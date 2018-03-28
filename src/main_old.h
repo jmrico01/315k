@@ -6,7 +6,7 @@
 #endif
 
 #include "km_types.h"
-#include "halfedge.h"
+#include "km_math.h"
 
 // TODO get rid of this
 #define PATH_MAX_LENGTH 512
@@ -22,18 +22,6 @@ struct ReadFileResult
 {
     uint64 size;
     void* data;
-};
-
-struct SharedState
-{
-    Vec3 cameraPos;
-    Quat modelRot;
-
-    HalfEdgeMesh mesh;
-    HalfEdgeMeshGL meshGL;
-
-    DynamicArray<uint32> selectedVerts;
-    DynamicArray<uint32> allVerts;
 };
 
 char* GetAppPath();

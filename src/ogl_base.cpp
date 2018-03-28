@@ -1,20 +1,45 @@
 #include "ogl_base.h"
 
-#include <GL/glew.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
+//#include <ft2build.h>
+//#include FT_FREETYPE_H
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "km_defines.h"
-#include "km_types.h"
 #include "km_math.h"
-#include "main.h"
+
+#if 0
 
 // TODO get this out of here
 global_var Mat4 pixelToClip_;
 
-internal bool CompileAndCheckShader(GLuint shaderID, ReadFileResult shaderFile)
+void InitOpenGL()
+{
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+}
+
+void ResizeGL(int width, int height)
+{
+    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+
+    Vec3 pixelScale = {
+        2.0f / (float)width,
+        2.0f / (float)height,
+        1.0f
+    };
+    Vec3 view = { -1.0f, -1.0f, 0.0f };
+    pixelToClip_ = Translate(view) * Scale(pixelScale);
+}
+#endif
+
+internal bool CompileAndCheckShader(GLuint shaderID,
+    DEBUGReadFileResult shaderFile)
 {
     // Compile shader.
     GLint shaderFileSize = (GLint)shaderFile.size;
@@ -41,31 +66,10 @@ internal bool CompileAndCheckShader(GLuint shaderID, ReadFileResult shaderFile)
     return true;
 }
 
-void InitOpenGL()
-{
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-
-    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
-}
-
-void ResizeGL(int width, int height)
-{
-    glViewport(0, 0, (GLsizei)width, (GLsizei)height);
-
-    Vec3 pixelScale = {
-        2.0f / (float)width,
-        2.0f / (float)height,
-        1.0f
-    };
-    Vec3 view = { -1.0f, -1.0f, 0.0f };
-    pixelToClip_ = Translate(view) * Scale(pixelScale);
-}
-
 GLuint LoadShaders(
+	ThreadContext* thread,
+	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory,
     const char* vertFilePath, const char* fragFilePath)
 {
     // Create GL shaders.
@@ -73,12 +77,12 @@ GLuint LoadShaders(
     GLuint fragShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 
     // Read shader code from files.
-    ReadFileResult vertFile = ReadFile(vertFilePath);
+    DEBUGReadFileResult vertFile = DEBUGPlatformReadFile(thread, vertFilePath);
     if (vertFile.size == 0) {
         printf("Failed to read vertex shader file.\n");
         return 0; // TODO what to return
     }
-    ReadFileResult fragFile = ReadFile(fragFilePath);
+    DEBUGReadFileResult fragFile = DEBUGPlatformReadFile(thread, fragFilePath);
     if (fragFile.size == 0) {
         printf("Failed to read fragment shader file.\n");
         return 0; // TODO what to return
@@ -127,12 +131,14 @@ GLuint LoadShaders(
     glDetachShader(programID, fragShaderID);
     glDeleteShader(vertShaderID);
     glDeleteShader(fragShaderID);
-    free(vertFile.data);
-    free(fragFile.data);
+
+    DEBUGPlatformFreeFileMemory(thread, vertFile.data);
+    DEBUGPlatformFreeFileMemory(thread, fragFile.data);
 
     return programID;
 }
 
+#if 0
 RectGL CreateRectGL()
 {
     RectGL rectGL;
@@ -335,3 +341,4 @@ void DrawLine(
     glDrawArrays(GL_LINES, 0, 2);
     glBindVertexArray(0);
 }
+#endif

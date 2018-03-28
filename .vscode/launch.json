@@ -5,7 +5,7 @@
                 "name": "Windows Launch",
                 "type": "cppvsdbg",
                 "request": "launch",
-                "program": "${workspaceRoot}\\build\\opengl.exe",
+                "program": "${workspaceRoot}\\build\\315k.exe",
                 "args": [],
                 "stopAtEntry": false,
                 "cwd": "${workspaceRoot}",

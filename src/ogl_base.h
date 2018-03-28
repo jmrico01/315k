@@ -1,9 +1,10 @@
 #pragma once
 
-#include <GL/glew.h>
-
+#include "main_platform.h"
+#include "opengl.h"
 #include "km_math.h"
 
+#if 0
 struct RectGL
 {
     GLuint vertexArray;
@@ -28,10 +29,15 @@ struct LineGL
 
 void InitOpenGL();
 void ResizeGL(int width, int height);
+#endif
 
 GLuint LoadShaders(
+	ThreadContext* thread,
+	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory,
     const char* vertFilePath, const char* fragFilePath);
 
+#if 0
 RectGL CreateRectGL();
 TexturedRectGL CreateTexturedRectGL();
 LineGL CreateLineGL();
@@ -45,3 +51,4 @@ void DrawTexturedRect(
 void DrawLine(
     LineGL lineGL, Mat4 proj, Mat4 view,
     Vec3 v1, Vec3 v2, Vec4 color);
+#endif

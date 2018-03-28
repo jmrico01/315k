@@ -2,7 +2,7 @@
 
 #include <math.h>
 
-#include "km_types.h"
+#include "km_defines.h"
 
 #define PI_F 3.14159265f
 

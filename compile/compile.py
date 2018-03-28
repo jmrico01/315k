@@ -4,6 +4,7 @@ import shutil
 import platform
 import string
 import hashlib
+import random
 
 def GetScriptPath():
     path = os.path.realpath(__file__)
@@ -36,7 +37,8 @@ paths["build-shaders"]  = paths["build"] + "/shaders"
 paths["src-shaders"]    = paths["src"] + "/shaders"
 
 
-paths["main-cpp"] = paths["src"] + "/main.cpp"
+paths["main-cpp"]       = paths["src"] + "/main.cpp"
+paths["win32-main-cpp"] = paths["src"] + "/win32_main.cpp"
 
 paths["include-glew"]       = paths["external"] + "/glew-2.1.0/include"
 paths["include-glfw"]       = paths["external"] + "/glfw-3.2.1/include"
@@ -59,7 +61,12 @@ paths["src-hashes-old"] = paths["build"] + "/src_hashes_old"
 NormalizePathSlashes(paths)
 
 def WinCompileDebug():
-    macros = "/D_CRT_SECURE_NO_WARNINGS"
+    macros = " ".join([
+        "/DGAME_INTERNAL=1",
+        "/DGAME_SLOW=1",
+        "/DGAME_WIN32=1",
+        "/D_CRT_SECURE_NO_WARNINGS"
+    ])
     compilerFlags = " ".join([
         "/MTd",     # CRT static link (debug)
         "/nologo",  # disables the "Microsoft C/C++ Optimizing Compiler" message
@@ -82,8 +89,6 @@ def WinCompileDebug():
         "/wd4505",  # unreferenced local function has been removed
     ])
     includePaths = " ".join([
-        "/I" + paths["include-glew"],
-        "/I" + paths["include-glfw"],
         "/I" + paths["include-freetype"],
         "/I" + paths["include-lodepng"]
     ])
@@ -93,90 +98,41 @@ def WinCompileDebug():
         "/opt:ref"          # get rid of extraneous linkages
     ])
     libPaths = " ".join([
-        "/LIBPATH:" + paths["lib-glfw-win-d"],
         "/LIBPATH:" + paths["lib-ft-win-d"]
     ])
     libs = " ".join([
         "user32.lib",
-        "shell32.lib",
         "gdi32.lib",
         "opengl32.lib",
-        "glfw3.lib",
         "freetype281MTd.lib"
     ])
 
-    compileCommand = " ".join([
+    pdbRandNum = random.randrange(99999)
+    compileDLLCommand = " ".join([
         "cl",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Feopengl.exe", "/Fmopengl.map", paths["main-cpp"],
+        "/LD", "/Fe315k.dll", paths["main-cpp"],
+        "/link", linkerFlags, libPaths, libs,
+        "/EXPORT:GameUpdateAndRender", "/PDB:main_" + str(pdbRandNum) + ".pdb"])
+
+    compileCommand = " ".join([
+        "cl", "/DGAME_PLATFORM_CODE",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "/Fe315k.exe", "/Fm315k.map", paths["win32-main-cpp"],
         "/link", linkerFlags, libPaths, libs])
     
-    loadCompiler = "call \"C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
+    loadCompiler = "call \"C:\\Program Files (x86)" + \
+        "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
     os.system(" & ".join([
         "pushd " + paths["build"],
         loadCompiler,
+        compileDLLCommand,
         compileCommand,
         "popd"
     ]))
 
 def WinCompileRelease():
-    macros = "/D_CRT_SECURE_NO_WARNINGS"
-    compilerFlags = " ".join([
-        "/MT",     # CRT static link (release)
-        "/nologo",  # disables the "Microsoft C/C++ Optimizing Compiler" message
-        "/Gm-",     # disable incremental build things
-        "/GR-",     # disable type information
-        "/EHa-",    # disable exception handling
-        "/EHsc",    # handle stdlib errors
-        "/Ox",      # full optimization
-    ])
-    compilerWarningFlags = " ".join([
-        "/WX",      # treat warnings as errors
-        "/W4",      # level 4 warnings
-
-        # disable the following warnings:
-        "/wd4100",  # unused function arguments
-        "/wd4189",  # unused initialized local variable
-        "/wd4201",  # nonstandard extension used: nameless struct/union
-        "/wd4505",  # unreferenced local function has been removed
-    ])
-    includePaths = " ".join([
-        "/I" + paths["include-glew"],
-        "/I" + paths["include-glfw"],
-        "/I" + paths["include-freetype"],
-        "/I" + paths["include-lodepng"]
-    ])
-
-    linkerFlags = " ".join([
-        "/incremental:no",  # disable incremental linking
-        "/opt:ref"          # get rid of extraneous linkages
-    ])
-    libPaths = " ".join([
-        "/LIBPATH:" + paths["lib-glfw-win-r"],
-        "/LIBPATH:" + paths["lib-ft-win-r"]
-    ])
-    libs = " ".join([
-        "user32.lib",
-        "shell32.lib",
-        "gdi32.lib",
-        "opengl32.lib",
-        "glfw3.lib",
-        "freetype281MT.lib"
-    ])
-
-    compileCommand = " ".join([
-        "cl",
-        macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Feopengl.exe", paths["main-cpp"],
-        "/link", linkerFlags, libPaths, libs])
-    
-    loadCompiler = "call \"C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
-    os.system(" & ".join([
-        "pushd " + paths["build"],
-        loadCompiler,
-        compileCommand,
-        "popd"
-    ]))
+    return
 
 def LinuxCompileDebug():
     compilerFlags = " ".join([
