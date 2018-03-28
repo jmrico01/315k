@@ -11,6 +11,10 @@
     GL_FUNCTIONS_ALL
 #undef FUNC
 
+#if GAME_SLOW
+DEBUGPlatformPrintFunc* debugPrint_;
+#endif
+
 struct Tiles
 {
 #define TILES_X		100
@@ -143,16 +147,16 @@ internal void InitTiles(
         sizeof(lineIndices), lineIndices, GL_STATIC_DRAW);
 
 	if (!tiles->shader) {
-		ASSERT(0);
+		DEBUG_ASSERT(0);
     }
 	if (!tiles->vao) {
-		ASSERT(0);
+		DEBUG_ASSERT(0);
     }
 	if (!tiles->quadIndBuffer) {
-		ASSERT(0);
+		DEBUG_ASSERT(0);
     }
 	if (!tiles->lineIndBuffer) {
-		ASSERT(0);
+		DEBUG_ASSERT(0);
     }
 }
 
@@ -223,16 +227,17 @@ internal void TintTiles(
 
 extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 {
-	ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
+	DEBUG_ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
 
 	GameState *gameState = (GameState*)memory->permanentStorage;
 	if (!memory->isInitialized)
 	{
-	// Initialize global gl function names
-#define FUNC(returntype, name, ...) name = glFunctions->name;
-	GL_FUNCTIONS_BASE
-    GL_FUNCTIONS_ALL
-#undef FUNC
+	    // Initialize global function names
+        debugPrint_ = memory->DEBUGPlatformPrint;
+        #define FUNC(returntype, name, ...) name = glFunctions->name;
+            GL_FUNCTIONS_BASE
+            GL_FUNCTIONS_ALL
+        #undef FUNC
 
 # if 0
 		// TODO round tripping, not final
@@ -275,12 +280,12 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		if (!gameState->rectShader)
 		{
 			// TODO logging / EXIT GAME! no way to do this yet...
-			ASSERT(!"LoadShaders failed");
+			DEBUG_PANIC("LoadShaders failed");
 		}
 		if (!gameState->rectVAO)
 		{
 			// TODO logging / exit
-			ASSERT(!"LoadRectVAO failed");
+			DEBUG_PANIC("LoadRectVAO failed");
 		}
 
 		glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
@@ -354,8 +359,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	Mat4 playerMat = Translate(centeredPos) * Scale(Vec3{ boxSize, boxSize, 1.0f });
 	DrawRect(thread, gameState->rectShader, gameState->rectVAO,
 		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
-
-    memory->DEBUGPlatformPrint("drew stuff! heres a float: %f\n", zHalfRange);
 }
 
 #include "ogl_base.cpp"

@@ -31,11 +31,9 @@ global_var bool running_;
 global_var bool32 DEBUGshowCursor_;
 global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 
-// TODO find a way to make this cross-platform
+// From km_debug.h
 #if GAME_SLOW
-#define PANIC(msg, ...) DEBUGPlatformPrint(msg, ##__VA_ARGS__); *(int *)0 = 0;
-#else
-#define PANIC(msg, ...)
+DEBUGPlatformPrintFunc* debugPrint_;
 #endif
 
 #define XINPUT_GET_STATE_FUNC(name) DWORD WINAPI name(DWORD dwUserIndex,\
@@ -209,7 +207,7 @@ internal void Win32UnloadGameCode(Win32GameCode* gameCode)
 internal inline uint32 SafeTruncateUInt64(uint64 value)
 {
 	// TODO defines for maximum values
-	ASSERT(value <= 0xFFFFFFFF);
+	DEBUG_ASSERT(value <= 0xFFFFFFFF);
 	uint32 result = (uint32)value;
 	return result;
 }
@@ -392,16 +390,16 @@ LRESULT CALLBACK WndProc(
 		} break;
 
 		case WM_SYSKEYDOWN: {
-            PANIC("Keyboard input shouldn't get processed here");
+            DEBUG_PANIC("WM_SYSKEYDOWN in WndProc");
 		} break;
 		case WM_SYSKEYUP: {
-            PANIC("Keyboard input shouldn't get processed here");
+            DEBUG_PANIC("WM_SYSKEYUP in WndProc");
 		} break;
 		case WM_KEYDOWN: {
-            PANIC("Keyboard input shouldn't get processed here");
+            DEBUG_PANIC("WM_KEYDOWN in WndProc");
 		} break;
 		case WM_KEYUP: {
-            PANIC("Keyboard input shouldn't get processed here");
+            DEBUG_PANIC("WM_KEYUP in WndProc");
 		} break;
 
 		default: {
@@ -435,7 +433,7 @@ internal void Win32ProcessMessages(
 			uint32 vkCode = (uint32)msg.wParam;
 			bool32 wasDown = ((msg.lParam & (1 << 30)) != 0);
 			bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
-			ASSERT(isDown);
+			DEBUG_ASSERT(isDown);
 
 			if (vkCode == VK_ESCAPE)
 				running_ = false;
@@ -446,7 +444,7 @@ internal void Win32ProcessMessages(
 			uint32 vkCode = (uint32)msg.wParam;
 			bool32 wasDown = ((msg.lParam & (1 << 30)) != 0);
 			bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
-			ASSERT(!isDown);
+			DEBUG_ASSERT(!isDown);
 		} break;
 
 		default: {
@@ -482,7 +480,7 @@ internal float32 Win32ProcessXInputStickValue(SHORT value, SHORT deadZone)
 
 internal void Win32RecordInputBegin(Win32State* state, int inputRecordingIndex)
 {
-	ASSERT(inputRecordingIndex < ARRAY_COUNT(state->replayBuffers));
+	DEBUG_ASSERT(inputRecordingIndex < ARRAY_COUNT(state->replayBuffers));
 
 	Win32ReplayBuffer* replayBuffer =
         &state->replayBuffers[inputRecordingIndex];
@@ -513,7 +511,7 @@ internal void Win32RecordInput(Win32State* state, GameInput* input)
 
 internal void Win32PlaybackBegin(Win32State* state, int inputPlayingIndex)
 {
-	ASSERT(inputPlayingIndex < ARRAY_COUNT(state->replayBuffers));
+	DEBUG_ASSERT(inputPlayingIndex < ARRAY_COUNT(state->replayBuffers));
 	Win32ReplayBuffer* replayBuffer = &state->replayBuffers[inputPlayingIndex];
 
 	if (replayBuffer->gameMemoryBlock)
@@ -552,7 +550,7 @@ internal void Win32PlayInput(Win32State* state, GameInput* input)
     if (!glFuncs->name) { \
         glFuncs->name = (name##Func*)GetProcAddress(oglLib, #name); \
         if (!glFuncs->name) { \
-            PANIC("OpenGL function load failed: %s", #name); \
+            DEBUG_PANIC("OpenGL function load failed: %s", #name); \
         } \
     }
 
@@ -744,6 +742,10 @@ int CALLBACK WinMain(
 	HINSTANCE hInstance, HINSTANCE hPrevInst,
 	LPSTR cmdline, int cmd_show)
 {
+    #if GAME_SLOW
+    debugPrint_ = DEBUGPlatformPrint;
+    #endif
+
 	Win32State state = {};
 	Win32GetExeFileName(&state);
 

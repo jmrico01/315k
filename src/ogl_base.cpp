@@ -3,8 +3,8 @@
 //#include <ft2build.h>
 //#include FT_FREETYPE_H
 #include <stdlib.h>
-#include <stdio.h>
 
+#include "km_debug.h"
 #include "km_defines.h"
 #include "km_math.h"
 
@@ -53,11 +53,12 @@ internal bool CompileAndCheckShader(GLuint shaderID,
     glGetShaderiv(shaderID, GL_COMPILE_STATUS, &result);
     glGetShaderiv(shaderID, GL_INFO_LOG_LENGTH, &infoLogLength);
     if (result == GL_FALSE) {
+        // TODO get rid of this malloc
         char* infoLog = (char*)malloc((size_t)(infoLogLength + 1));
         glGetShaderInfoLog(shaderID, infoLogLength, NULL, infoLog);
         infoLog[infoLogLength] = 0;
-        printf("Shader compilation log:\n");
-        printf("%s\n", infoLog);
+        DEBUG_PRINT("Shader compilation log:\n");
+        DEBUG_PRINT("%s\n", infoLog);
         free(infoLog);
 
         return false;
@@ -79,26 +80,26 @@ GLuint LoadShaders(
     // Read shader code from files.
     DEBUGReadFileResult vertFile = DEBUGPlatformReadFile(thread, vertFilePath);
     if (vertFile.size == 0) {
-        printf("Failed to read vertex shader file.\n");
+        DEBUG_PRINT("Failed to read vertex shader file.\n");
         return 0; // TODO what to return
     }
     DEBUGReadFileResult fragFile = DEBUGPlatformReadFile(thread, fragFilePath);
     if (fragFile.size == 0) {
-        printf("Failed to read fragment shader file.\n");
+        DEBUG_PRINT("Failed to read fragment shader file.\n");
         return 0; // TODO what to return
     }
 
     // Compile and check shader code.
     // TODO error checking
     if (!CompileAndCheckShader(vertShaderID, vertFile)) {
-        printf("Vertex shader compilation failed (%s)\n", vertFilePath);
+        DEBUG_PRINT("Vertex shader compilation failed (%s)\n", vertFilePath);
         glDeleteShader(vertShaderID);
         glDeleteShader(fragShaderID);
 
         return 0; // TODO what to return
     }
     if (!CompileAndCheckShader(fragShaderID, fragFile)) {
-        printf("Fragment shader compilation failed (%s)\n", fragFilePath);
+        DEBUG_PRINT("Fragment shader compilation failed (%s)\n", fragFilePath);
         glDeleteShader(vertShaderID);
         glDeleteShader(fragShaderID);
 
@@ -117,11 +118,12 @@ GLuint LoadShaders(
     glGetProgramiv(programID, GL_LINK_STATUS, &result);
     glGetProgramiv(programID, GL_INFO_LOG_LENGTH, &infoLogLength);
     if (result == GL_FALSE) {
+        // TODO get rid of this malloc
         char* infoLog = (char*)malloc((size_t)(infoLogLength + 1));
         glGetProgramInfoLog(programID, infoLogLength, NULL, infoLog);
         infoLog[infoLogLength] = 0;
-        printf("Program linking failed:\n");
-        printf("%s\n", infoLog);
+        DEBUG_PRINT("Program linking failed:\n");
+        DEBUG_PRINT("%s\n", infoLog);
         free(infoLog);
 
         return 0; // TODO what to return
