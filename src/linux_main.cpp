@@ -261,11 +261,10 @@ LinuxFileId(char *FileName)
     return Attr.st_ino;
 }
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
 DEBUG_PLATFORM_FREE_FILE_MEMORY(DEBUGPlatformFreeFileMemory)
 {
-    if(File->Contents)
-    {
+    if(File->Contents) {
         munmap(File->Contents, File->ContentsSize);
         File->Contents = 0;
     }
@@ -277,44 +276,37 @@ DEBUG_PLATFORM_READ_ENTIRE_FILE(DEBUGPlatformReadEntireFile)
     debug_read_file_result Result = {};
 
     s32 FileHandle = open(Filename, O_RDONLY);
-    if(FileHandle >= 0)
-    {
+    if (FileHandle >= 0) {
         off_t FileSize64 = lseek(FileHandle, 0, SEEK_END);
         lseek(FileHandle, 0, SEEK_SET);
 
-        if(FileSize64 > 0)
-        {
+        if (FileSize64 > 0) {
             u32 FileSize32 = SafeTruncateUInt64(FileSize64);
             Result.Contents = mmap(NULL, FileSize32, PROT_READ | PROT_WRITE,
                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            if(Result.Contents)
-            {
+            if (Result.Contents) {
                 ssize_t BytesRead = read(FileHandle, Result.Contents, Result.ContentsSize);
-                if ((ssize_t)FileSize32 == BytesRead)
-                {
+                if ((ssize_t)FileSize32 == BytesRead) {
                     // NOTE(casey): File read successfully
                     Result.ContentsSize = FileSize32;
                 }
-                else
-                {
+                else {
                     // TODO(michiel): Logging
                     DEBUGPlatformFreeFileMemory(&Result);
                 }
             }
         }
-        else
-        {
+        else {
             // TODO(michiel): Logging
         }
 
         close(FileHandle);
     }
-    else
-    {
+    else {
         // TODO(casey): Logging
     }
 
-    return(Result);
+    return Result;
 }
 
 DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
@@ -322,22 +314,18 @@ DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
     b32 Result = false;
 
     s32 FileHandle = open(Filename, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
-    if (FileHandle >= 0)
-    {
+    if (FileHandle >= 0) {
         ssize_t BytesWritten = write(FileHandle, Memory, MemorySize);
-        if (fsync(FileHandle) >= 0)
-        {
+        if (fsync(FileHandle) >= 0) {
             Result = (BytesWritten == (ssize_t)MemorySize);
         }
-        else
-        {
+        else {
             // TODO(casey): Logging
         }
 
         close(FileHandle);
     }
-    else
-    {
+    else {
         // TODO(casey): Logging
     }
 
@@ -361,7 +349,7 @@ internal bool32 LinuxLoadGameCode(LinuxGameCode *GameCode,
         }
     }
 
-    if(!GameCode->IsValid) {
+    if (!GameCode->IsValid) {
         LinuxUnloadLibrary(GameCode->GameLibHandle);
         GameCode->GameLibID = 0;
         GameCode->UpdateAndRender = 0;
@@ -393,7 +381,7 @@ global_variable int LinuxOpenGLAttribs[] =
     GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
     GLX_CONTEXT_MINOR_VERSION_ARB, 3,
     GLX_CONTEXT_FLAGS_ARB, GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
         | GLX_CONTEXT_DEBUG_BIT_ARB
 #endif
         ,
@@ -453,16 +441,20 @@ LinuxLoadGlxExtensions(void)
                     if (glXMakeCurrent(TempDisplay, GLWindow, Context)) {
                         char *Extensions = (char *)glXQueryExtensionsString(TempDisplay, Visuals->screen);
                         char *At = Extensions;
-                        while(*At) {
-                            while(IsWhitespace(*At)) {++At;}
+                        while (*At) {
+                            while (IsWhitespace(*At)) {
+                                At++;
+                            }
                             char *End = At;
-                            while(*End && !IsWhitespace(*End)) {++End;}
+                            while (*End && !IsWhitespace(*End)) {
+                                End++;
+                            }
 
                             umm Count = End - At;
 
-                            if(0) {}
-                            else if(StringsAreEqual(Count, At, "GLX_EXT_framebuffer_sRGB")) {OpenGL.SupportsSRGBFramebuffer = true;}
-                            else if(StringsAreEqual(Count, At, "GLX_ARB_framebuffer_sRGB")) {OpenGL.SupportsSRGBFramebuffer = true;}
+                            if (0) {}
+                            else if (StringsAreEqual(Count, At, "GLX_EXT_framebuffer_sRGB")) {OpenGL.SupportsSRGBFramebuffer = true;}
+                            else if (StringsAreEqual(Count, At, "GLX_ARB_framebuffer_sRGB")) {OpenGL.SupportsSRGBFramebuffer = true;}
 
                             At = End;
                         }
@@ -485,8 +477,7 @@ LinuxLoadGlxExtensions(void)
 internal GLXFBConfig *
 LinuxGetOpenGLFramebufferConfig(Display *display)
 {
-    int VisualAttribs[] =
-    {
+    int VisualAttribs[] = {
         GLX_X_RENDERABLE, True,
         GLX_DRAWABLE_TYPE, GLX_WINDOW_BIT,
         GLX_RENDER_TYPE, GLX_RGBA_BIT,
@@ -504,14 +495,13 @@ LinuxGetOpenGLFramebufferConfig(Display *display)
         None
     };
 
-    if (!OpenGL.SupportsSRGBFramebuffer)
-    {
+    if (!OpenGL.SupportsSRGBFramebuffer) {
         VisualAttribs[22] = None;
     }
 
     int FramebufferCount;
     GLXFBConfig *FramebufferConfig = glXChooseFBConfig(display, DefaultScreen(display), VisualAttribs, &FramebufferCount);
-    Assert(FramebufferCount >= 1);
+    DEBUG_ASSERT(FramebufferCount >= 1);
 
     return FramebufferConfig;
 }
@@ -522,13 +512,11 @@ LinuxInitOpenGL(Display *display, GLXDrawable GlWindow, GLXFBConfig Config)
     b32 ModernContext = true;
 
     GLXContext OpenGlContext = 0;
-    if (glXCreateContextAttribsARB)
-    {
+    if (glXCreateContextAttribsARB) {
         OpenGlContext = glXCreateContextAttribsARB(display, Config, 0, true, LinuxOpenGLAttribs);
     }
 
-    if (!OpenGlContext)
-    {
+    if (!OpenGlContext) {
         ModernContext = false;
 
         XVisualInfo *VisualInfo = glXGetVisualFromFBConfig(display, Config);
@@ -536,8 +524,8 @@ LinuxInitOpenGL(Display *display, GLXDrawable GlWindow, GLXFBConfig Config)
         XFree(VisualInfo);
     }
 
-    if (glXMakeCurrent(display, GlWindow, OpenGlContext))
-    {
+#if 0
+    if (glXMakeCurrent(display, GlWindow, OpenGlContext)) {
         LinuxGetOpenGLFunction(glDebugMessageCallbackARB);
 
         LinuxGetOpenGLFunction(glXSwapIntervalEXT);
@@ -600,6 +588,7 @@ LinuxInitOpenGL(Display *display, GLXDrawable GlWindow, GLXFBConfig Config)
 
         OpenGLInit(Info, OpenGL.SupportsSRGBFramebuffer);
     }
+#endif
 
     return OpenGlContext;
 }
@@ -616,19 +605,17 @@ LinuxGetWindowDimension()
 }
 #endif
 
-internal linux_offscreen_buffer
-LinuxCreateOffscreenBuffer(u32 Width, u32 Height)
+internal LinuxOffscreenBuffer LinuxCreateOffscreenBuffer(u32 Width, u32 Height)
 {
-    linux_offscreen_buffer OffscreenBuffer = {};
+    LinuxOffscreenBuffer OffscreenBuffer = {};
     OffscreenBuffer.Width = Width;
     OffscreenBuffer.Height = Height;
     OffscreenBuffer.Pitch = Align16(OffscreenBuffer.Width * BYTES_PER_PIXEL);
     u32 Size = OffscreenBuffer.Pitch * OffscreenBuffer.Height;
 
     OffscreenBuffer.Memory = (u8 *)mmap(NULL, Size, PROT_READ | PROT_WRITE,
-                                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (OffscreenBuffer.Memory == MAP_FAILED)
-    {
+        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (OffscreenBuffer.Memory == MAP_FAILED) {
         // TODO(michiel): Logging
         OffscreenBuffer.Width = 0;
         OffscreenBuffer.Height = 0;
@@ -638,11 +625,10 @@ LinuxCreateOffscreenBuffer(u32 Width, u32 Height)
     return OffscreenBuffer;
 }
 
-internal void
-LinuxResizeOffscreenBuffer(linux_offscreen_buffer *Buffer, u32 Width, u32 Height)
+internal void LinuxResizeOffscreenBuffer(
+    LinuxOffscreenBuffer *Buffer, u32 Width, u32 Height)
 {
-    if (Buffer->Memory)
-    {
+    if (Buffer->Memory) {
         munmap(Buffer->Memory, Buffer->Pitch * Buffer->Height);
     }
 
@@ -652,9 +638,8 @@ LinuxResizeOffscreenBuffer(linux_offscreen_buffer *Buffer, u32 Width, u32 Height
 
     u32 NewSize = Buffer->Pitch * Buffer->Height;
     Buffer->Memory = (u8 *)mmap(NULL, NewSize, PROT_READ | PROT_WRITE,
-                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (Buffer->Memory == MAP_FAILED)
-    {
+        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (Buffer->Memory == MAP_FAILED) {
         // TODO(michiel): Logging
         Buffer->Width = 0;
         Buffer->Height = 0;
@@ -662,10 +647,11 @@ LinuxResizeOffscreenBuffer(linux_offscreen_buffer *Buffer, u32 Width, u32 Height
     }
 }
 
-internal void
-LinuxDisplayBufferInWindow(platform_work_queue *RenderQueue, game_render_commands *Commands,
-                           Display *display, GLXDrawable GlWindow,
-                           rectangle2i DrawRegion, u32 WindowWidth, u32 WindowHeight, memory_arena *TempArena)
+internal void LinuxDisplayBufferInWindow(
+    platform_work_queue *RenderQueue, game_render_commands *Commands,
+    Display *display, GLXDrawable GlWindow,
+    rectangle2i DrawRegion, u32 WindowWidth, u32 WindowHeight,
+    memory_arena *TempArena)
 {
     temporary_memory TempMem = BeginTemporaryMemory(TempArena);
 
@@ -676,8 +662,7 @@ LinuxDisplayBufferInWindow(platform_work_queue *RenderQueue, game_render_command
         }
     */
 
-    if (GlobalSoftwareRendering)
-    {
+    if (GlobalSoftwareRendering) {
         loaded_bitmap OutputTarget;
         OutputTarget.Memory = GlobalBackbuffer.Memory;
         OutputTarget.Width = GlobalBackbuffer.Width;
@@ -689,12 +674,11 @@ LinuxDisplayBufferInWindow(platform_work_queue *RenderQueue, game_render_command
         // NOTE(michiel): Draw with opengl because i allready got that one
         // TODO(casey): Track clears so we clear the backbuffer to the right color?
         v4 ClearColor = {};
-        OpenGLDisplayBitmap(GlobalBackbuffer.Width, GlobalBackbuffer.Height, GlobalBackbuffer.Memory,
-                            GlobalBackbuffer.Pitch, DrawRegion, ClearColor,
-                            OpenGL.ReservedBlitTexture);
+        OpenGLDisplayBitmap(GlobalBackbuffer.Width, GlobalBackbuffer.Height,
+            GlobalBackbuffer.Memory, GlobalBackbuffer.Pitch, DrawRegion,
+            ClearColor, OpenGL.ReservedBlitTexture);
     }
-    else
-    {
+    else {
         TIMED_BLOCK("OpenGLRenderCommands");
         OpenGLRenderCommands(Commands, DrawRegion, WindowWidth, WindowHeight);
     }
@@ -816,7 +800,7 @@ LinuxGetMousePosition(Display *display, Window window)
 // NOTE(michiel): Memory
 //
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
 internal
 DEBUG_PLATFORM_GET_MEMORY_STATS(LinuxGetMemoryStats)
 {
@@ -1420,7 +1404,7 @@ LinuxProcessPendingMessages(linux_state *State, Display *display, Window window,
                     Input->ControlDown = (Event.type == KeyPress);
                 }
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                 else if (Event.xkey.keycode == KEYCODE_P)
                 {
                     if (Event.type == KeyPress)
@@ -1702,7 +1686,7 @@ internal PLATFORM_OPEN_FILE(LinuxOpenNextFile)
 
 internal PLATFORM_FILE_ERROR(LinuxFileError)
 {
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
     fprintf(stderr, "LINUX FILE ERROR: %s\n", Message);
 #endif
 
@@ -1731,7 +1715,7 @@ internal PLATFORM_READ_DATA_FROM_FILE(LinuxReadDataFromFile)
 // NOTE(michiel): MAIN
 //
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
 global_variable debug_table GlobalDebugTable_;
 debug_table *GlobalDebugTable = &GlobalDebugTable_;
 #endif
@@ -1812,7 +1796,7 @@ int main(int argc, char **argv)
     GlobalWindowPositionX = 0;
     GlobalWindowPositionY = 0;
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
     DEBUGGlobalShowCursor = true;
 #endif
 
@@ -1878,7 +1862,7 @@ int main(int argc, char **argv)
 
                 // NOTE(michiel): Hide cursor
                 LinuxCreateHiddenCursor(display, GlWindow);
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                 LinuxShowCursor(display, GlWindow);
 #else
                 LinuxHideCursor(display, GlWindow);
@@ -1966,14 +1950,14 @@ int main(int argc, char **argv)
                                                PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
                     SoundOutput.SafetyBytes = (SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample / GameUpdateHz) / 3;
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                     void *BaseAddress = (void *)Terabytes((u64)2);
 #else
                     void *BaseAddress = 0;
 #endif
 
                     game_memory GameMemory = {};
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                     GameMemory.DebugTable = GlobalDebugTable;
 #endif
                     GameMemory.HighPriorityQueue = &HighPriorityQueue;
@@ -1990,7 +1974,7 @@ int main(int argc, char **argv)
                     GameMemory.PlatformAPI.AllocateMemory = LinuxAllocateMemory;
                     GameMemory.PlatformAPI.DeallocateMemory = LinuxDeallocateMemory;
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                     GameMemory.PlatformAPI.DEBUGFreeFileMemory = DEBUGPlatformFreeFileMemory;
                     GameMemory.PlatformAPI.DEBUGReadEntireFile = DEBUGPlatformReadEntireFile;
                     GameMemory.PlatformAPI.DEBUGWriteEntireFile = DEBUGPlatformWriteEntireFile;
@@ -2255,7 +2239,7 @@ int main(int argc, char **argv)
                                     Game.GetSoundSamples(&GameMemory, &SoundBuffer);
                                 }
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                                 linux_debug_time_marker *Marker = &DebugTimeMarkers[DebugTimeMarkerIndex];
                                 Marker->OutputPlayCursor = PlayCursor;
                                 Marker->OutputWriteCursor = WriteCursor;
@@ -2281,7 +2265,7 @@ int main(int argc, char **argv)
                             //
                             //
 
-#if HANDMADE_INTERNAL
+#if GAME_INTERNAL
                             BEGIN_BLOCK("Debug Collation");
 
                             // Reload code if necessary
