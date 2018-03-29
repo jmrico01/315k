@@ -88,6 +88,7 @@ struct GameInput
 struct GameMemory
 {
 	bool32 isInitialized;
+
 	uint64 permanentStorageSize;
 	// Required to be cleared to zero at startup
 	void* permanentStorage;
@@ -100,6 +101,10 @@ struct GameMemory
 	DEBUGPlatformFreeFileMemoryFunc*	DEBUGPlatformFreeFileMemory;
 	DEBUGPlatformReadFileFunc*			DEBUGPlatformReadFile;
 	DEBUGPlatformWriteFileFunc*			DEBUGPlatformWriteFile;
+
+    #if GAME_INTERNAL
+    bool32 DEBUGShouldInitGlobals;
+    #endif
 };
 
 // ------------------------------ Game functions ------------------------------

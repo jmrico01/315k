@@ -217,12 +217,16 @@ internal void TintTiles(
 	ThreadContext* thread,
 	Tiles* tiles, Vec3 pos)
 {
-	Vec3 offset{ -(float32)TILES_X * TILE_SIZE / 2.0f, -(float32)TILES_Y * TILE_SIZE / 2.0f, 0.0f };
+	Vec3 offset = {
+        -(float32)TILES_X * TILE_SIZE / 2.0f,
+        -(float32)TILES_Y * TILE_SIZE / 2.0f,
+        0.0f
+    };
 
 	Vec3 indices = (pos - offset) / TILE_SIZE;
 	int i = (int)indices.x;
 	int j = (int)indices.y;
-	tiles->color[i][j] = Vec4{ 0.8f, 0.3f, 0.3f, 1.0f };
+	tiles->color[i][j] = Vec4 { 0.8f, 0.3f, 0.3f, 1.0f };
 }
 
 extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
@@ -230,8 +234,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	DEBUG_ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
 
 	GameState *gameState = (GameState*)memory->permanentStorage;
-	if (!memory->isInitialized)
-	{
+    if (memory->DEBUGShouldInitGlobals) {
 	    // Initialize global function names
         debugPrint_ = memory->DEBUGPlatformPrint;
         #define FUNC(returntype, name, ...) name = glFunctions->name;
@@ -239,6 +242,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             GL_FUNCTIONS_ALL
         #undef FUNC
 
+        memory->DEBUGShouldInitGlobals = false;
+    }
+	if (!memory->isInitialized) {
 # if 0
 		// TODO round tripping, not final
 		char* filename = __FILE__;
@@ -277,13 +283,11 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			0.0f, 0.0f
 		};
 		gameState->rectVAO = LoadRectVAO(thread);
-		if (!gameState->rectShader)
-		{
+		if (!gameState->rectShader) {
 			// TODO logging / EXIT GAME! no way to do this yet...
 			DEBUG_PANIC("LoadShaders failed");
 		}
-		if (!gameState->rectVAO)
-		{
+		if (!gameState->rectVAO) {
 			// TODO logging / exit
 			DEBUG_PANIC("LoadRectVAO failed");
 		}
@@ -314,9 +318,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	Vec3 playerRight = Normalize(Vec3{ 1.0f, 1.0f, 0.0f });
 	Vec3 playerForward = Normalize(Vec3{ -1.0f, 1.0f, 0.0f });
 	Vec3 vel = {};
-	if (input0->isConnected)
-	{
-		vel = (input0->end.x * playerRight + input0->end.y * playerForward) * speed;
+	if (input0->isConnected) {
+		vel = (input0->end.x * playerRight + input0->end.y * playerForward)
+            * speed;
 	}
 	gameState->pos += vel;
 
@@ -325,10 +329,12 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if (input0->x.isDown)
+	if (input0->x.isDown) {
 		gameState->angle -= 0.005f;
-	if (input0->b.isDown)
+    }
+	if (input0->b.isDown) {
 		gameState->angle += 0.005f;
+    }
 
 	float isoZ = PI_F / 4.0f;
 	float isoX = acosf(tanf((PI_F - gameState->angle) / 2.0f));
@@ -336,13 +342,16 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	Quat rotationX = QuatFromAngleUnitAxis(-isoX, Vec3{ 1.0f, 0.0f, 0.0f });
 
 	float zHalfRange = 10.0f;
-	Mat4 proj = Scale(Vec3{ (float32)screenInfo.height / (float32)screenInfo.width,
-		1.0f, 1.0f / zHalfRange });
+	Mat4 proj = Scale(Vec3 {
+        (float32)screenInfo.height / (float32)screenInfo.width,
+		1.0f,
+        1.0f / zHalfRange
+    });
 	Mat4 view = //Scale(Vec3{ 1.0f, 1.0f, 1.0f / zRange }) *
 		UnitQuatToMat4(rotationX) *
 		UnitQuatToMat4(rotationZ) *
 		Translate(-gameState->pos) *
-		Scale(Vec3{ 1.0f, 1.0f, -1.0f });
+		Scale(Vec3 { 1.0f, 1.0f, -1.0f });
 
 	TintTiles(thread, &gameState->tiles, gameState->pos);
 	DrawTiles(thread, &gameState->tiles, proj * view);
@@ -350,13 +359,17 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	float32 boxSize = 0.1f;
 	float32 boxGray = 0.5f;
 
-	if (input->controllers[0].a.isDown)
+	if (input->controllers[0].a.isDown) {
 		boxGray = 1.0f;
+    }
 
-	Vec3 centeredPos = { gameState->pos.x - boxSize / 2.0f,
+	Vec3 centeredPos = {
+        gameState->pos.x - boxSize / 2.0f,
 		gameState->pos.y - boxSize / 2.0f,
-		0.01f };
-	Mat4 playerMat = Translate(centeredPos) * Scale(Vec3{ boxSize, boxSize, 1.0f });
+		0.01f
+    };
+	Mat4 playerMat = Translate(centeredPos)
+        * Scale(Vec3{ boxSize, boxSize, 1.0f });
 	DrawRect(thread, gameState->rectShader, gameState->rectVAO,
 		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
 }

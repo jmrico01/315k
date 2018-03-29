@@ -107,18 +107,26 @@ def WinCompileDebug():
         "freetype281MTd.lib"
     ])
 
-    pdbRandNum = random.randrange(99999)
+    # Clear old PDB files
+    for fileName in os.listdir(paths["build"]):
+        if ".pdb" in fileName:
+            try:
+                os.remove(os.path.join(paths["build"], fileName))
+            except:
+                print("Couldn't remove " + fileName)
+
+    pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
     compileDLLCommand = " ".join([
         "cl",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/LD", "/Fe315k.dll", paths["main-cpp"],
+        "/LD", "/Fe315k_game.dll", paths["main-cpp"],
         "/link", linkerFlags, libPaths, libs,
-        "/EXPORT:GameUpdateAndRender", "/PDB:main_" + str(pdbRandNum) + ".pdb"])
+        "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
 
     compileCommand = " ".join([
         "cl", "/DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Fe315k.exe", "/Fm315k.map", paths["win32-main-cpp"],
+        "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
         "/link", linkerFlags, libPaths, libs])
     
     loadCompiler = "call \"C:\\Program Files (x86)" + \

@@ -283,7 +283,6 @@ DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFile)
 	DEBUGReadFileResult result = {};
     
     char fullPath[MAX_PATH];
-    DEBUGPlatformPrint("path: %s\n", GetAppPath());
     CatStrings(StringLength(GetAppPath()), GetAppPath(),
         StringLength(fileName), fileName, MAX_PATH, fullPath);
 
@@ -581,7 +580,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 {
 	HMODULE oglLib = LoadLibrary("opengl32.dll");
     if (!oglLib) {
-        DEBUGPlatformPrint("Failed to load opengl32.dll\n");
+        DEBUG_PRINT("Failed to load opengl32.dll\n");
         return false;
     }
 
@@ -593,12 +592,13 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 	glFuncs->glViewport(0, 0, width, height);
 
 	// Set v-sync
-	// NOTE this isn't technically complete. we have to ask Windows if the extensions
-	// are loaded, and THEN look for the extension function name
+	// NOTE this isn't technically complete. we have to ask Windows
+    // if the extensions are loaded, and THEN look for the
+    // extension function name
 	wglSwapInterval = (wglSwapIntervalEXTFunc*)
         wglGetProcAddress("wglSwapIntervalEXT");
 	if (wglSwapInterval) {
-		wglSwapInterval(1);
+		wglSwapInterval(0);
 	}
 	else {
 		// TODO no vsync. logging? just exit? just exit for now
@@ -606,11 +606,11 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 	}
 
 	const GLubyte* vendorString = glFuncs->glGetString(GL_VENDOR);
-	DEBUGPlatformPrint("GL_VENDOR: %s\n", vendorString);
+	DEBUG_PRINT("GL_VENDOR: %s\n", vendorString);
 	const GLubyte* rendererString = glFuncs->glGetString(GL_RENDERER);
-	DEBUGPlatformPrint("GL_RENDERER: %s\n", rendererString);
+	DEBUG_PRINT("GL_RENDERER: %s\n", rendererString);
 	const GLubyte* versionString = glFuncs->glGetString(GL_VERSION);
-	DEBUGPlatformPrint("GL_VERSION: %s\n", versionString);
+	DEBUG_PRINT("GL_VERSION: %s\n", versionString);
 
 	int32 majorVersion = versionString[0] - '0';
 	int32 minorVersion = versionString[2] - '0';
@@ -627,7 +627,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 
 	const GLubyte* glslString =
         glFuncs->glGetString(GL_SHADING_LANGUAGE_VERSION);
-    DEBUGPlatformPrint("GL_SHADING_LANGUAGE_VERSION: %s\n", glslString);
+    DEBUG_PRINT("GL_SHADING_LANGUAGE_VERSION: %s\n", glslString);
 
 	return true;
 }
@@ -750,7 +750,7 @@ int CALLBACK WinMain(
 	Win32GetExeFileName(&state);
 
     RemoveFileNameFromPath(state.exeFilePath, pathToApp_, MAX_PATH);
-    DEBUGPlatformPrint("Path to executable: %s\n", pathToApp_);
+    DEBUG_PRINT("Path to executable: %s\n", pathToApp_);
 
 	Win32LoadXInput();
 
@@ -761,7 +761,7 @@ int CALLBACK WinMain(
 	if (!hWnd) {
 		return 1;
     }
-    DEBUGPlatformPrint("Created Win32 window\n");
+    DEBUG_PRINT("Created Win32 window\n");
 
 	RECT clientRect;
 	GetClientRect(hWnd, &clientRect);
@@ -779,7 +779,7 @@ int CALLBACK WinMain(
 	screenInfo.depthBits, screenInfo.stencilBits)) {
 		return 1;
     }
-    DEBUGPlatformPrint("Created Win32 OpenGL rendering context\n");
+    DEBUG_PRINT("Created Win32 OpenGL rendering context\n");
 
 	OpenGLFunctions glFuncs = {};
 
@@ -787,7 +787,7 @@ int CALLBACK WinMain(
 	if (!Win32InitOpenGL(&glFuncs, screenInfo.width, screenInfo.height)) {
 		return 1;
     }
-    DEBUGPlatformPrint("Initialized Win32 OpenGL\n");
+    DEBUG_PRINT("Initialized Win32 OpenGL\n");
 
 	// Try to get monitor refresh rate
 	// TODO make this more reliable
@@ -819,6 +819,8 @@ int CALLBACK WinMain(
 	gameMemory.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
 	gameMemory.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
 	gameMemory.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
+
+    gameMemory.DEBUGShouldInitGlobals = true;
 
 	// TODO Look into using large virtual pages for this
     // potentially big allocation
@@ -857,10 +859,10 @@ int CALLBACK WinMain(
 	}
 
 	char gameCodeDLLPath[MAX_PATH];
-	Win32BuildExePathFileName(&state, "315k.dll",
+	Win32BuildExePathFileName(&state, "315k_game.dll",
         MAX_PATH, gameCodeDLLPath);
 	char tempCodeDLLPath[MAX_PATH];
-	Win32BuildExePathFileName(&state, "315k_temp.dll",
+	Win32BuildExePathFileName(&state, "315k_game_temp.dll",
         MAX_PATH, tempCodeDLLPath);
 
 	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
@@ -894,6 +896,7 @@ int CALLBACK WinMain(
 		if (CompareFileTime(&newDLLWriteTime, &gameCode.lastDLLWriteTime) > 0) {
 			Win32UnloadGameCode(&gameCode);
 			gameCode = Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
+            gameMemory.DEBUGShouldInitGlobals = true;
 		}
 
 		Win32ProcessMessages(hWnd, newInput, &glFuncs);
@@ -977,11 +980,11 @@ int CALLBACK WinMain(
 		&& state.inputPlayingIndex == 0) {
 			if (state.inputRecordingIndex == 0) {
 				Win32RecordInputBegin(&state, 1);
-				DEBUGPlatformPrint("RECORDING - START\n");
+				DEBUG_PRINT("RECORDING - START\n");
 			}
 			else {
 				Win32RecordInputEnd(&state);
-				DEBUGPlatformPrint("RECORDING - STOP\n");
+				DEBUG_PRINT("RECORDING - STOP\n");
 			}
 		}
 		if (newInput->controllers[0].rShoulder.isDown
@@ -989,11 +992,11 @@ int CALLBACK WinMain(
 		&& state.inputRecordingIndex == 0) {
 			if (state.inputPlayingIndex == 0) {
 				Win32PlaybackBegin(&state, 1);
-				DEBUGPlatformPrint("-> PLAYING - START\n");
+				DEBUG_PRINT("-> PLAYING - START\n");
 			}
 			else {
 				Win32PlaybackEnd(&state);
-				DEBUGPlatformPrint("-> PLAYING - STOP\n");
+				DEBUG_PRINT("-> PLAYING - STOP\n");
 			}
 		}
 
@@ -1032,8 +1035,8 @@ int CALLBACK WinMain(
 		QueryPerformanceCounter(&vsyncEnd);
 
 		int64 vsyncElapsed = vsyncEnd.QuadPart - vsyncStart.QuadPart;
-		int32 vsyncElapsedMS = (int32)(1000 * vsyncElapsed / timerFreq);
-		//DEBUGPlatformPrint("SwapBuffers took %d ms\n", vsyncElapsedMS);
+		float32 vsyncElapsedMS = 1000.0f * vsyncElapsed / timerFreq;
+		//DEBUG_PRINT("SwapBuffers took %f ms\n", vsyncElapsedMS);
 
 		LARGE_INTEGER timerEnd;
 		QueryPerformanceCounter(&timerEnd);
@@ -1041,15 +1044,15 @@ int CALLBACK WinMain(
 
 		int64 cyclesElapsed = cyclesEnd - cyclesLast;
 		int64 timerElapsed = timerEnd.QuadPart - timerLast.QuadPart;
-		int32 elapsedMS = (int32)(1000 * timerElapsed / timerFreq);
-		int32 fps = (int32)(timerFreq / timerElapsed);
+		float32 elapsedMS = 1000.0f * timerElapsed / timerFreq;
+		float32 fps = (float32)timerFreq / timerElapsed;
 		int32 mCyclesPerFrame = (int32)(cyclesElapsed / (1000 * 1000));
 
-		/*DEBUGPlatformPrint("Rest of loop took %d ms\n",
+		/*DEBUG_PRINT("Rest of loop took %d ms\n",
             elapsedMS - vsyncElapsedMS);*/
 
-        /*DEBUGPlatformPrint("%dms/f, %df/s, %dMc/f\n",
-            elapsedMS, fps, mCyclesPerFrame);*/
+        DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
+            elapsedMS, fps, mCyclesPerFrame);
 
 		timerLast = timerEnd;
 		cyclesLast = cyclesEnd;

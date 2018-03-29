@@ -5,7 +5,7 @@
                 "name": "Windows Launch",
                 "type": "cppvsdbg",
                 "request": "launch",
-                "program": "${workspaceRoot}\\build\\315k.exe",
+                "program": "${workspaceRoot}\\build\\315k_win32.exe",
                 "args": [],
                 "stopAtEntry": false,
                 "cwd": "${workspaceRoot}",
