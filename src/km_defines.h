@@ -25,6 +25,13 @@ defined on the platform-specific compilation unit
 
 #define ARRAY_COUNT(arrayName) (sizeof(arrayName) / sizeof((arrayName)[0]))
 
+// Added (val - val) here to force integral promotion to the size of Value
+#define ALIGN_POW2(val, alignment) \
+    ((val + ((alignment) - 1)) & ~((val - val) + (alignment) - 1))
+#define ALIGN4(val) ((val + 3) & ~3)
+#define ALIGN8(val) ((val + 7) & ~7)
+#define ALIGN16(val) ((val + 15) & ~15)
+
 #define KILOBYTES(bytes)		((bytes) * 1024LL)
 #define MEGABYTES(bytes)		(KILOBYTES(bytes) * 1024LL)
 #define GIGABYTES(bytes)		(MEGABYTES(bytes) * 1024LL)
