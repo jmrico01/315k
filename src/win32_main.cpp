@@ -546,7 +546,7 @@ internal void Win32PlayInput(Win32State* state, GameInput* input)
     if (!glFuncs->name) { \
         glFuncs->name = (name##Func*)GetProcAddress(oglLib, #name); \
         if (!glFuncs->name) { \
-            DEBUG_PANIC("OpenGL function load failed: %s", #name); \
+            DEBUG_PRINT("OpenGL function load failed: %s", #name); \
         } \
     }
 

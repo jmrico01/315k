@@ -46,7 +46,7 @@ typedef void        glXSwapIntervalEXTFunc(
     Display* display, GLXDrawable drawable, int interval);
 global_var glXSwapIntervalEXTFunc* glXSwapIntervalEXT;
 
-#define LINUX_LOAD_OPENGL_FUNC(name) \
+#define LOAD_GLX_FUNCTION(name) \
     name = (name##Func*)glXGetProcAddress((const GLubyte*)#name)
 
 global_var int linuxOpenGLAttribs[] =
@@ -517,6 +517,7 @@ internal bool32 LinuxLoadGLXExtensions()
 
     char* extensions = (char*)glXQueryExtensionsString(tempDisplay,
         visuals->screen);
+    //DEBUG_PRINT("Supported extensions: %s\n", extensions);
     char* at = extensions;
     while (*at) {
         while (IsWhitespace(*at)) {
@@ -526,9 +527,9 @@ internal bool32 LinuxLoadGLXExtensions()
         while (*end && !IsWhitespace(*end)) {
             end++;
         }
-        size_t count = end - at;
+        //size_t count = end - at;
 
-        const char* srgbFramebufferExtName =
+        /*const char* srgbFramebufferExtName =
             "GLX_EXT_framebuffer_sRGB";
         const char* srgbFramebufferArbName =
             "GLX_ARB_framebuffer_sRGB";
@@ -541,7 +542,7 @@ internal bool32 LinuxLoadGLXExtensions()
         else if (StringsAreEqual(at, count,
         srgbFramebufferArbName, StringLength(srgbFramebufferArbName))) {
             //OpenGL.SupportsSRGBFramebuffer = true;
-        }
+        }*/
 
         at = end;
     }
@@ -591,32 +592,53 @@ internal GLXFBConfig* LinuxGetOpenGLFramebufferConfig(Display *display)
     return framebufferConfig;
 }
 
+#define LOAD_GL_FUNCTION(name) \
+    glFuncs->name = (name##Func*)glXGetProcAddress((const GLubyte*)#name); \
+    if (!glFuncs->name) { \
+        DEBUG_PANIC("OpenGL function load failed: %s", #name); \
+    }
+
+internal bool32 LinuxLoadBaseGLFunctions(OpenGLFunctions* glFuncs)
+{
+	// Generate function loading code
+#define FUNC(returntype, name, ...) LOAD_GL_FUNCTION(name);
+	GL_FUNCTIONS_BASE
+#undef FUNC
+
+    return true;
+}
+
+internal bool32 LinuxLoadAllGLFunctions(OpenGLFunctions* glFuncs)
+{
+	// Generate function loading code
+#define FUNC(returntype, name, ...) LOAD_GL_FUNCTION(name);
+	GL_FUNCTIONS_ALL
+#undef FUNC
+
+    return true;
+}
+
 internal bool32 LinuxInitOpenGL(
     OpenGLFunctions* glFuncs,
     Display* display, GLXDrawable glWindow,
     int width, int height)
 {
-	/*HMODULE oglLib = LoadLibrary("opengl32.dll");
-    if (!oglLib) {
-        DEBUG_PRINT("Failed to load opengl32.dll\n");
+    if (!LinuxLoadBaseGLFunctions(glFuncs)) {
+        DEBUG_PRINT("Failed to load base GL functions\n");
         return false;
     }
-
-	if (!Win32LoadBaseGLFunctions(glFuncs, oglLib)) {
-		// TODO logging (base GL loading failed, but context exists. weirdness)
-		return false;
-	}*/
 
 	glFuncs->glViewport(0, 0, width, height);
 
 	// Set v-sync
-    LINUX_LOAD_OPENGL_FUNC(glXSwapIntervalEXT);
+    LOAD_GLX_FUNCTION(glXSwapIntervalEXT);
     if (glXSwapIntervalEXT) {
         glXSwapIntervalEXT(display, glWindow, 1);
     }
     else {
         // TODO no vsync. logging? just exit? just exit for now
-        return false;
+        DEBUG_PRINT("Failed to load glXSwapIntervalEXT (no vsync)\n");
+        //return false;
     }
 
 	const GLubyte* vendorString = glFuncs->glGetString(GL_VENDOR);
@@ -634,10 +656,10 @@ internal bool32 LinuxInitOpenGL(
 		return false;
 	}
 
-	/*if (!Win32LoadAllGLFunctions(glFuncs, oglLib)) {
-		// TODO logging (couldn't load all functions, but version is 3.3+)
+	if (!LinuxLoadAllGLFunctions(glFuncs)) {
+        DEBUG_PRINT("Failed to load all GL functions\n");
 		return false;
-	}*/
+	}
 
 	const GLubyte* glslString =
         glFuncs->glGetString(GL_SHADING_LANGUAGE_VERSION);
@@ -1542,6 +1564,9 @@ LinuxFullRestart(char *SourceEXE, char *DestEXE, char *DeleteEXE)
 
 int main(int argc, char **argv)
 {
+    int width = 1280;
+    int height = 800;
+
     #if GAME_SLOW
     debugPrint_ = DEBUGPlatformPrint;
     #endif
@@ -1590,7 +1615,7 @@ int main(int argc, char **argv)
                                 KeyPressMask | KeyReleaseMask);
 
     Window glWindow = XCreateWindow(display, root,
-        100, 100, 1280, 800,
+        100, 100, width, height,
         0, visualInfo->depth, InputOutput, visualInfo->visual,
         CWBorderPixel | CWColormap | CWEventMask /*| CWOverrideRedirect*/,
         &windowAttribs);
@@ -1602,8 +1627,8 @@ int main(int argc, char **argv)
     XSizeHints sizeHints = {};
     sizeHints.x = 100;
     sizeHints.y = 100;
-    sizeHints.width  = 1280;
-    sizeHints.height = 800;
+    sizeHints.width  = width;
+    sizeHints.height = height;
     sizeHints.flags = USSize | USPosition; // US vs PS?
 
     XSetNormalHints(display, glWindow, &sizeHints);
@@ -1615,7 +1640,7 @@ int main(int argc, char **argv)
     DEBUG_PRINT("Created X11 window\n");
 
     GLXContext glxContext = 0;
-    LINUX_LOAD_OPENGL_FUNC(glXCreateContextAttribsARB);
+    LOAD_GLX_FUNCTION(glXCreateContextAttribsARB);
     if (glXCreateContextAttribsARB) {
         glxContext = glXCreateContextAttribsARB(display, framebufferConfig,
             0, true, linuxOpenGLAttribs);
@@ -1632,7 +1657,7 @@ int main(int argc, char **argv)
     DEBUG_PRINT("Created GLX context\n");
 
 	OpenGLFunctions glFuncs = {};
-    if (!LinuxInitOpenGL(&glFuncs, display, glWindow, 1280, 800)) {
+    if (!LinuxInitOpenGL(&glFuncs, display, glWindow, width, height)) {
         return 1;
     }
     DEBUG_PRINT("Initialized Linux OpenGL\n");
