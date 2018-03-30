@@ -2,6 +2,12 @@
 
 #include "km_defines.h"
 
+#ifdef GAME_LINUX
+
+#include <GL/gl.h>
+
+#endif
+
 #ifdef GAME_WIN32
 
 #define GL_FALSE					0

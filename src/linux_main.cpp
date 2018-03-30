@@ -593,7 +593,8 @@ internal GLXFBConfig* LinuxGetOpenGLFramebufferConfig(Display *display)
 
 internal bool32 LinuxInitOpenGL(
     OpenGLFunctions* glFuncs,
-    Display* display, GLXDrawable glWindow)
+    Display* display, GLXDrawable glWindow,
+    int width, int height)
 {
 	/*HMODULE oglLib = LoadLibrary("opengl32.dll");
     if (!oglLib) {
@@ -1631,7 +1632,7 @@ int main(int argc, char **argv)
     DEBUG_PRINT("Created GLX context\n");
 
 	OpenGLFunctions glFuncs = {};
-    if (!LinuxInitOpenGL(&glFuncs, display, glWindow)) {
+    if (!LinuxInitOpenGL(&glFuncs, display, glWindow, 1280, 800)) {
         return 1;
     }
     DEBUG_PRINT("Initialized Linux OpenGL\n");
