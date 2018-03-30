@@ -2,32 +2,6 @@
 
 #include "km_defines.h"
 
-typedef void	GLvoid;
-
-typedef bool	GLboolean;
-
-typedef char	GLchar;
-typedef int8	GLbyte;
-typedef int16	GLshort;
-typedef int32	GLint;
-typedef int64	GLint64;
-
-typedef uint8	GLubyte;
-typedef uint16	GLushort;
-typedef uint32	GLuint;
-typedef uint64	GLuint64;
-
-typedef uint32	GLsizei;
-typedef uint32	GLenum;
-typedef uint32	GLbitfield;
-
-typedef size_t	GLsizeiptr;
-
-typedef float32	GLfloat;
-typedef float32	GLclampf;
-typedef float64	GLdouble;
-typedef float64	GLclampd;
-
 #define GL_FALSE					0
 #define GL_TRUE						1
 
@@ -97,6 +71,43 @@ typedef float64	GLclampd;
 #define GL_ONE_MINUS_DST_ALPHA		0x0305
 #define GL_DST_COLOR				0x0306
 #define GL_ONE_MINUS_DST_COLOR		0x0307
+
+#ifdef GAME_LINUX
+
+#include <GL/gl.h>
+#include <GL/glx.h>
+
+#endif
+
+#ifdef GAME_WIN32
+
+typedef void	GLvoid;
+
+typedef bool	GLboolean;
+
+typedef char	GLchar;
+typedef int8	GLbyte;
+typedef int16	GLshort;
+typedef int32	GLint;
+typedef int64	GLint64;
+
+typedef uint8	GLubyte;
+typedef uint16	GLushort;
+typedef uint32	GLuint;
+typedef uint64	GLuint64;
+
+typedef uint32	GLenum;
+typedef uint32	GLbitfield;
+
+typedef float32	GLfloat;
+typedef float32	GLclampf;
+typedef float64	GLdouble;
+typedef float64	GLclampd;
+
+typedef uint32	GLsizei;
+typedef size_t	GLsizeiptr;
+
+#endif
 
 // X Macro trickery for declaring required OpenGL functions
 // The general FUNC macro has the form
@@ -178,13 +189,13 @@ struct OpenGLFunctions
 {
 	// Generate function pointers
 #define FUNC(returntype, name, ...) name##Func* name;
-	GL_FUNCTIONS_BASE
-	GL_FUNCTIONS_ALL
+	//GL_FUNCTIONS_BASE
+	// GL_FUNCTIONS_ALL
 #undef FUNC
 };
 
 // TODO maybe there's a better way of doing this...
 #define FUNC(returntype, name, ...) extern name##Func* name;
-    GL_FUNCTIONS_BASE
-    GL_FUNCTIONS_ALL
+    //GL_FUNCTIONS_BASE
+    //GL_FUNCTIONS_ALL
 #undef FUNC

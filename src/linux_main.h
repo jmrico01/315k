@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sys/types.h>
+
 #include "km_defines.h"
 #include "main_platform.h"
 
@@ -70,23 +72,15 @@ struct LinuxDebugTimeMarker
 
 struct LinuxGameCode
 {
-    //void *GameLibHandle;
-    //ino_t GameLibID;
+    void *GameLibHandle;
+    ino_t GameLibID;
 
-    // IMPORTANT(casey): Either of the callbacks can be 0!  You must
-    // check before calling.
-    //game_update_and_render *UpdateAndRender;
-    //game_get_sound_samples *GetSoundSamples;
-    //debug_game_frame_end *DEBUGFrameEnd;
+    // NOTE: Callbacks can be 0!  You must check before calling
+    GameUpdateAndRenderFunc* gameUpdateAndRender;
 
     bool32 IsValid;
 };
 
-enum linux_memory_block_flag
-{
-    LINUXMEM_ALLOCATED_DURING_LOOP  = 0x1,
-    LINUXMEM_FREED_DURING_LOOP      = 0x2
-};
 struct LinuxMemoryBlock
 {
     GameMemory memory;
@@ -107,7 +101,7 @@ struct LinuxState
     // NOTE(casey): To touch the memory ring, you must
     // take the memory mutex!
     //ticket_mutex MemoryMutex;
-    //linux_memory_block MemorySentinel;
+    //LinuxMemoryBlock MemorySentinel;
 
     int32 RecordingHandle;
     int32 InputRecordingIndex;
@@ -115,11 +109,6 @@ struct LinuxState
     int32 PlaybackHandle;
     int32 InputPlayingIndex;
 
-    char EXEFileName[LINUX_STATE_FILE_NAME_COUNT];
-    char *OnePastLastEXEFileNameSlash;
+    char exeFilePath[LINUX_STATE_FILE_NAME_COUNT];
+    char* exeOnePastLastSlash;
 };
-
-/*struct linux_thread_startup
-{
-    platform_work_queue *Queue;
-};*/

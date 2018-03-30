@@ -22,7 +22,7 @@ struct DEBUGReadFileResult
 typedef DEBUG_PLATFORM_PRINT_FUNC(DEBUGPlatformPrintFunc);
 
 #define DEBUG_PLATFORM_FREE_FILE_MEMORY_FUNC(name) \
-    void name(ThreadContext* thread, void* memory)
+    void name(ThreadContext* thread, DEBUGReadFileResult* file)
 typedef DEBUG_PLATFORM_FREE_FILE_MEMORY_FUNC(DEBUGPlatformFreeFileMemoryFunc);
 
 #define DEBUG_PLATFORM_READ_FILE_FUNC(name) \

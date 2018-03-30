@@ -216,6 +216,8 @@ internal void RemoveFileNameFromPath(
     char* filePath, char* dest, uint64 destLength)
 {
     unsigned int lastSlash = 0;
+	// TODO confused... some cross-platform code inside a win32 file
+	//	maybe I meant to pull this out sometime?
 #ifdef _WIN32
     char pathSep = '\\';
 #else

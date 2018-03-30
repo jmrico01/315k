@@ -38,6 +38,7 @@ paths["src-shaders"]    = paths["src"] + "/shaders"
 
 
 paths["main-cpp"]       = paths["src"] + "/main.cpp"
+paths["linux-main-cpp"] = paths["src"] + "/linux_main.cpp"
 paths["win32-main-cpp"] = paths["src"] + "/win32_main.cpp"
 
 paths["include-glew"]       = paths["external"] + "/glew-2.1.0/include"
@@ -64,7 +65,7 @@ def WinCompileDebug():
     macros = " ".join([
         "/DGAME_INTERNAL=1",
         "/DGAME_SLOW=1",
-        "/DGAME_WIN32=1",
+        "/DGAME_WIN32",
         "/D_CRT_SECURE_NO_WARNINGS"
     ])
     compilerFlags = " ".join([
@@ -143,6 +144,11 @@ def WinCompileRelease():
     return
 
 def LinuxCompileDebug():
+    macros = " ".join([
+        "-DGAME_INTERNAL=1",
+        "-DGAME_SLOW=1",
+        "-DGAME_LINUX"
+    ])
     compilerFlags = " ".join([
         "-std=c++11",       # use C++11 standard
         "-ggdb3",           # generate level 3 (max) GDB debug info.
@@ -155,44 +161,48 @@ def LinuxCompileDebug():
 
         # disable the following warnings:
         "-Wno-char-subscripts" # using char as an array subscript
+
+        ,"-Wno-unused-function" # TODO temporary! remove this!
     ])
     includePaths = " ".join([
-        "-I" + paths["include-glew"],
-        "-I" + paths["include-glfw"],
-        "-I" + paths["include-freetype"],
-        "-I" + paths["include-lodepng"]
+        #"-I" + paths["include-glew"],
+        #"-I" + paths["include-glfw"],
+        #"-I" + paths["include-freetype"],
+        #"-I" + paths["include-lodepng"]
     ])
 
     libPaths = " ".join([
-        "-L" + paths["lib-glfw-linux"],
-        "-L" + paths["lib-ft-linux"]
+        #"-L" + paths["lib-glfw-linux"],
+        #"-L" + paths["lib-ft-linux"]
     ])
     libs = " ".join([
         # main external libs
-        "-lglfw3",
-        "-lfreetype",
+        #"-lglfw3",
+        #"-lfreetype",
 
         # GLFW3 dependencies
         "-lGL",
-        "-lm",
-        "-lXrandr",
-        "-lXi",
+        #"-lm",
+        #"-lXrandr",
+        #"-lXi",
         "-lX11",
-        "-lXxf86vm",
-        "-lXcursor",
-        "-lXinerama",
-        "-lpthread",
-        "-ldl",
+        "-lm", # math
+        "-ldl", # dynamic linking loader
+        #"-lXxf86vm",
+        #"-lXcursor",
+        #"-lXinerama",
+        #"-lpthread",
+        #"-ldl",
 
         # FreeType dependencies
-        "-lz",
-        "-lpng"
+        #"-lz",
+        #"-lpng"
     ])
 
     compileCommand = " ".join([
-        "g++",
-        compilerFlags, compilerWarningFlags, includePaths,
-        paths["main-cpp"], "-o opengl",
+        "gcc", "-DGAME_PLATFORM_CODE",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        paths["linux-main-cpp"], "-o opengl",
         libPaths, libs
     ])
 
@@ -241,7 +251,7 @@ def MacCompileDebug():
     ])
 
     compileCommand = " ".join([
-        "gcc",
+        "g++",
         compilerFlags, compilerWarningFlags, includePaths,
         paths["main-cpp"], "-o opengl",
         libPaths, libs
@@ -294,7 +304,6 @@ def Debug():
     elif platformName == "Linux":
         LinuxCompileDebug()
     else:
-        LinuxCompileDebug()
         print "Unsupported platform: " + platformName
         
 
@@ -327,19 +336,11 @@ def Release():
 
     platformName = platform.system()
     if platformName == "Windows":
-        WinCompileRelease()
+        print "Release: UNIMPLEMENTED"
     elif platformName == "Linux":
         print "Release: UNIMPLEMENTED"
     else:
         print "Release: UNIMPLEMENTED"
-
-def External():
-    if not os.path.exists(paths["external-build"]):
-        os.makedirs(paths["external-build"])
-    
-    for fileName in os.listdir(paths["external-src"]):
-        filePath = os.path.join(paths["external-src"], fileName)
-        print filePath
 
 def Clean():
     for fileName in os.listdir(paths["build"]):
@@ -368,8 +369,6 @@ def Main():
         IfChanged()
     elif arg1 == "release":
         Release()
-    elif arg1 == "external":
-        External()
     elif arg1 == "clean":
         Clean()
 
