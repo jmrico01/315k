@@ -5,7 +5,6 @@
 #include <Xinput.h>
 
 #include "opengl.h"
-#include "opengl_global.h"
 #include "km_debug.h"
 
 /*
