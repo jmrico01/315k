@@ -420,8 +420,9 @@ internal void Win32ProcessMessages(
 			uint32 vkCode = (uint32)msg.wParam;
 			bool32 altDown = (msg.lParam & (1 << 29));
 
-			if (vkCode == VK_F4 && altDown)
+			if (vkCode == VK_F4 && altDown) {
 				running_ = false;
+            }
 		} break;
 		case WM_SYSKEYUP: {
 		} break;
@@ -431,10 +432,12 @@ internal void Win32ProcessMessages(
 			bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
 			DEBUG_ASSERT(isDown);
 
-			if (vkCode == VK_ESCAPE)
+			if (vkCode == VK_ESCAPE) {
 				running_ = false;
-			if (vkCode == VK_F11)
+            }
+			if (vkCode == VK_F11) {
 				Win32ToggleFullscreen(hWnd, glFuncs);
+            }
 		} break;
 		case WM_KEYUP: {
 			uint32 vkCode = (uint32)msg.wParam;
@@ -1006,16 +1009,15 @@ int CALLBACK WinMain(
 
 #if GAME_INTERNAL
 		if (newInput->controllers[0].y.isDown
-        && newInput->controllers[0].y.transitions == 1) {
+        && newInput->controllers[0].y.transitions > 0) {
 			gameMemory.isInitialized = false;
 		}
 #endif
 
 		ThreadContext thread = {};
-
 		if (gameCode.gameUpdateAndRender) {
 			gameCode.gameUpdateAndRender(&thread, &gameMemory,
-            screenInfo, newInput, &glFuncs);
+                screenInfo, newInput, &glFuncs);
         }
 
 		LARGE_INTEGER vsyncStart;
