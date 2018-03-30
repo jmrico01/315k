@@ -5,6 +5,7 @@
 #include <Xinput.h>
 
 #include "opengl.h"
+#include "opengl_global.h"
 #include "km_debug.h"
 
 /*
@@ -270,8 +271,8 @@ DEBUG_PLATFORM_PRINT_FUNC(DEBUGPlatformPrint)
 
 DEBUG_PLATFORM_FREE_FILE_MEMORY_FUNC(DEBUGPlatformFreeFileMemory)
 {
-	if (memory) {
-		VirtualFree(memory, 0, MEM_RELEASE);
+	if (file->data) {
+		VirtualFree(file->data, 0, MEM_RELEASE);
     }
 }
 
@@ -308,7 +309,7 @@ DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFile)
 	if (!ReadFile(hFile, result.data, fileSize32, &bytesRead, NULL) ||
 		fileSize32 != bytesRead) {
 		// TODO log
-		DEBUGPlatformFreeFileMemory(thread, result.data);
+		DEBUGPlatformFreeFileMemory(thread, &result);
 		return result;
 	}
 

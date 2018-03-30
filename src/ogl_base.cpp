@@ -134,8 +134,8 @@ GLuint LoadShaders(
     glDeleteShader(vertShaderID);
     glDeleteShader(fragShaderID);
 
-    DEBUGPlatformFreeFileMemory(thread, vertFile.data);
-    DEBUGPlatformFreeFileMemory(thread, fragFile.data);
+    DEBUGPlatformFreeFileMemory(thread, &vertFile);
+    DEBUGPlatformFreeFileMemory(thread, &fragFile);
 
     return programID;
 }
