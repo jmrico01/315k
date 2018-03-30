@@ -5,6 +5,9 @@
 #include "km_defines.h"
 #include "main_platform.h"
 
+#define LINUX_STATE_FILE_NAME_COUNT  512
+#define BYTES_PER_PIXEL 4
+
 // Looked up with xev command
 #define KEYCODE_W           25
 #define KEYCODE_A           38
@@ -41,16 +44,6 @@
 #define KEYCODE_SHIFT_MASK  0x01
 #define KEYCODE_CTRL_MASK   0x04
 #define KEYCODE_ALT_MASK    0x08
-
-#define BYTES_PER_PIXEL 4
-struct LinuxOffscreenBuffer
-{
-    // Pixels are always 32-bits wide, little endian 0x AA RR GG BB, or [0xBB, 0xGG, 0xRR, 0xAA] in memory
-    uint32 Width;
-    uint32 Height;
-    uint32 Pitch;
-    uint8 *Memory;   // pointer to texture buffer
-};
 
 struct LinuxWindowDimension
 {
@@ -95,7 +88,6 @@ struct linux_saved_memory_block
     uint64 Size;
 };
 
-#define LINUX_STATE_FILE_NAME_COUNT  512
 struct LinuxState
 {
     // NOTE(casey): To touch the memory ring, you must

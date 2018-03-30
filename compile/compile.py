@@ -181,18 +181,10 @@ def LinuxCompileDebug():
         #"-lfreetype",
 
         # GLFW3 dependencies
-        "-lGL",
-        #"-lm",
-        #"-lXrandr",
-        #"-lXi",
-        "-lX11",
-        "-lm", # math
-        "-ldl", # dynamic linking loader
-        #"-lXxf86vm",
-        #"-lXcursor",
-        #"-lXinerama",
-        #"-lpthread",
-        #"-ldl",
+        "-lm",      # math
+        "-ldl",     # dynamic linking loader
+        "-lGL",     # OpenGL
+        "-lX11",    # X11
 
         # FreeType dependencies
         #"-lz",
@@ -202,7 +194,7 @@ def LinuxCompileDebug():
     compileCommand = " ".join([
         "gcc", "-DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        paths["linux-main-cpp"], "-o opengl",
+        paths["linux-main-cpp"], "-o 315k_linux",
         libPaths, libs
     ])
 

@@ -27,7 +27,7 @@
 
 // TODO this is a global for now
 global_var char pathToApp_[MAX_PATH];
-global_var bool running_;
+global_var bool32 running_;
 global_var bool32 DEBUGshowCursor_;
 global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 
@@ -127,7 +127,34 @@ internal void Win32ToggleFullscreen(HWND hWnd, OpenGLFunctions* glFuncs)
 	}
 }
 
-internal void Win32GetExeFileName(Win32State* state)
+internal void RemoveFileNameFromPath(
+    const char* filePath, char* dest, uint64 destLength)
+{
+    unsigned int lastSlash = 0;
+	// TODO confused... some cross-platform code inside a win32 file
+	//	maybe I meant to pull this out sometime?
+#ifdef _WIN32
+    char pathSep = '\\';
+#else
+    char pathSep = '/';
+#endif
+    while (filePath[lastSlash] != '\0') {
+        lastSlash++;
+    }
+    // TODO unsafe!
+    while (filePath[lastSlash] != pathSep) {
+        lastSlash--;
+    }
+    if (lastSlash + 2 > destLength) {
+        return;
+    }
+    for (unsigned int i = 0; i < lastSlash + 1; i++) {
+        dest[i] = filePath[i];
+    }
+    dest[lastSlash + 1] = '\0';
+}
+
+internal void Win32GetExeFilePath(Win32State* state)
 {
 	// NOTE
 	// Never use MAX_PATH in code that is user-facing, because it is
@@ -212,38 +239,6 @@ internal inline uint32 SafeTruncateUInt64(uint64 value)
 	return result;
 }
 
-internal void RemoveFileNameFromPath(
-    char* filePath, char* dest, uint64 destLength)
-{
-    unsigned int lastSlash = 0;
-	// TODO confused... some cross-platform code inside a win32 file
-	//	maybe I meant to pull this out sometime?
-#ifdef _WIN32
-    char pathSep = '\\';
-#else
-    char pathSep = '/';
-#endif
-    while (filePath[lastSlash] != '\0') {
-        lastSlash++;
-    }
-    // TODO unsafe!
-    while (filePath[lastSlash] != pathSep) {
-        lastSlash--;
-    }
-    if (lastSlash + 2 > destLength) {
-        return;
-    }
-    for (unsigned int i = 0; i < lastSlash + 1; i++) {
-        dest[i] = filePath[i];
-    }
-    dest[lastSlash + 1] = '\0';
-}
-
-internal char* GetAppPath()
-{
-    return pathToApp_;
-}
-
 #if GAME_INTERNAL
 
 DEBUG_PLATFORM_PRINT_FUNC(DEBUGPlatformPrint)
@@ -285,7 +280,7 @@ DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFile)
 	DEBUGReadFileResult result = {};
     
     char fullPath[MAX_PATH];
-    CatStrings(StringLength(GetAppPath()), GetAppPath(),
+    CatStrings(StringLength(pathToApp_), pathToApp_,
         StringLength(fileName), fileName, MAX_PATH, fullPath);
 
 	HANDLE hFile = CreateFile(fullPath, GENERIC_READ, FILE_SHARE_READ,
@@ -749,7 +744,7 @@ int CALLBACK WinMain(
     #endif
 
 	Win32State state = {};
-	Win32GetExeFileName(&state);
+	Win32GetExeFilePath(&state);
 
     RemoveFileNameFromPath(state.exeFilePath, pathToApp_, MAX_PATH);
     DEBUG_PRINT("Path to executable: %s\n", pathToApp_);

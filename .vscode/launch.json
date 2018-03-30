@@ -18,7 +18,7 @@
                 "name": "Linux Launch",
                 "type": "cppdbg",
                 "request": "launch",
-                "program": "${workspaceRoot}/build/opengl",
+                "program": "${workspaceRoot}/build/315k_linux",
                 "args": [],
                 "stopAtEntry": false,
                 "cwd": "${workspaceRoot}",
