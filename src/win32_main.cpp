@@ -17,18 +17,23 @@
 	- Getting a handle to our own exe file
 	- Asset loading path
 	- Threading (launch a thread)
-	- Raw Input (maybe)
 	- Sleep/timeBeginPeriod (don't melt the processor)
 	- ClipCursor() (multimonitor support)
-	- Fullscreen support
 	- WM_SETCURSOR (control cursor visibility)
 	- QueryCancelAutoplay
 	- WM_ACTIVATEAPP (for when we are not the active app)
 */
 
+#define START_WIDTH 1280
+#define START_HEIGHT 800
+
 // TODO this is a global for now
 global_var char pathToApp_[MAX_PATH];
-global_var bool32 running_;
+global_var bool32 running_ = true;
+global_var GameInput* input_ = nullptr;             // for WndProc WM_CHAR
+global_var glViewportFunc* glViewport_ = nullptr;   // for WndProc WM_SIZE
+global_var ScreenInfo* screenInfo_ = nullptr;       // for WndProc WM_SIZE
+
 global_var bool32 DEBUGshowCursor_;
 global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 
@@ -379,6 +384,18 @@ LRESULT CALLBACK WndProc(
 			running_ = false;
 		} break;
 
+        case WM_SIZE: {
+            int width = LOWORD(lParam);
+            int height = HIWORD(lParam);
+            if (glViewport_) {
+                glViewport_(0, 0, width, height);
+            }
+            if (screenInfo_) {
+                screenInfo_->width = width;
+                screenInfo_->height = height;
+            }
+        } break;
+
 		case WM_SETCURSOR: {
 			if (DEBUGshowCursor_)
 				result = DefWindowProc(hWnd, message, wParam, lParam);
@@ -393,15 +410,14 @@ LRESULT CALLBACK WndProc(
             DEBUG_PANIC("WM_SYSKEYUP in WndProc");
 		} break;
 		case WM_KEYDOWN: {
-            //DEBUG_PANIC("WM_KEYDOWN in WndProc");
 		} break;
 		case WM_KEYUP: {
-            //DEBUG_PANIC("WM_KEYUP in WndProc");
 		} break;
 
         case WM_CHAR: {
             char c = (char)wParam;
-            DEBUG_PRINT("%c", c);
+            input_->keyboardString[input_->keyboardStringLen++] = c;
+            input_->keyboardString[input_->keyboardStringLen] = '\0';
         } break;
 
 		default: {
@@ -474,6 +490,7 @@ internal void Win32ProcessMessages(
 		case WM_QUIT: {
 			running_ = false;
 		} break;
+
 		case WM_SYSKEYDOWN: {
 			uint32 vkCode = (uint32)msg.wParam;
 			bool32 altDown = (msg.lParam & (1 << 29));
@@ -495,28 +512,18 @@ internal void Win32ProcessMessages(
             if (kmKeyCode != -1) {
                 gameInput->keyboard[kmKeyCode].isDown = isDown;
                 gameInput->keyboard[kmKeyCode].transitions = transitions;
-
-                if (kmKeyCode >= KM_KEY_A && kmKeyCode <= KM_KEY_Z) {
-                    int ch = kmKeyCode - KM_KEY_A;
-                    if (gameInput->keyboard[KM_KEY_SHIFT].isDown) {
-                        ch += 'A';
-                    }
-                    else {
-                        ch += 'a';
-                    }
-
-                    gameInput->keyboardString[gameInput->keyboardStringLen++] =
-                        (char)ch;
-                    gameInput->keyboardString[gameInput->keyboardStringLen] =
-                        '\0';
-                }
             }
 
 			if (vkCode == VK_ESCAPE) {
                 // TODO eventually handle this in the game layer
 				running_ = false;
             }
+            if (vkCode == VK_F11) {
+                Win32ToggleFullscreen(hWnd, glFuncs);
+            }
 
+            // Pass over to WndProc for WM_CHAR messages (string input)
+            input_ = gameInput;
             TranslateMessage(&msg);
             DispatchMessage(&msg);
 		} break;
@@ -687,6 +694,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 		// TODO logging (base GL loading failed, but context exists. weirdness)
 		return false;
 	}
+    glViewport_ = glFuncs->glViewport;
 
 	glFuncs->glViewport(0, 0, width, height);
 
@@ -856,7 +864,7 @@ int CALLBACK WinMain(
 	// Create window
 	HWND hWnd = Win32CreateWindow(hInstance,
 		"OpenGLWindowClass", "315K",
-		100, 100, 1280, 800);
+		100, 100, START_WIDTH, START_HEIGHT);
 	if (!hWnd) {
 		return 1;
     }
@@ -872,6 +880,7 @@ int CALLBACK WinMain(
 	screenInfo.alphaBits = 8;
 	screenInfo.depthBits = 24;
 	screenInfo.stencilBits = 0;
+    screenInfo_ = &screenInfo;
 
 	// Create and attach rendering context for OpenGL
 	if (!Win32CreateRC(hWnd, screenInfo.colorBits, screenInfo.alphaBits,
@@ -1005,7 +1014,7 @@ int CALLBACK WinMain(
 		GetCursorPos(&mousePos);
 		ScreenToClient(hWnd, &mousePos);
 		newInput->mouseX = mousePos.x;
-		newInput->mouseY = mousePos.y;
+		newInput->mouseY = screenInfo.height - mousePos.y;
 		newInput->mouseWheel = 0;
 		newInput->mouseButtons[0].isDown = (int32)GetKeyState(VK_LBUTTON);
 		newInput->mouseButtons[1].isDown = (int32)GetKeyState(VK_RBUTTON);
