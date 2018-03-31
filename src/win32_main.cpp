@@ -393,11 +393,16 @@ LRESULT CALLBACK WndProc(
             DEBUG_PANIC("WM_SYSKEYUP in WndProc");
 		} break;
 		case WM_KEYDOWN: {
-            DEBUG_PANIC("WM_KEYDOWN in WndProc");
+            //DEBUG_PANIC("WM_KEYDOWN in WndProc");
 		} break;
 		case WM_KEYUP: {
-            DEBUG_PANIC("WM_KEYUP in WndProc");
+            //DEBUG_PANIC("WM_KEYUP in WndProc");
 		} break;
+
+        case WM_CHAR: {
+            char c = (char)wParam;
+            DEBUG_PRINT("%c", c);
+        } break;
 
 		default: {
 			result = DefWindowProc(hWnd, message, wParam, lParam);
@@ -511,6 +516,9 @@ internal void Win32ProcessMessages(
                 // TODO eventually handle this in the game layer
 				running_ = false;
             }
+
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
 		} break;
 		case WM_KEYUP: {
 			uint32 vkCode = (uint32)msg.wParam;
@@ -534,9 +542,10 @@ internal void Win32ProcessMessages(
 	}
 }
 
-internal void Win32ClearInput(GameInput* input)
+internal void Win32ClearInput(GameInput* input, GameInput* inputPrev)
 {
     for (int i = 0; i < KM_KEY_LAST; i++) {
+        input->keyboard[i].isDown = inputPrev->keyboard[i].isDown;
         input->keyboard[i].transitions = 0;
     }
 
@@ -1151,7 +1160,7 @@ int CALLBACK WinMain(
 		newInput = oldInput;
 		oldInput = temp;
 
-        Win32ClearInput(newInput);
+        Win32ClearInput(newInput, oldInput);
 	}
 
 	return 0;

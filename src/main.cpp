@@ -375,7 +375,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
     
     if (input->keyboardStringLen > 0) {
-        DEBUG_PRINT("%s", input->keyboardString);
+        //DEBUG_PRINT("%s", input->keyboardString);
     }
 }
 
