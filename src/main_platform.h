@@ -90,6 +90,11 @@ struct GameInput
 	GameControllerInput controllers[4];
 };
 
+struct GameAudio
+{
+    // standardized audio output (PCM float? 16-bit?)
+};
+
 struct GameMemory
 {
 	bool32 isInitialized;
