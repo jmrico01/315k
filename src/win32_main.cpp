@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <Xinput.h>
+#include <intrin.h> // __rdtsc
 
 #include "opengl.h"
 #include "km_debug.h"
@@ -406,6 +407,58 @@ LRESULT CALLBACK WndProc(
 	return result;
 }
 
+internal int Win32KeyCodeToKM(int vkCode)
+{
+    // Numbers, letters, text
+    if (vkCode >= 0x30 && vkCode <= 0x39) {
+        return vkCode - 0x30 + KM_KEY_0;
+    }
+    else if (vkCode >= 0x41 && vkCode <= 0x5a) {
+        return vkCode - 0x41 + KM_KEY_A;
+    }
+    else if (vkCode == VK_SPACE) {
+        return KM_KEY_SPACE;
+    }
+    else if (vkCode == VK_BACK) {
+        return KM_KEY_BACKSPACE;
+    }
+    // Arrow keys
+    else if (vkCode == VK_UP) {
+        return KM_KEY_ARROW_UP;
+    }
+    else if (vkCode == VK_DOWN) {
+        return KM_KEY_ARROW_DOWN;
+    }
+    else if (vkCode == VK_LEFT) {
+        return KM_KEY_ARROW_LEFT;
+    }
+    else if (vkCode == VK_RIGHT) {
+        return KM_KEY_ARROW_RIGHT;
+    }
+    // Special keys
+    else if (vkCode == VK_ESCAPE) {
+        return KM_KEY_ESCAPE;
+    }
+    else if (vkCode == VK_SHIFT) {
+        return KM_KEY_SHIFT;
+    }
+    else if (vkCode == VK_CONTROL) {
+        return KM_KEY_CTRL;
+    }
+    else if (vkCode == VK_TAB) {
+       return KM_KEY_TAB;
+    }
+    else if (vkCode == VK_RETURN) {
+        return KM_KEY_ENTER;
+    }
+    else if (vkCode >= 0x60 && vkCode <= 0x69) {
+        return vkCode - 0x60 + KM_KEY_NUMPAD_0;
+    }
+    else {
+        return -1;
+    }
+}
+
 internal void Win32ProcessMessages(
 	HWND hWnd, GameInput* gameInput,
 	OpenGLFunctions* glFuncs)
@@ -430,20 +483,47 @@ internal void Win32ProcessMessages(
 			uint32 vkCode = (uint32)msg.wParam;
 			bool32 wasDown = ((msg.lParam & (1 << 30)) != 0);
 			bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
+            int transitions = (wasDown != isDown) ? 1 : 0;
 			DEBUG_ASSERT(isDown);
 
-			if (vkCode == VK_ESCAPE) {
-				running_ = false;
+            int kmKeyCode = Win32KeyCodeToKM(vkCode);
+            if (kmKeyCode != -1) {
+                gameInput->keyboard[kmKeyCode].isDown = isDown;
+                gameInput->keyboard[kmKeyCode].transitions = transitions;
+
+                if (kmKeyCode >= KM_KEY_A && kmKeyCode <= KM_KEY_Z) {
+                    int ch = kmKeyCode - KM_KEY_A;
+                    if (gameInput->keyboard[KM_KEY_SHIFT].isDown) {
+                        ch += 'A';
+                    }
+                    else {
+                        ch += 'a';
+                    }
+
+                    gameInput->keyboardString[gameInput->keyboardStringLen++] =
+                        (char)ch;
+                    gameInput->keyboardString[gameInput->keyboardStringLen] =
+                        '\0';
+                }
             }
-			if (vkCode == VK_F11) {
-				Win32ToggleFullscreen(hWnd, glFuncs);
+
+			if (vkCode == VK_ESCAPE) {
+                // TODO eventually handle this in the game layer
+				running_ = false;
             }
 		} break;
 		case WM_KEYUP: {
 			uint32 vkCode = (uint32)msg.wParam;
 			bool32 wasDown = ((msg.lParam & (1 << 30)) != 0);
 			bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
+            int transitions = (wasDown != isDown) ? 1 : 0;
 			DEBUG_ASSERT(!isDown);
+
+            int kmKeyCode = Win32KeyCodeToKM(vkCode);
+            if (kmKeyCode != -1) {
+                gameInput->keyboard[kmKeyCode].isDown = isDown;
+                gameInput->keyboard[kmKeyCode].transitions = transitions;
+            }
 		} break;
 
 		default: {
@@ -452,6 +532,16 @@ internal void Win32ProcessMessages(
 		} break;
 		}
 	}
+}
+
+internal void Win32ClearInput(GameInput* input)
+{
+    for (int i = 0; i < KM_KEY_LAST; i++) {
+        input->keyboard[i].transitions = 0;
+    }
+
+    input->keyboardString[0] = '\0';
+    input->keyboardStringLen = 0;
 }
 
 internal void Win32ProcessXInputButton(
@@ -899,6 +989,7 @@ int CALLBACK WinMain(
             gameMemory.DEBUGShouldInitGlobals = true;
 		}
 
+        // Process keyboard input & other messages
 		Win32ProcessMessages(hWnd, newInput, &glFuncs);
 
 		POINT mousePos;
@@ -1050,8 +1141,8 @@ int CALLBACK WinMain(
 		/*DEBUG_PRINT("Rest of loop took %d ms\n",
             elapsedMS - vsyncElapsedMS);*/
 
-        DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
-            elapsedMS, fps, mCyclesPerFrame);
+        /*DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
+            elapsedMS, fps, mCyclesPerFrame);*/
 
 		timerLast = timerEnd;
 		cyclesLast = cyclesEnd;
@@ -1059,7 +1150,8 @@ int CALLBACK WinMain(
 		GameInput *temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
-		// TODO should I clear these here?
+
+        Win32ClearInput(newInput);
 	}
 
 	return 0;

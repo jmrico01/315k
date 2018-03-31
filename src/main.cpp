@@ -1,6 +1,7 @@
 #include "main_platform.h"
 #include "km_debug.h"
 #include "km_defines.h"
+#include "km_input.h"
 #include "km_math.h"
 #include "opengl.h"
 #include "ogl_base.h"
@@ -372,6 +373,11 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         * Scale(Vec3{ boxSize, boxSize, 1.0f });
 	DrawRect(thread, gameState->rectShader, gameState->rectVAO,
 		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
+    
+    if (input->keyboardStringLen > 0) {
+        DEBUG_PRINT("%s", input->keyboardString);
+    }
 }
 
 #include "ogl_base.cpp"
+#include "km_input.cpp"
