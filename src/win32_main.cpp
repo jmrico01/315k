@@ -4,6 +4,8 @@
 #include <stdarg.h>
 #include <Xinput.h>
 #include <intrin.h> // __rdtsc
+#include <mmdeviceapi.h>
+#include <audioclient.h>
 
 #include "opengl.h"
 #include "km_debug.h"
@@ -739,6 +741,197 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 	return true;
 }
 
+internal bool Win32InitAudio()
+{
+    const int REFTIMES_PER_SEC = 10000000;
+    const int REFTIMES_PER_MILLISEC = 10000;
+
+    HRESULT hr;
+    IMMDeviceEnumerator* audioDeviceEnumerator = NULL;
+    hr = CoCreateInstance(
+        __uuidof(MMDeviceEnumerator),
+        NULL,
+        CLSCTX_ALL,
+        __uuidof(IMMDeviceEnumerator),
+        (void**)&audioDeviceEnumerator
+    );
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to create device enumerator, HRESULT %x\n", hr);
+        return false;
+    }
+
+    IMMDevice* audioDevice = NULL;
+    hr = audioDeviceEnumerator->GetDefaultAudioEndpoint(
+        eRender,
+        eConsole,
+        &audioDevice
+    );
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get default audio endpoint, HRESULT %x\n", hr);
+        return false;
+    }
+
+    IAudioClient* audioClient = NULL;
+    hr = audioDevice->Activate(
+        __uuidof(IAudioClient),
+        CLSCTX_ALL,
+        NULL,
+        (void**)&audioClient
+    );
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to activate audio device, HRESULT %x\n", hr);
+        return false;
+    }
+
+    WAVEFORMATEX* audioFormat = NULL;
+    hr = audioClient->GetMixFormat(&audioFormat);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get audio client format, HRESULT %x\n", hr);
+        return false;
+    }
+
+
+    hr = audioClient->Initialize(
+        AUDCLNT_SHAREMODE_SHARED,
+        0,
+        REFTIMES_PER_SEC * 20,
+        0,
+        audioFormat,
+        NULL
+    );
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to initialize audio client, HRESULT %x\n", hr);
+        return false;
+    }
+
+    UINT32 bufferFrameCount;
+    hr = audioClient->GetBufferSize(&bufferFrameCount);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get buffer size, HRESULT %x\n", hr);
+        return false;
+    }
+
+    IAudioRenderClient* renderClient = NULL;
+    hr = audioClient->GetService(
+        __uuidof(IAudioRenderClient),
+        (void**)&renderClient
+    );
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get render client, HRESULT %x\n", hr);
+        return false;
+    }
+
+    BYTE* buffer;
+    hr = renderClient->GetBuffer(bufferFrameCount, &buffer);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get buffer, HRESULT %x\n", hr);
+        return false;
+    }
+
+    DEBUG_PRINT("Audio information\n");
+    DEBUG_PRINT("channels: %d, bits per sample: %d\n",
+        audioFormat->nChannels, audioFormat->wBitsPerSample);
+    if (audioFormat->wFormatTag == WAVE_FORMAT_PCM) {
+        DEBUG_PRINT("PCM integer format\n");
+    }
+    else if (audioFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) {
+        DEBUG_PRINT("PCM float format\n");
+    }
+    else if (audioFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+        DEBUG_PRINT("extensible format\n");
+        WAVEFORMATEXTENSIBLE* audioFormatExt =
+            (WAVEFORMATEXTENSIBLE*)audioFormat;
+        DEBUG_PRINT("valid bits: %d\n",
+            audioFormatExt->Samples.wValidBitsPerSample);
+        if (audioFormatExt->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) {
+            DEBUG_PRINT("PCM integer format\n");
+        }
+        else if (audioFormatExt->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) {
+            DEBUG_PRINT("PCM float format\n");
+            int channels = audioFormat->nChannels;
+            int bytesPerSample = audioFormat->wBitsPerSample / 8;
+            int samplesPerSec = audioFormat->nSamplesPerSec;
+            float32 duration = (float32)bufferFrameCount / samplesPerSec;
+            for (UINT32 i = 0; i < bufferFrameCount; i++) {
+                float32* sampleCh1 = (float32*)
+                    (buffer + i * channels * bytesPerSample);
+                float32* sampleCh2 = (float32*)
+                    (buffer + i * channels * bytesPerSample + bytesPerSample);
+                
+                float32 t = (float32)i / (float32)(samplesPerSec);
+                float32 freq = 220.0f;
+                *sampleCh1 = sinf(2.0f * PI_F * freq * t);
+                *sampleCh2 = sinf(2.0f * PI_F * freq * t);
+
+                *sampleCh1 = (duration - t) / duration * sinf(2.0f * PI_F * freq * 1.01f * t);
+                //*sampleCh2 = sinf(2.0f * PI_F * freq * t);
+
+                //*sampleCh1 = 0.0f;
+                //*sampleCh2 = 0.0f;
+            }
+        }
+    }
+    
+    // pass silent flag here when nothing is written
+    hr = renderClient->ReleaseBuffer(bufferFrameCount, NULL);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to release buffer, HRESULT %x\n", hr);
+        return false;
+    }
+
+    REFERENCE_TIME duration = REFTIMES_PER_SEC * bufferFrameCount
+        / audioFormat->nSamplesPerSec;
+    
+    hr = audioClient->Start();
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Audio client start playback failed, HRESULT %x\n", hr);
+        return false;
+    }
+
+    /*while (true) {
+        // This would be the actual game frame time
+        Sleep((DWORD)(duration / REFTIMES_PER_MILLISEC / 2.0f));
+
+        UINT32 numFramesPadding;
+        hr = audioClient->GetCurrentPadding(&numFramesPadding);
+        if (FAILED(hr)) {
+            DEBUG_PRINT("Failed to get audio client padding, HRESULT %x\n", hr);
+            return false;
+        }
+        DEBUG_PRINT("frames to write: %d\n", numFramesPadding);
+
+        UINT32 numFramesAvailable = bufferFrameCount - numFramesPadding;
+        hr = renderClient->GetBuffer(numFramesAvailable, &buffer);
+        if (FAILED(hr)) {
+            DEBUG_PRINT("Failed to reacquire buffer, HRESULT %x\n", hr);
+            return false;
+        }
+
+        int channels = audioFormat->nChannels;
+        int bytesPerSample = audioFormat->wBitsPerSample / 8;
+        int samplesPerSec = audioFormat->nSamplesPerSec;
+        for (UINT32 i = 0; i < numFramesAvailable; i++) {
+            float32* sampleCh1 = (float32*)
+                (buffer + i * channels * bytesPerSample);
+            float32* sampleCh2 = (float32*)
+                (buffer + i * channels * bytesPerSample + bytesPerSample);
+            
+            float32 t = (float32)i / (float32)(samplesPerSec);
+            float32 freq = 440.0f;
+            *sampleCh1 = sinf(2.0f * PI_F * freq * t);
+            *sampleCh2 = sinf(2.0f * PI_F * freq * t);
+        }
+
+        hr = renderClient->ReleaseBuffer(numFramesAvailable, NULL);
+        if (FAILED(hr)) {
+            DEBUG_PRINT("Failed to release buffer, HRESULT %x\n", hr);
+            return false;
+        }
+    }*/
+
+    return true;
+}
+
 internal bool Win32CreateRC(HWND hWnd,
 	BYTE colorBits, BYTE alphaBits, BYTE depthBits, BYTE stencilBits)
 {
@@ -907,6 +1100,12 @@ int CALLBACK WinMain(
 			monitorRefreshHz = win32RefreshRate;
 		ReleaseDC(hWnd, hDC);
 	}
+
+    // Initialize audio
+    if (!Win32InitAudio()) {
+        return 1;
+    }
+    DEBUG_PRINT("Initialized Win32 audio output\n");
 
     // TODO probably remove this later
 #if GAME_INTERNAL
