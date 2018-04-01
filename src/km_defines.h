@@ -51,3 +51,6 @@ typedef uint64_t    uint64;
 
 typedef float       float32;
 typedef double      float64;
+
+#define INT16_MINVAL -32768
+#define INT16_MAXVAL 32767

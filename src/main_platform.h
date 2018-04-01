@@ -92,7 +92,11 @@ struct GameInput
 
 struct GameAudio
 {
-    // standardized audio output (PCM float? 16-bit?)
+    uint32 channels;
+    uint32 sampleRate;
+    
+    uint64 bufferSize;
+    int16* buffer;
 };
 
 struct GameMemory
@@ -119,5 +123,6 @@ struct GameMemory
 
 // ------------------------------ Game functions ------------------------------
 #define GAME_UPDATE_AND_RENDER_FUNC(name) void name(ThreadContext* thread, \
-	GameMemory* memory, ScreenInfo screenInfo, GameInput* input, OpenGLFunctions* glFunctions)
+	GameMemory* memory, ScreenInfo screenInfo, GameInput* input, \
+    GameAudio* audio, OpenGLFunctions* glFunctions)
 typedef GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRenderFunc);

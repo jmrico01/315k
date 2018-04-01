@@ -103,7 +103,7 @@ def WinCompileDebug():
         "user32.lib",
         "gdi32.lib",
         "opengl32.lib",
-        "Ole32.lib",    # COM functions, funky stuff
+        "xaudio2.lib"
         #"freetype281MTd.lib"
     ])
 

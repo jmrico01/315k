@@ -4,6 +4,16 @@
 
 #define NOMINMAX
 #include <Windows.h>
+#include <Xaudio2.h>
+
+struct Win32Audio
+{
+    IXAudio2* xAudio2;
+    IXAudio2MasteringVoice* masterVoice;
+    IXAudio2SourceVoice* sourceVoice;
+    WAVEFORMATEXTENSIBLE format;
+    XAUDIO2_BUFFER buffer;
+};
 
 struct Win32GameCode
 {
