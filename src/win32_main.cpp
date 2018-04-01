@@ -45,28 +45,39 @@ global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 DEBUGPlatformPrintFunc* debugPrint_;
 #endif
 
-#define XINPUT_GET_STATE_FUNC(name) DWORD WINAPI name(DWORD dwUserIndex,\
+// XInput functions
+#define XINPUT_GET_STATE_FUNC(name) DWORD WINAPI name(DWORD dwUserIndex, \
     XINPUT_STATE *pState)
 typedef XINPUT_GET_STATE_FUNC(XInputGetStateFunc);
 XINPUT_GET_STATE_FUNC(XInputGetStateStub)
 {
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
-internal XInputGetStateFunc *xInputGetState = XInputGetStateStub;
-#define XInputGetState xInputGetState
+internal XInputGetStateFunc *xInputGetState_ = XInputGetStateStub;
+#define XInputGetState xInputGetState_
 
-#define XINPUT_SET_STATE_FUNC(name) DWORD WINAPI name(DWORD dwUserIndex,\
+#define XINPUT_SET_STATE_FUNC(name) DWORD WINAPI name(DWORD dwUserIndex, \
     XINPUT_VIBRATION *pVibration)
 typedef XINPUT_SET_STATE_FUNC(XInputSetStateFunc);
 XINPUT_SET_STATE_FUNC(XInputSetStateStub)
 {
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
-internal XInputSetStateFunc *xInputSetState = XInputSetStateStub;
-#define XInputSetState xInputSetState
+internal XInputSetStateFunc *xInputSetState_ = XInputSetStateStub;
+#define XInputSetState xInputSetState_
 
+// XAudio2 functions
+typedef HRESULT XAudio2CreateFunc(
+    _Out_   IXAudio2**          ppXAudio2,
+    _In_    UINT32              flags,
+    _In_    XAUDIO2_PROCESSOR   xAudio2Processor);
+internal XAudio2CreateFunc* xAudio2Create_ = NULL;
+#define XAudio2Create xAudio2Create_
+
+// WGL functions
 typedef BOOL WINAPI wglSwapIntervalEXTFunc(int interval);
-global_var wglSwapIntervalEXTFunc* wglSwapInterval;
+global_var wglSwapIntervalEXTFunc* wglSwapInterval_ = NULL;
+#define wglSwapInterval wglSwapInterval_
 
 internal int StringLength(const char* string)
 {
@@ -748,8 +759,30 @@ internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
     // Only support stereo for now
     DEBUG_ASSERT(channels == 2);
 
-    HRESULT hr;
+    // Try to load Windows 10 version
+	HMODULE xAudio2Lib = LoadLibrary("xaudio2_9.dll");
+	if (!xAudio2Lib) {
+        // Fall back to Windows 8 version
+		xAudio2Lib = LoadLibrary("xaudio2_8.dll");
+    }
+	if (!xAudio2Lib) {
+        // Fall back to Windows 7 version
+		xAudio2Lib = LoadLibrary("xaudio2_7.dll");
+	}
+    if (!xAudio2Lib) {
+        // TODO load earlier versions?
+        DEBUG_PRINT("Could not find a valid XAudio2 DLL\n");
+        return false;
+    }
 
+    XAudio2Create = (XAudio2CreateFunc*)GetProcAddress(
+        xAudio2Lib, "XAudio2Create");
+    if (!XAudio2Create) {
+        DEBUG_PRINT("Failed to load XAudio2Create function\n");
+        return false;
+    }
+
+    HRESULT hr;
     hr = XAudio2Create(&audio->xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to create XAudio2 instance, HRESULT %x\n", hr);
@@ -1000,7 +1033,7 @@ int CALLBACK WinMain(
         return 1;
     }
 
-    DEBUG_PRINT("Initialized Win32 audio output\n");
+    DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
 #if GAME_INTERNAL
@@ -1268,6 +1301,8 @@ int CALLBACK WinMain(
 
         Win32ClearInput(newInput, oldInput);
 	}
+
+    audio.sourceVoice->Stop();
 
 	return 0;
 }

@@ -129,6 +129,11 @@ def WinCompileDebug():
         "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
         "/link", linkerFlags, libPaths, libs])
     
+    devenvCommand = "rem"
+    if len(sys.argv) > 2:
+        if sys.argv[2] == "devenv":
+            devenvCommand = "devenv 315k_win32.exe"
+
     loadCompiler = "call \"C:\\Program Files (x86)" + \
         "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
     os.system(" & ".join([
@@ -136,6 +141,7 @@ def WinCompileDebug():
         loadCompiler,
         compileDLLCommand,
         compileCommand,
+        devenvCommand,
         "popd"
     ]))
 
@@ -354,7 +360,7 @@ def Main():
     if len(sys.argv) > 1:
         arg1 = sys.argv[1]
 
-    if arg1 == "" or arg1 == "debug":
+    if arg1 == "debug":
         Debug()
     elif arg1 == "ifchanged":
         IfChanged()
@@ -362,5 +368,7 @@ def Main():
         Release()
     elif arg1 == "clean":
         Clean()
+    else:
+        print("Compile script expected one argument")
 
 Main()
