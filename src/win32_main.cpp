@@ -789,8 +789,15 @@ internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
     }
 
     // TODO temporary malloc use
+    gameAudio->channels = channels;
+    gameAudio->sampleRate = sampleRate;
+    gameAudio->bufferSize = bufSampleLength;
     gameAudio->buffer = (int16*)malloc(
         bufSampleLength * channels * sizeof(int16));
+    for (uint32 i = 0; i < bufSampleLength; i++) {
+        gameAudio->buffer[i * channels] = 0;
+        gameAudio->buffer[i * channels + 1] = 0;
+    }
 
     audio->buffer.Flags = 0;
     audio->buffer.AudioBytes = bufSampleLength * channels * sizeof(int16);
@@ -812,19 +819,6 @@ internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to start source voice, HRESULT %x\n", hr);
         return false;
-    }
-
-    for (uint32 i = 0; i < bufSampleLength; i++) {
-        float32 t = (float32)i / sampleRate;
-        float32 freq = 440.0f;
-        int16 sinSample = (int16)(INT16_MAXVAL
-            * sinf(2.0f * PI_F * freq * t));
-        int16 sinSample2 = (int16)(INT16_MAXVAL
-            * sinf(2.0f * PI_F * freq * 1.01f * t));
-        gameAudio->buffer[i * channels]        = sinSample;
-        gameAudio->buffer[i * channels + 1]    = sinSample;
-
-        gameAudio->buffer[i * channels] = sinSample2;
     }
 
     return true;
