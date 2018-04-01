@@ -1133,6 +1133,7 @@ int CALLBACK WinMain(
     // potentially big allocation
 	uint64 totalSize = gameMemory.permanentStorageSize
         + gameMemory.transientStorageSize;
+	// TODO check allocation fail?
 	gameMemory.permanentStorage = VirtualAlloc(baseAddress, (size_t)totalSize,
 		MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	gameMemory.transientStorage = ((uint8*)gameMemory.permanentStorage +
@@ -1140,6 +1141,7 @@ int CALLBACK WinMain(
 
 	state.gameMemorySize = totalSize;
 	state.gameMemoryBlock = gameMemory.permanentStorage;
+	DEBUG_PRINT("Initialized game memory\n");
 
 	for (int replayIndex = 0;
 	replayIndex < ARRAY_COUNT(state.replayBuffers);
@@ -1164,6 +1166,7 @@ int CALLBACK WinMain(
 		// TODO possibly check if this memory block "allocation" fails
 		// Debug, so not really that important
 	}
+	DEBUG_PRINT("Initialized input replay system\n");
 
 	char gameCodeDLLPath[MAX_PATH];
 	Win32BuildExePathFileName(&state, "315k_game.dll",

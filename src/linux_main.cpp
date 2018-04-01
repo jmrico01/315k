@@ -1662,97 +1662,43 @@ int main(int argc, char **argv)
     }
     DEBUG_PRINT("Initialized Linux OpenGL\n");
 
+#if GAME_INTERNAL
+	void* baseAddress = (void*)TERABYTES((uint64)2);;
+#else
+	void* baseAddress = 0;
+#endif
+    
+    GameMemory gameMemory = {};
+	gameMemory.permanentStorageSize = MEGABYTES(64);
+	gameMemory.transientStorageSize = GIGABYTES(1);
+
+	gameMemory.DEBUGPlatformPrint = DEBUGPlatformPrint;
+	gameMemory.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
+	gameMemory.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
+	gameMemory.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
+
+    gameMemory.DEBUGShouldInitGlobals = true;
+
+	// TODO Look into using large virtual pages for this
+    // potentially big allocation
+	uint64 totalSize = gameMemory.permanentStorageSize
+        + gameMemory.transientStorageSize;
+	// TODO check allocation fail?
+	gameMemory.permanentStorage = mmap(baseAddress, (size_t)totalSize,
+		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	gameMemory.transientStorage = ((uint8*)gameMemory.permanentStorage +
+		gameMemory.permanentStorageSize);
+
+	state.gameMemorySize = totalSize;
+	state.gameMemoryBlock = gameMemory.permanentStorage;
+	DEBUG_PRINT("Initialized game memory\n");
+
     running_ = true;
 
     while (running_) {
     }
 
 #if 0
-    if (LinuxInitializeSound("default", 48000, 4, 512, &SoundOutput))
-    {
-        LinuxStartPlayingSound();
-
-        GlobalRunning = true;
-
-        // TODO(casey): Let's make this our first growable arena!
-        memory_arena FrameTempArena = {};
-
-        // TODO(casey): Decide what our pushbuffer size is!
-        uint32 PushBufferSize = Megabytes(64);
-        platform_memory_block *PushBufferBlock = LinuxAllocateMemory(PushBufferSize, PlatformMemory_NotRestored);
-        u8 *PushBuffer = PushBufferBlock->Base;
-
-        uint32 MaxVertexCount = 65536;
-        platform_memory_block *VertexArrayBlock = LinuxAllocateMemory(MaxVertexCount*sizeof(textured_vertex), PlatformMemory_NotRestored);
-        textured_vertex *VertexArray = (textured_vertex *)VertexArrayBlock->Base;
-        platform_memory_block *BitmapArrayBlock = LinuxAllocateMemory(MaxVertexCount*sizeof(loaded_bitmap *), PlatformMemory_NotRestored);
-        loaded_bitmap **BitmapArray = (loaded_bitmap **)BitmapArrayBlock->Base;
-        lighting_box *LightBoxes = (lighting_box *)
-            LinuxAllocateMemory(LIGHT_DATA_WIDTH*sizeof(lighting_box),
-                                PlatformMemory_NotRestored)->Base;
-
-        game_render_commands RenderCommands = DefaultRenderCommands(
-            PushBufferSize, PushBuffer,
-            (uint32)GlobalBackbuffer.Width,
-            (uint32)GlobalBackbuffer.Height,
-            MaxVertexCount, VertexArray, BitmapArray,
-            &OpenGL.WhiteBitmap,
-            LightBoxes);
-
-        // TODO(michiel): Pool with bitmap mmap
-        // TODO(casey): Remove MaxPossibleOverrun?
-        size_t NrSamples = SoundOutput.SamplesPerSecond * AUDIO_CHANNELS;     // 1 second
-        size_t SampleSize = NrSamples * sizeof(s16);
-        uint32 MaxPossibleOverrun = AUDIO_CHANNELS * 8 * sizeof(u16);
-        s16 *Samples = (s16 *)mmap(NULL, SampleSize + MaxPossibleOverrun,
-                                    PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        SoundOutput.SafetyBytes = (SoundOutput.SamplesPerSecond * SoundOutput.BytesPerSample / GameUpdateHz) / 3;
-
-#if GAME_INTERNAL
-        void *BaseAddress = (void *)Terabytes((u64)2);
-#else
-        void *BaseAddress = 0;
-#endif
-
-        game_memory GameMemory = {};
-#if GAME_INTERNAL
-        GameMemory.DebugTable = GlobalDebugTable;
-#endif
-        GameMemory.HighPriorityQueue = &HighPriorityQueue;
-        GameMemory.LowPriorityQueue = &LowPriorityQueue;
-        GameMemory.PlatformAPI.AddEntry = LinuxAddEntry;
-        GameMemory.PlatformAPI.CompleteAllWork = LinuxCompleteAllWork;
-
-        GameMemory.PlatformAPI.GetAllFilesOfTypeBegin = LinuxGetAllFilesOfTypeBegin;
-        GameMemory.PlatformAPI.GetAllFilesOfTypeEnd = LinuxGetAllFilesOfTypeEnd;
-        GameMemory.PlatformAPI.OpenNextFile = LinuxOpenNextFile;
-        GameMemory.PlatformAPI.ReadDataFromFile = LinuxReadDataFromFile;
-        GameMemory.PlatformAPI.FileError = LinuxFileError;
-
-        GameMemory.PlatformAPI.AllocateMemory = LinuxAllocateMemory;
-        GameMemory.PlatformAPI.DeallocateMemory = LinuxDeallocateMemory;
-
-#if GAME_INTERNAL
-        GameMemory.PlatformAPI.DEBUGFreeFileMemory = DEBUGPlatformFreeFileMemory;
-        GameMemory.PlatformAPI.DEBUGReadEntireFile = DEBUGPlatformReadEntireFile;
-        GameMemory.PlatformAPI.DEBUGWriteEntireFile = DEBUGPlatformWriteEntireFile;
-        GameMemory.PlatformAPI.DEBUGExecuteSystemCommand = DEBUGExecuteSystemCommand;
-        GameMemory.PlatformAPI.DEBUGGetProcessState = DEBUGGetProcessState;
-        GameMemory.PlatformAPI.DEBUGGetMemoryStats = LinuxGetMemoryStats;
-#endif
-        uint32 TextureOpCount = 1024;
-        platform_texture_op_queue *TextureOpQueue = &GameMemory.TextureOpQueue;
-        TextureOpQueue->FirstFree =
-            (texture_op *)mmap(0, sizeof(texture_op)*TextureOpCount,
-                                PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        for (uint32 TextureOpIndex = 0;
-            TextureOpIndex < (TextureOpCount - 1);
-            ++TextureOpIndex)
-        {
-            texture_op *Op = TextureOpQueue->FirstFree + TextureOpIndex;
-            Op->Next = TextureOpQueue->FirstFree + TextureOpIndex + 1;
-        }
-
         // Platform = GameMemory.PlatformAPI;
 
         if (Samples != MAP_FAILED)

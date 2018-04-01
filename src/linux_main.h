@@ -90,10 +90,8 @@ struct linux_saved_memory_block
 
 struct LinuxState
 {
-    // NOTE(casey): To touch the memory ring, you must
-    // take the memory mutex!
-    //ticket_mutex MemoryMutex;
-    //LinuxMemoryBlock MemorySentinel;
+	uint64 gameMemorySize;
+	void* gameMemoryBlock;
 
     int32 RecordingHandle;
     int32 InputRecordingIndex;
