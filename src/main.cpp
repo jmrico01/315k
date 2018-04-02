@@ -308,26 +308,11 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
 		glDisable(GL_BLEND);
 
-        for (uint32 i = 0; i < audio->bufferSize; i++) {
-            float32 t = (float32)i / audio->sampleRate;
-            float32 freq = 440.0f;
-            int16 sinSample = (int16)(INT16_MAXVAL
-                * sinf(2.0f * PI_F * freq * t));
-            int16 sinSample2 = (int16)(INT16_MAXVAL
-                * sinf(2.0f * PI_F * freq * 1.01f * t));
-            audio->buffer[i * audio->channels]      = sinSample;
-            audio->buffer[i * audio->channels + 1]  = sinSample;
-
-            audio->buffer[i * audio->channels] = sinSample2;
-
-        }
-
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
 	}
 
 	GameControllerInput* input0 = &input->controllers[0];
-	GameControllerInput* input1 = &input->controllers[1];
 
 	float32 speed = 0.01f;
 	Vec3 playerRight = Normalize(Vec3{ 1.0f, 1.0f, 0.0f });

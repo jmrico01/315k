@@ -95,7 +95,7 @@ struct GameAudio
     uint32 channels;
     uint32 sampleRate;
     
-    uint64 bufferSize;
+    uint32 bufferSize;
     int16* buffer;
 };
 

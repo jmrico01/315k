@@ -29,6 +29,7 @@
 #define START_WIDTH 1280
 #define START_HEIGHT 800
 #define SAMPLERATE 48000
+#define AUDIO_BUFFER_SIZE_MILLISECONDS  2000
 
 // TODO this is a global for now
 global_var char pathToApp_[MAX_PATH];
@@ -1029,10 +1030,10 @@ int CALLBACK WinMain(
     // Initialize audio
     Win32Audio audio = {};
     GameAudio gameAudio = {};
-    if (!Win32InitAudio(&audio, &gameAudio, 2, SAMPLERATE, SAMPLERATE * 5)) {
+    uint32 bufNumSamples = SAMPLERATE * AUDIO_BUFFER_SIZE_MILLISECONDS / 1000;
+    if (!Win32InitAudio(&audio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
         return 1;
     }
-
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1126,6 +1127,10 @@ int CALLBACK WinMain(
 
 	Win32GameCode gameCode =
         Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
+    
+    // TODO This is actually game-specific code
+    float32 toneHz = 300.0f;
+    uint32 runningSampleIndex = 0;
 
 	running_ = true;
 	while (running_) {
@@ -1160,8 +1165,10 @@ int CALLBACK WinMain(
 		for (DWORD controllerInd = 0;
 		controllerInd < maxControllerCount;
 		controllerInd++) {
-			GameControllerInput *oldController = &oldInput->controllers[controllerInd];
-			GameControllerInput *newController = &newInput->controllers[controllerInd];
+			GameControllerInput *oldController =
+                &oldInput->controllers[controllerInd];
+			GameControllerInput *newController =
+                &newInput->controllers[controllerInd];
 
 			XINPUT_STATE controllerState;
 			// TODO the get state function has a really bad performance bug
@@ -1259,6 +1266,41 @@ int CALLBACK WinMain(
                 screenInfo, newInput, &gameAudio, &glFuncs);
         }
 
+        XAUDIO2_VOICE_STATE voiceState;
+        audio.sourceVoice->GetState(&voiceState);
+        uint32 playMark = (uint32)voiceState.SamplesPlayed
+            % gameAudio.bufferSize;
+        uint32 writeTo = runningSampleIndex % gameAudio.bufferSize;
+        uint32 writeLen;
+        if (writeTo == playMark) {
+            writeLen = gameAudio.bufferSize;
+        }
+        else if (writeTo > playMark) {
+            writeLen = gameAudio.bufferSize - (writeTo - playMark);
+        }
+        else {
+            writeLen = playMark - writeTo;
+        }
+
+        float tone1Hz = 261.6f;
+        float tone2Hz = tone1Hz
+            * (1.0f + 0.5f * newInput->controllers[1].end.x);
+        DEBUG_PRINT("tone freq: %f\n", tone2Hz);
+        for (uint32 i = 0; i < writeLen; i++) {
+            uint32 ind = (writeTo + i) % gameAudio.bufferSize;
+            float32 t = (float32)runningSampleIndex / gameAudio.sampleRate;
+            int16 sin1Sample = (int16)(INT16_MAXVAL * sinf(
+                2.0f * PI_F * tone1Hz * t));
+            int16 sin2Sample = (int16)(INT16_MAXVAL * sinf(
+                2.0f * PI_F * tone2Hz * t));
+            gameAudio.buffer[ind * gameAudio.channels]      = sin1Sample;
+            gameAudio.buffer[ind * gameAudio.channels + 1]  = sin2Sample;
+
+            //gameAudio.buffer[ind * gameAudio.channels] = sinSample2;
+
+            runningSampleIndex++;
+        }
+
 		LARGE_INTEGER vsyncStart;
 		QueryPerformanceCounter(&vsyncStart);
 		// NOTE
@@ -1298,7 +1340,6 @@ int CALLBACK WinMain(
 		GameInput *temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
-
         Win32ClearInput(newInput, oldInput);
 	}
 
