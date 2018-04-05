@@ -13,6 +13,8 @@ struct Win32Audio
     IXAudio2SourceVoice* sourceVoice;
     WAVEFORMATEXTENSIBLE format;
     XAUDIO2_BUFFER buffer;
+
+    int sampleLatency;
 };
 
 struct Win32GameCode

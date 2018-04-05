@@ -1034,6 +1034,7 @@ int CALLBACK WinMain(
     if (!Win32InitAudio(&audio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
         return 1;
     }
+    audio.sampleLatency = SAMPLERATE / 10;
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1131,6 +1132,8 @@ int CALLBACK WinMain(
     // TODO This is actually game-specific code
     float32 toneHz = 300.0f;
     uint32 runningSampleIndex = 0;
+    float32 tSine1 = 0.0f;
+    float32 tSine2 = 0.0f;
 
 	running_ = true;
 	while (running_) {
@@ -1270,31 +1273,39 @@ int CALLBACK WinMain(
         audio.sourceVoice->GetState(&voiceState);
         uint32 playMark = (uint32)voiceState.SamplesPlayed
             % gameAudio.bufferSize;
+        uint32 fillTarget = (playMark + audio.sampleLatency)
+            % gameAudio.bufferSize;
         uint32 writeTo = runningSampleIndex % gameAudio.bufferSize;
         uint32 writeLen;
-        if (writeTo == playMark) {
+        if (writeTo == fillTarget) {
             writeLen = gameAudio.bufferSize;
         }
-        else if (writeTo > playMark) {
-            writeLen = gameAudio.bufferSize - (writeTo - playMark);
+        else if (writeTo > fillTarget) {
+            writeLen = gameAudio.bufferSize - (writeTo - fillTarget);
         }
         else {
-            writeLen = playMark - writeTo;
+            writeLen = fillTarget - writeTo;
         }
 
         float tone1Hz = 261.6f;
         float tone2Hz = tone1Hz
-            * (1.0f + 0.5f * newInput->controllers[1].end.x);
+            * (1.0f + 0.5f * newInput->controllers[0].end.x)
+            * (1.0f + 0.1f * newInput->controllers[0].end.y);
         DEBUG_PRINT("tone freq: %f\n", tone2Hz);
         for (uint32 i = 0; i < writeLen; i++) {
             uint32 ind = (writeTo + i) % gameAudio.bufferSize;
-            float32 t = (float32)runningSampleIndex / gameAudio.sampleRate;
+            //float32 t = (float32)runningSampleIndex / gameAudio.sampleRate;
             int16 sin1Sample = (int16)(INT16_MAXVAL * sinf(
-                2.0f * PI_F * tone1Hz * t));
+                /*2.0f * PI_F * tone1Hz * t*/tSine1));
             int16 sin2Sample = (int16)(INT16_MAXVAL * sinf(
-                2.0f * PI_F * tone2Hz * t));
+                /*2.0f * PI_F * tone2Hz * t*/tSine2));
             gameAudio.buffer[ind * gameAudio.channels]      = sin1Sample;
             gameAudio.buffer[ind * gameAudio.channels + 1]  = sin2Sample;
+
+            tSine1 += 2.0f * PI_F * tone1Hz * 1.0f
+                / (float32)gameAudio.sampleRate;
+            tSine2 += 2.0f * PI_F * tone2Hz * 1.0f
+                / (float32)gameAudio.sampleRate;
 
             //gameAudio.buffer[ind * gameAudio.channels] = sinSample2;
 
