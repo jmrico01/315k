@@ -29,7 +29,7 @@
 #include "km_math.h"
 
 #define SAMPLERATE 44100
-#define AUDIO_BUFFER_SIZE_MILLISECONDS  1000
+#define AUDIO_BUFFER_SIZE_MILLISECONDS 1000
 
 global_var char pathToApp_[LINUX_STATE_FILE_NAME_COUNT];
 global_var bool32 running_;
@@ -1568,8 +1568,10 @@ LinuxFullRestart(char *SourceEXE, char *DestEXE, char *DeleteEXE)
 #endif
 
 internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
-    uint32 channels, uint32 sampleRate, uint32 bufSampleLength)
+    uint32 channels, uint32 sampleRate, uint32 bufFrameLength)
 {
+    DEBUG_PRINT("ALSA library version: %s\n", SND_LIB_VERSION_STR);
+
     int err;
     snd_pcm_stream_t stream = SND_PCM_STREAM_PLAYBACK;
     const char* pcmName = "plughw:0,0";
@@ -1603,8 +1605,8 @@ internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
         return false;
     }
 
-    // Set sample rate. If the exact rate is not supported by the hardware,
-    // use nearest possible rate.
+    // Set sample rate
+    // If the rate is not supported by the hardware, use nearest one
     uint32 rate = sampleRate;
     err = snd_pcm_hw_params_set_rate_near(audio->pcmHandle, hwParams,
         &rate, 0);
@@ -1626,10 +1628,19 @@ internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
     }
     gameAudio->channels = channels;
 
-    // Set number of periods. Periods used to be called fragments.
-    uint32 periods = 2;
-    err = snd_pcm_hw_params_set_periods(audio->pcmHandle, hwParams,
-        periods, 0);
+    // Set period size (in frames)
+    snd_pcm_uframes_t periodSize = 1024;
+    err = snd_pcm_hw_params_set_period_size_near(audio->pcmHandle, hwParams,
+        &periodSize, 0);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting period size\n");
+        return false;
+    }
+
+    // Set number of periods
+    uint32 periods = bufFrameLength / periodSize;
+    err = snd_pcm_hw_params_set_periods_near(audio->pcmHandle, hwParams,
+        &periods, 0);
     if (err < 0) {
         DEBUG_PRINT("Error setting number of periods\n");
         return false;
@@ -1637,16 +1648,21 @@ internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
 
     // Set buffer size (in frames). The resulting latency is given by
     // latency = periodsize * periods / (rate * bytes_per_frame)
-    uint32 periodSize = 8192;
-    uint32 numFrames = periodSize * periods / 4;
-    err = snd_pcm_hw_params_set_buffer_size(audio->pcmHandle, hwParams,
-        numFrames);
+    snd_pcm_uframes_t bufferSize = periods * periodSize;
+    err = snd_pcm_hw_params_set_buffer_size_near(audio->pcmHandle, hwParams,
+        &bufferSize);
     if (err < 0) {
         DEBUG_PRINT("Error setting buffer size\n");
         return false;
     }
-    DEBUG_PRINT("Sample rate: %d\n", sampleRate);
-    DEBUG_PRINT("Number of frames: %d\n", numFrames);
+    gameAudio->bufferSize = (uint32)bufferSize;
+
+    DEBUG_PRINT("Sample rate: %d\n", gameAudio->sampleRate);
+    DEBUG_PRINT("Period size (frames): %d\n", (int)periodSize);
+    DEBUG_PRINT("Periods: %d\n", periods);
+    DEBUG_PRINT("Buffer size (frames): %d\n", gameAudio->bufferSize);
+    DEBUG_PRINT("Buffer size (secs): %f\n",
+        (float)gameAudio->bufferSize / gameAudio->sampleRate);
     DEBUG_PRINT("Almost done with sound. Press Enter to continue\n");
     getchar();
 
@@ -1757,7 +1773,8 @@ int main(int argc, char **argv)
 
     LinuxAudio linuxAudio;
     GameAudio gameAudio;
-    if (!LinuxInitAudio(&linuxAudio, &gameAudio, 2, SAMPLERATE, 0)) {
+    uint32 bufNumSamples = SAMPLERATE * AUDIO_BUFFER_SIZE_MILLISECONDS / 1000;
+    if (!LinuxInitAudio(&linuxAudio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
         return 1;
     }
     unsigned char* data;
