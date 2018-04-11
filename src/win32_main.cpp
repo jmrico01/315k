@@ -754,7 +754,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 	return true;
 }
 
-internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
+internal bool Win32InitAudio(Win32Audio* winAudio, GameAudio* gameAudio,
     uint32 channels, uint32 sampleRate, uint32 bufSampleLength)
 {
     // Only support stereo for now
@@ -784,13 +784,13 @@ internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
     }
 
     HRESULT hr;
-    hr = XAudio2Create(&audio->xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+    hr = XAudio2Create(&winAudio->xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to create XAudio2 instance, HRESULT %x\n", hr);
         return false;
     }
 
-    hr = audio->xAudio2->CreateMasteringVoice(&audio->masterVoice,
+    hr = winAudio->xAudio2->CreateMasteringVoice(&winAudio->masterVoice,
         channels,
         sampleRate,
         0,
@@ -801,22 +801,22 @@ internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
         return false;
     }
 
-    audio->format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-    audio->format.Format.nChannels = (WORD)channels;
-    audio->format.Format.nSamplesPerSec = (DWORD)sampleRate;
-    audio->format.Format.nAvgBytesPerSec = (DWORD)(
+    winAudio->format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    winAudio->format.Format.nChannels = (WORD)channels;
+    winAudio->format.Format.nSamplesPerSec = (DWORD)sampleRate;
+    winAudio->format.Format.nAvgBytesPerSec = (DWORD)(
         sampleRate * channels * sizeof(int16));
-    audio->format.Format.nBlockAlign = (WORD)(channels * sizeof(int16));
-    audio->format.Format.wBitsPerSample = (WORD)(sizeof(int16) * 8);
-    audio->format.Format.cbSize = (WORD)(
+    winAudio->format.Format.nBlockAlign = (WORD)(channels * sizeof(int16));
+    winAudio->format.Format.wBitsPerSample = (WORD)(sizeof(int16) * 8);
+    winAudio->format.Format.cbSize = (WORD)(
         sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX));
-    audio->format.Samples.wValidBitsPerSample =
-        audio->format.Format.wBitsPerSample;
-    audio->format.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-    audio->format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+    winAudio->format.Samples.wValidBitsPerSample =
+        winAudio->format.Format.wBitsPerSample;
+    winAudio->format.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+    winAudio->format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
 
-    hr = audio->xAudio2->CreateSourceVoice(&audio->sourceVoice,
-        (const WAVEFORMATEX*)&audio->format);
+    hr = winAudio->xAudio2->CreateSourceVoice(&winAudio->sourceVoice,
+        (const WAVEFORMATEX*)&winAudio->format);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to create source voice, HRESULT %x\n", hr);
         return false;
@@ -833,23 +833,23 @@ internal bool Win32InitAudio(Win32Audio* audio, GameAudio* gameAudio,
         gameAudio->buffer[i * channels + 1] = 0;
     }
 
-    audio->buffer.Flags = 0;
-    audio->buffer.AudioBytes = bufSampleLength * channels * sizeof(int16);
-    audio->buffer.pAudioData = (const BYTE*)gameAudio->buffer;
-    audio->buffer.PlayBegin = 0;
-    audio->buffer.PlayLength = 0;
-    audio->buffer.LoopBegin = 0;
-    audio->buffer.LoopLength = 0;
-    audio->buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
-    audio->buffer.pContext = NULL;
+    winAudio->buffer.Flags = 0;
+    winAudio->buffer.AudioBytes = bufSampleLength * channels * sizeof(int16);
+    winAudio->buffer.pAudioData = (const BYTE*)gameAudio->buffer;
+    winAudio->buffer.PlayBegin = 0;
+    winAudio->buffer.PlayLength = 0;
+    winAudio->buffer.LoopBegin = 0;
+    winAudio->buffer.LoopLength = 0;
+    winAudio->buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
+    winAudio->buffer.pContext = NULL;
 
-    hr = audio->sourceVoice->SubmitSourceBuffer(&audio->buffer);
+    hr = winAudio->sourceVoice->SubmitSourceBuffer(&winAudio->buffer);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to submit buffer, HRESULT %x\n", hr);
         return false;
     }
 
-    hr = audio->sourceVoice->Start(0);
+    hr = winAudio->sourceVoice->Start(0);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to start source voice, HRESULT %x\n", hr);
         return false;
@@ -1028,13 +1028,13 @@ int CALLBACK WinMain(
 	}
 
     // Initialize audio
-    Win32Audio audio = {};
+    Win32Audio winAudio = {};
     GameAudio gameAudio = {};
     uint32 bufNumSamples = SAMPLERATE * AUDIO_BUFFER_SIZE_MILLISECONDS / 1000;
-    if (!Win32InitAudio(&audio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
+    if (!Win32InitAudio(&winAudio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
         return 1;
     }
-    audio.sampleLatency = SAMPLERATE / 10;
+    winAudio.sampleLatency = SAMPLERATE / 10;
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1071,6 +1071,10 @@ int CALLBACK WinMain(
 
 	state.gameMemorySize = totalSize;
 	state.gameMemoryBlock = gameMemory.permanentStorage;
+	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
+		// TODO log
+		return 1;
+	}
 	DEBUG_PRINT("Initialized game memory\n");
 
 	for (int replayIndex = 0;
@@ -1104,11 +1108,6 @@ int CALLBACK WinMain(
 	char tempCodeDLLPath[MAX_PATH];
 	Win32BuildExePathFileName(&state, "315k_game_temp.dll",
         MAX_PATH, tempCodeDLLPath);
-
-	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
-		// TODO log
-		return 1;
-	}
 
 	GameInput input[2] = {};
 	GameInput *newInput = &input[0];
@@ -1270,10 +1269,10 @@ int CALLBACK WinMain(
         }
 
         XAUDIO2_VOICE_STATE voiceState;
-        audio.sourceVoice->GetState(&voiceState);
+        winAudio.sourceVoice->GetState(&voiceState);
         uint32 playMark = (uint32)voiceState.SamplesPlayed
             % gameAudio.bufferSize;
-        uint32 fillTarget = (playMark + audio.sampleLatency)
+        uint32 fillTarget = (playMark + winAudio.sampleLatency)
             % gameAudio.bufferSize;
         uint32 writeTo = runningSampleIndex % gameAudio.bufferSize;
         uint32 writeLen;
@@ -1354,7 +1353,7 @@ int CALLBACK WinMain(
         Win32ClearInput(newInput, oldInput);
 	}
 
-    audio.sourceVoice->Stop();
+    winAudio.sourceVoice->Stop();
 
 	return 0;
 }

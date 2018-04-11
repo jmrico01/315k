@@ -23,8 +23,13 @@
 #include <GL/gl.h>
 #include <GL/glx.h>
 
+#include <alsa/asoundlib.h>
+
 #include "km_debug.h"
 #include "km_math.h"
+
+#define SAMPLERATE 44100
+#define AUDIO_BUFFER_SIZE_MILLISECONDS  1000
 
 global_var char pathToApp_[LINUX_STATE_FILE_NAME_COUNT];
 global_var bool32 running_;
@@ -547,7 +552,7 @@ internal bool32 LinuxLoadGLXExtensions()
         at = end;
     }
 
-    glXMakeCurrent(0, 0, 0);
+    glXMakeCurrent(tempDisplay, None, NULL);
 
     glXDestroyContext(tempDisplay, context);
     XDestroyWindow(tempDisplay, glWindow);
@@ -1562,10 +1567,103 @@ LinuxFullRestart(char *SourceEXE, char *DestEXE, char *DeleteEXE)
 }
 #endif
 
+internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
+    uint32 channels, uint32 sampleRate, uint32 bufSampleLength)
+{
+    int err;
+    snd_pcm_stream_t stream = SND_PCM_STREAM_PLAYBACK;
+    const char* pcmName = "plughw:0,0";
+    err = snd_pcm_open(&audio->pcmHandle, pcmName, stream, 0);
+    if (err < 0) {
+        DEBUG_PRINT("Error opening PCM device %s\n", pcmName);
+        return false;
+    }
+
+    snd_pcm_hw_params_t* hwParams;
+    snd_pcm_hw_params_alloca(&hwParams);
+    err = snd_pcm_hw_params_any(audio->pcmHandle, hwParams);
+    if (err < 0) {
+        DEBUG_PRINT("Failed to initialize hw params\n");
+        return false;
+    }
+
+    // Set access
+    err = snd_pcm_hw_params_set_access(audio->pcmHandle, hwParams,
+        SND_PCM_ACCESS_RW_INTERLEAVED);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting audio access\n");
+        return false;
+    }
+
+    // Set sample format
+    err = snd_pcm_hw_params_set_format(audio->pcmHandle, hwParams,
+        SND_PCM_FORMAT_S16_LE);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting audio format\n");
+        return false;
+    }
+
+    // Set sample rate. If the exact rate is not supported by the hardware,
+    // use nearest possible rate.
+    uint32 rate = sampleRate;
+    err = snd_pcm_hw_params_set_rate_near(audio->pcmHandle, hwParams,
+        &rate, 0);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting sample rate\n");
+        return false;
+    }
+    if (rate != sampleRate) {
+        DEBUG_PRINT("Sample rate %d Hz not supported by your hardware\n"
+            "==> Using %d Hz instead.\n", sampleRate, rate);
+    }
+    gameAudio->sampleRate = rate;
+
+    // Set number of channels
+    err = snd_pcm_hw_params_set_channels(audio->pcmHandle, hwParams, channels);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting number of channels\n");
+        return false;
+    }
+    gameAudio->channels = channels;
+
+    // Set number of periods. Periods used to be called fragments.
+    uint32 periods = 2;
+    err = snd_pcm_hw_params_set_periods(audio->pcmHandle, hwParams,
+        periods, 0);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting number of periods\n");
+        return false;
+    }
+
+    // Set buffer size (in frames). The resulting latency is given by
+    // latency = periodsize * periods / (rate * bytes_per_frame)
+    uint32 periodSize = 8192;
+    uint32 numFrames = periodSize * periods / 4;
+    err = snd_pcm_hw_params_set_buffer_size(audio->pcmHandle, hwParams,
+        numFrames);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting buffer size\n");
+        return false;
+    }
+    DEBUG_PRINT("Sample rate: %d\n", sampleRate);
+    DEBUG_PRINT("Number of frames: %d\n", numFrames);
+    DEBUG_PRINT("Almost done with sound. Press Enter to continue\n");
+    getchar();
+
+    // Apply HW parameter settings to PCM device and prepare device
+    err = snd_pcm_hw_params(audio->pcmHandle, hwParams);
+    if (err < 0) {
+        DEBUG_PRINT("Error setting HW params\n");
+        return false;
+    }
+
+    return true;
+}
+
 int main(int argc, char **argv)
 {
-    int width = 1280;
-    int height = 800;
+    int width = 800;
+    int height = 600;
 
     #if GAME_SLOW
     debugPrint_ = DEBUGPlatformPrint;
@@ -1576,19 +1674,13 @@ int main(int argc, char **argv)
 
     RemoveFileNameFromPath(state.exeFilePath, pathToApp_, LINUX_STATE_FILE_NAME_COUNT);
     DEBUG_PRINT("Path to application: %s\n", pathToApp_);
-    //state->MemorySentinel.Prev = &state->MemorySentinel;
-    //state->MemorySentinel.Next = &state->MemorySentinel;
-
-    /*char SourceGameCodeDLLFullPath[LINUX_STATE_FILE_NAME_COUNT];
-    LinuxBuildEXEPathFileName(&state, "libHandmade.so",
-        sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);*/
     
     Display* display = XOpenDisplay(NULL);
     if (!display) {
         DEBUG_PRINT("Failed to open display\n");
         return 1;
     }
-    
+
     if (!LinuxLoadGLXExtensions()) {
         return 1;
     }
@@ -1637,6 +1729,7 @@ int main(int argc, char **argv)
 
     Atom wmDeleteWindow = XInternAtom(display, "WM_DELETE_WINDOW", False);
     XSetWMProtocols(display, glWindow, &wmDeleteWindow, 1);
+    XMapRaised(display, glWindow);
     DEBUG_PRINT("Created X11 window\n");
 
     GLXContext glxContext = 0;
@@ -1661,6 +1754,36 @@ int main(int argc, char **argv)
         return 1;
     }
     DEBUG_PRINT("Initialized Linux OpenGL\n");
+
+    LinuxAudio linuxAudio;
+    GameAudio gameAudio;
+    if (!LinuxInitAudio(&linuxAudio, &gameAudio, 2, SAMPLERATE, 0)) {
+        return 1;
+    }
+    unsigned char* data;
+    int pcmreturn;
+    int frames;
+
+    data = (unsigned char*)malloc(8192);
+    frames = 8192 >> 2;
+    for (uint32 l1 = 0; l1 < 100; l1++) {
+        for (uint32 l2 = 0; l2 < (8192 * 2 / 4); l2++) {
+            short s1 = (l2 % 128) * 100 - 5000;  
+            short s2 = (l2 % 256) * 100 - 5000;  
+            data[4*l2] = (unsigned char)s1;
+            data[4*l2+1] = s1 >> 8;
+            data[4*l2+2] = (unsigned char)s2;
+            data[4*l2+3] = s2 >> 8;
+        }
+        while ((pcmreturn = snd_pcm_writei(linuxAudio.pcmHandle,
+        data, frames)) < 0) {
+            snd_pcm_prepare(linuxAudio.pcmHandle);
+            DEBUG_PRINT("<<<<<<<<<<<<<<< Buffer Underrun >>>>>>>>>>>>>>>\n");
+        }
+    }
+    DEBUG_PRINT("Done playing? Press Enter to continue");
+    getchar();
+    DEBUG_PRINT("Initialized Linux audio\n");
 
 #if GAME_INTERNAL
 	void* baseAddress = (void*)TERABYTES((uint64)2);;
@@ -1691,11 +1814,26 @@ int main(int argc, char **argv)
 
 	state.gameMemorySize = totalSize;
 	state.gameMemoryBlock = gameMemory.permanentStorage;
+	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
+		// TODO log
+		return 1;
+	}
 	DEBUG_PRINT("Initialized game memory\n");
 
-    running_ = true;
+    /*char SourceGameCodeDLLFullPath[LINUX_STATE_FILE_NAME_COUNT];
+    LinuxBuildEXEPathFileName(&state, "libHandmade.so",
+        sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);*/
 
+	GameInput input[2] = {};
+	GameInput *newInput = &input[0];
+	GameInput *oldInput = &input[1];
+
+    running_ = true;
     while (running_) {
+		GameInput *temp = newInput;
+		newInput = oldInput;
+		oldInput = temp;
+        // TODO clear input
     }
 
 #if 0

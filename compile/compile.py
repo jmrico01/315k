@@ -190,6 +190,7 @@ def LinuxCompileDebug():
         "-ldl",     # dynamic linking loader
         "-lGL",     # OpenGL
         "-lX11",    # X11
+        "-lasound"  # ALSA lib
 
         # FreeType dependencies
         #"-lz",

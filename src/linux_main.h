@@ -2,6 +2,8 @@
 
 #include <sys/types.h>
 
+#include <alsa/asoundlib.h>
+
 #include "km_defines.h"
 #include "main_platform.h"
 
@@ -51,6 +53,12 @@ struct LinuxWindowDimension
     uint32 Height;
 };
 
+struct LinuxAudio
+{
+    snd_pcm_t* pcmHandle;
+    
+};
+
 struct LinuxDebugTimeMarker
 {
     uint32 OutputPlayCursor;
@@ -72,20 +80,6 @@ struct LinuxGameCode
     GameUpdateAndRenderFunc* gameUpdateAndRender;
 
     bool32 IsValid;
-};
-
-struct LinuxMemoryBlock
-{
-    GameMemory memory;
-    LinuxMemoryBlock *Prev;
-    LinuxMemoryBlock *Next;
-    uint64 LoopingFlags;
-};
-
-struct linux_saved_memory_block
-{
-    uint64 BasePointer;
-    uint64 Size;
 };
 
 struct LinuxState
