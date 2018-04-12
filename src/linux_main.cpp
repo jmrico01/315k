@@ -37,11 +37,6 @@ global_var bool32 running_;
 //global_var bool32 GlobalPause;
 //global_var bool32 GlobalFullscreen;
 
-// From km_debug.h
-#if GAME_SLOW
-DEBUGPlatformPrintFunc* debugPrint_;
-#endif
-
 // Required GLX functions
 typedef GLXContext  glXCreateContextAttribsARBFunc(
     Display* display, GLXFBConfig config, GLXContext shareContext,
@@ -213,7 +208,7 @@ internal void* LinuxLoadFunction(void* libHandle, const char* name)
     return symbol;
 }
 
-internal void* LinuxLoadLibrary(const char *libName)
+internal void* LinuxLoadLibrary(const char* libName)
 {
     void* handle = dlopen(libName, RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
@@ -222,7 +217,7 @@ internal void* LinuxLoadLibrary(const char *libName)
     return handle;
 }
 
-internal void LinuxUnloadLibrary(void *handle)
+internal void LinuxUnloadLibrary(void* handle)
 {
     if (handle != NULL) {
         dlclose(handle);
@@ -338,14 +333,14 @@ internal void LinuxBuildEXEPathFileName(
         dstLen, dst);
 }
 
-internal inline ino_t LinuxFileId(char *FileName)
+internal inline ino_t LinuxFileId(const char* fileName)
 {
-    struct stat Attr = {};
-    if (stat(FileName, &Attr)) {
-        Attr.st_ino = 0;
+    struct stat attr = {};
+    if (stat(fileName, &attr)) {
+        attr.st_ino = 0;
     }
 
-    return Attr.st_ino;
+    return attr.st_ino;
 }
 
 #if GAME_INTERNAL
@@ -372,7 +367,10 @@ DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFile)
 {
     DEBUGReadFileResult result = {};
 
-    int32 fileHandle = open(fileName, O_RDONLY);
+    char fullPath[LINUX_STATE_FILE_NAME_COUNT];
+    CatStrings(StringLength(pathToApp_), pathToApp_,
+        StringLength(fileName), fileName, LINUX_STATE_FILE_NAME_COUNT, fullPath);
+    int32 fileHandle = open(fullPath, O_RDONLY);
     if (fileHandle >= 0) {
         off_t fileSize64 = lseek(fileHandle, 0, SEEK_END);
         lseek(fileHandle, 0, SEEK_SET);
@@ -383,7 +381,7 @@ DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFile)
                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             if (result.data) {
                 ssize_t bytesRead = read(fileHandle,
-                    result.data, result.size);
+                    result.data, fileSize64);
                 if ((ssize_t)fileSize32 == bytesRead) {
                     // NOTE(casey): File read successfully
                     result.size = fileSize32;
@@ -411,7 +409,10 @@ DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFile)
 {
     bool32 result = false;
 
-    int32 fileHandle = open(fileName, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
+    char fullPath[LINUX_STATE_FILE_NAME_COUNT];
+    CatStrings(StringLength(pathToApp_), pathToApp_,
+        StringLength(fileName), fileName, LINUX_STATE_FILE_NAME_COUNT, fullPath);
+    int32 fileHandle = open(fullPath, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
     if (fileHandle >= 0) {
         ssize_t bytesWritten = write(fileHandle, memory, memorySize);
         if (fsync(fileHandle) >= 0) {
@@ -434,34 +435,37 @@ DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFile)
 
 // Dynamic code loading
 internal bool32 LinuxLoadGameCode(
-    LinuxGameCode* gameCode, const char* DLLName, ino_t FileID)
+    LinuxGameCode* gameCode, const char* libName, ino_t fileId)
 {
-    if (gameCode->GameLibID != FileID) {
-        LinuxUnloadLibrary(gameCode->GameLibHandle);
-        gameCode->GameLibID = FileID;
-        gameCode->IsValid = false;
+    if (gameCode->gameLibId != fileId) {
+        LinuxUnloadLibrary(gameCode->gameLibHandle);
+        gameCode->gameLibId = fileId;
+        gameCode->isValid = false;
 
-        gameCode->GameLibHandle = LinuxLoadLibrary(DLLName);
-        if (gameCode->GameLibHandle) {
-            *(void **)(&gameCode->gameUpdateAndRender) = LinuxLoadFunction(
-                gameCode->GameLibHandle, "GameUpdateAndRender");
+        gameCode->gameLibHandle = LinuxLoadLibrary(libName);
+        if (gameCode->gameLibHandle) {
+            *(void**)(&gameCode->gameUpdateAndRender) = LinuxLoadFunction(
+                gameCode->gameLibHandle, "GameUpdateAndRender");
+            if (gameCode->gameUpdateAndRender) {
+                gameCode->isValid = true;
+            }
         }
     }
 
-    if (!gameCode->IsValid) {
-        LinuxUnloadLibrary(gameCode->GameLibHandle);
-        gameCode->GameLibID = 0;
+    if (!gameCode->isValid) {
+        LinuxUnloadLibrary(gameCode->gameLibHandle);
+        gameCode->gameLibId = 0;
         gameCode->gameUpdateAndRender = 0;
     }
 
-    return gameCode->IsValid;
+    return gameCode->isValid;
 }
 
 internal void LinuxUnloadGameCode(LinuxGameCode *GameCode)
 {
-    LinuxUnloadLibrary(GameCode->GameLibHandle);
-    GameCode->GameLibID = 0;
-    GameCode->IsValid = false;
+    LinuxUnloadLibrary(GameCode->gameLibHandle);
+    GameCode->gameLibId = 0;
+    GameCode->isValid = false;
     GameCode->gameUpdateAndRender = 0;
 }
 
@@ -715,6 +719,278 @@ internal LinuxWindowDimension LinuxGetWindowDimension(
     return result;
 }
 
+internal inline struct timespec LinuxGetWallClock()
+{
+    struct timespec clock;
+    clock_gettime(CLOCK_MONOTONIC, &clock);
+    return clock;
+}
+
+internal inline float32 LinuxGetSecondsElapsed(
+    struct timespec start, struct timespec end)
+{
+    return (float32)(end.tv_sec - start.tv_sec)
+        + ((float32)(end.tv_nsec - start.tv_nsec) * 1e-9f);
+}
+
+internal inline Vec2 LinuxGetMousePosition(Display* display, Window window)
+{
+    Window retRoot, retWin;
+    int32 rootX, rootY;
+    int32 winX, winY;
+    uint32 mask;
+    bool32 querySuccess = XQueryPointer(display, window,
+        &retRoot, &retWin,
+        &rootX, &rootY, &winX, &winY, &mask);
+
+    // TODO initializing this with empty brackets crashes GCC... wtf
+    Vec2 result = { 0.0f, 0.0f };
+    if (querySuccess) {
+        result.x = (float32)winX;
+        result.y = (float32)winY;
+    }
+    return result;
+}
+
+internal void LinuxProcessPendingMessages(
+    LinuxState *state, Display *display, Window window, Atom wmDeleteWindow,
+    GameInput* input, Vec2* mousePos, ScreenInfo* screenInfo)
+{
+    while (running_ && XPending(display)) {
+        XEvent event;
+        XNextEvent(display, &event);
+
+        // NOTE(michiel): Don't skip the scroll key Events
+        if (event.type == ButtonRelease) {
+            if ((event.xbutton.button != 4) &&
+            (event.xbutton.button != 5) &&
+            XEventsQueued(display, QueuedAfterReading)) {
+                // NOTE(michiel): Skip the auto repeat key
+                XEvent nextEvent;
+                XPeekEvent(display, &nextEvent);
+                if ((nextEvent.type == ButtonPress) &&
+                (nextEvent.xbutton.time == event.xbutton.time) &&
+                (nextEvent.xbutton.button == event.xbutton.button)) {
+                    continue;
+                }
+            }
+        }
+        // NOTE(michiel): Skip the Keyboard
+        if (event.type == KeyRelease
+        && XEventsQueued(display, QueuedAfterReading)) {
+            XEvent nextEvent;
+            XPeekEvent(display, &nextEvent);
+            if ((nextEvent.type == KeyPress) &&
+            (nextEvent.xbutton.time == event.xbutton.time) &&
+            (nextEvent.xbutton.button == event.xbutton.button)) {
+                continue;
+            }
+        }
+
+        switch (event.type) {
+            case ConfigureNotify: {
+                uint32 w = (uint32)event.xconfigure.width;
+                uint32 h = (uint32)event.xconfigure.height;
+                if ((screenInfo->width != w) || (screenInfo->height != h)) {
+                    screenInfo->width = w;
+                    screenInfo->height = h;
+                    glViewport(0, 0, w, h);
+                }
+            } break;
+            case DestroyNotify: {
+                running_ = false;
+            } break;
+            case ClientMessage: {
+                if ((Atom)event.xclient.data.l[0] == wmDeleteWindow) {
+                    running_ = false;
+                }
+            } break;
+            case MotionNotify: {
+                mousePos->x = (float32)event.xmotion.x;
+                mousePos->y = (float32)(screenInfo->height - event.xmotion.y);
+            } break;
+
+            case ButtonRelease:
+            case ButtonPress: {
+                if (event.xbutton.button == 1) {
+                    DEBUG_PRINT("left click something\n");
+                    /*LinuxProcessKeyboardMessage(&input->MouseButtons[PlatformMouseButton_Left], event.type == ButtonPress);*/
+                }
+                else if (event.xbutton.button == 2) {
+                    DEBUG_PRINT("middle click something\n");
+                    /*LinuxProcessKeyboardMessage(&input->MouseButtons[PlatformMouseButton_Middle],
+                                                event.type == ButtonPress);*/
+                }
+                else if (event.xbutton.button == 3) {
+                    DEBUG_PRINT("right click something\n");
+                    /*LinuxProcessKeyboardMessage(&input->MouseButtons[PlatformMouseButton_Right],
+                                                event.type == ButtonPress);*/
+                }
+                /*else if (event.xbutton.button == 4) {
+                    ++(input->MouseZ);
+                }
+                else if (event.xbutton.button == 5) {
+                    --(input->MouseZ);
+                }
+                else if (event.xbutton.button == 8) {
+                    LinuxProcessKeyboardMessage(&input->MouseButtons[PlatformMouseButton_Extended0],
+                                                event.type == ButtonPress);
+                }
+                else if (event.xbutton.button == 9) {
+                    LinuxProcessKeyboardMessage(&input->MouseButtons[PlatformMouseButton_Extended1],
+                                                event.type == ButtonPress);
+                    // } else {
+                    //     printf("Uncaught button: %u\n", Event.xbutton.button);
+                }*/
+            } break;
+
+            case KeyRelease:
+            case KeyPress: {
+                //bool32 altWasDown = event.xkey.state & KEYCODE_ALT_MASK;
+                //bool32 shiftWasDown = event.xkey.state & KEYCODE_SHIFT_MASK;
+                
+                if (event.xkey.keycode == KEYCODE_W) {
+                    DEBUG_PRINT("w key press or something\n");
+                    /*LinuxProcessKeyboardMessage(
+                        &KeyboardController->MoveUp,
+                        event.type == KeyPress);*/
+                }
+                /*else if (event.xkey.keycode == KEYCODE_A) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->MoveLeft,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_S) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->MoveDown,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_D) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->MoveRight,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_Q) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->LeftShoulder,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_E) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->RightShoulder,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_UP) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->ActionUp,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_DOWN) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->ActionDown,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_LEFT) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->ActionLeft,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_RIGHT) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->ActionRight,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_ESCAPE) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->Back,
+                        event.type == KeyPress);
+                }
+                else if (event.xkey.keycode == KEYCODE_SPACE) {
+                    LinuxProcessKeyboardMessage(
+                        &KeyboardController->Start,
+                        event.type == KeyPress);
+                }
+                
+                if ((event.xkey.keycode == KEYCODE_SHIFT_L)
+                || (event.xkey.keycode == KEYCODE_SHIFT_R)) {
+                    Input->ShiftDown = (event.type == KeyPress);
+                }
+                else if ((event.xkey.keycode == KEYCODE_ALT_L)
+                || (event.xkey.keycode == KEYCODE_ALT_R)) {
+                    Input->AltDown = (event.type == KeyPress);
+                }
+                else if ((event.xkey.keycode == KEYCODE_CTRL_L)
+                || (event.xkey.keycode == KEYCODE_CTRL_R)) {
+                    Input->ControlDown = (event.type == KeyPress);
+                }*/
+/*
+#if GAME_INTERNAL
+                else if (Event.xkey.keycode == KEYCODE_P) {
+                    if (Event.type == KeyPress) {
+                        GlobalPause = !GlobalPause;
+                    }
+                }
+                else if (Event.xkey.keycode == KEYCODE_L) {
+                    if (Event.type == KeyPress) {
+                        if (AltKeyWasDown) {
+                            LinuxBeginInputPlayBack(state, 1);
+                        }
+                        else {
+                            if (state->InputPlayingIndex == 0) {
+                                if (state->InputRecordingIndex == 0) {
+                                    LinuxBeginRecordingInput(state, 1);
+                                }
+                                else {
+                                    LinuxEndRecordingInput(state);
+                                    LinuxBeginInputPlayBack(state, 1);
+                                }
+                            }
+                            else {
+                                LinuxEndInputPlayBack(state);
+                            }
+                        }
+                    }
+                }
+#endif
+                if (Event.type == KeyPress) {
+                    if (Event.xkey.keycode == KEYCODE_PLUS) {
+                        if (ShiftKeyWasDown) {
+                            OpenGL.DebugLightBufferIndex += 1;
+                        }
+                        else {
+                            OpenGL.DebugLightBufferTexIndex += 1;
+                        }
+                    }
+                    else if (Event.xkey.keycode == KEYCODE_MINUS) {
+                        if (ShiftKeyWasDown) {
+                            OpenGL.DebugLightBufferIndex -= 1;
+                        }
+                        else {
+                            OpenGL.DebugLightBufferTexIndex -= 1;
+                        }
+                    }
+                    else if ((Event.xkey.keycode == KEYCODE_ENTER)
+                    && AltKeyWasDown) {
+                        ToggleFullscreen(display, window);
+                    }
+                    else if ((Event.xkey.keycode >= KEYCODE_F1)
+                    && (Event.xkey.keycode <= KEYCODE_F10)) {
+                        Input->FKeyPressed[Event.xkey.keycode - KEYCODE_F1 + 1] = true;
+                    }
+                    else if ((Event.xkey.keycode >= KEYCODE_F11)
+                    && (Event.xkey.keycode <= KEYCODE_F12)) {
+                        // NOTE(michiel): Because of X11 mapping we get to do the function keys in 2 steps :)
+                        Input->FKeyPressed[Event.xkey.keycode - KEYCODE_F11 + 1] = true;
+                    }
+                }*/
+            } break;
+
+            default: {
+            } break;
+        }
+    }
+}
+
 #if 0
 internal void ToggleFullscreen(Display *display, Window window)
 {
@@ -740,25 +1016,6 @@ internal void ToggleFullscreen(Display *display, Window window)
     // XFlush(display);
 }
 #endif
-
-internal inline Vec2 LinuxGetMousePosition(Display* display, Window window)
-{
-    Window RetRoot, RetWin;
-    int32 RootX, RootY;
-    int32 WinX, WinY;
-    uint32 Mask;
-    bool32 querySuccess = XQueryPointer(display, window,
-        &RetRoot, &RetWin,
-        &RootX, &RootY, &WinX, &WinY, &Mask);
-
-    // TODO initializing this with empty brackets crashes GCC... wtf
-    Vec2 result = { 0.0f, 0.0f };
-    if (querySuccess) {
-        result.x = (float32)WinX;
-        result.y = (float32)WinY;
-    }
-    return result;
-}
 
 #if 0
 internal void LinuxVerifyMemoryListIntegrity()
@@ -821,8 +1078,8 @@ LinuxClearBlocksByMask(linux_state *State, u64 Mask)
 
 inline bool32 LinuxIsInLoop(LinuxState *state)
 {
-    bool32 result = ((state->InputRecordingIndex != 0)
-        || (state->InputPlayingIndex));
+    bool32 result = ((state->inputRecordingIndex != 0)
+        || (state->inputPlayingIndex));
     return result;
 }
 
@@ -1003,19 +1260,6 @@ LinuxPlayBackInput(linux_state *State, game_input *NewInput)
 //
 
 #if 0
-internal inline struct timespec LinuxGetWallClock()
-{
-    struct timespec clock;
-    clock_gettime(CLOCK_MONOTONIC, &clock);
-    return clock;
-}
-
-internal inline float32 LinuxGetSecondsElapsed(
-    struct timespec start, struct timespec end)
-{
-    return (float32)(end.tv_sec - start.tv_sec)
-        + ((float32)(end.tv_nsec - start.tv_nsec) * 1e-9f);
-}
 
 // NOTE(michiel): Reference
 global unsigned int GlobalX11Map[] = {
@@ -1033,247 +1277,6 @@ global unsigned int GlobalX11Map[] = {
     XK_Num_Lock, XK_Scroll_Lock, XK_Print, XK_Break,
     XK_Up, XK_Down, XK_Left, XK_Right, XK_Delete,
 };
-#endif
-
-#if 0
-internal void LinuxProcessPendingMessages(
-    LinuxState *State, Display *display, Window window,
-    Atom WmDeleteWindow,
-    /*game_controller_input *KeyboardController,*/ GameInput* Input, Vec2 *MouseP,
-    LinuxWindowDimension* Dimension)
-{
-    while (GlobalRunning && XPending(display)) {
-        XEvent Event;
-        XNextEvent(display, &Event);
-
-        // NOTE(michiel): Don't skip the scroll key Events
-        if (Event.type == ButtonRelease) {
-            if ((Event.xbutton.button != 4) &&
-            (Event.xbutton.button != 5) &&
-            XEventsQueued(display, QueuedAfterReading)) {
-                // NOTE(michiel): Skip the auto repeat key
-                XEvent NextEvent;
-                XPeekEvent(display, &NextEvent);
-                if ((NextEvent.type == ButtonPress) &&
-                (NextEvent.xbutton.time == Event.xbutton.time) &&
-                (NextEvent.xbutton.button == Event.xbutton.button)) {
-                    continue;
-                }
-            }
-        }
-        // NOTE(michiel): Skip the Keyboard
-        if (Event.type == KeyRelease
-        && XEventsQueued(display, QueuedAfterReading)) {
-            XEvent NextEvent;
-            XPeekEvent(display, &NextEvent);
-            if ((NextEvent.type == KeyPress) &&
-            (NextEvent.xbutton.time == Event.xbutton.time) &&
-            (NextEvent.xbutton.button == Event.xbutton.button)) {
-                continue;
-            }
-        }
-
-        switch (Event.type) {
-            case ConfigureNotify: {
-                int32 W = Event.xconfigure.width;
-                int32 H = Event.xconfigure.height;
-                if ((Dimension->Width != W) || (Dimension->Height != H)) {
-                    Dimension->Width = W;
-                    Dimension->Height = H;
-                }
-            } break;
-            case DestroyNotify: {
-                GlobalRunning = false;
-            } break;
-            case ClientMessage: {
-                if ((Atom)Event.xclient.data.l[0] == WmDeleteWindow) {
-                    GlobalRunning = false;
-                }
-            } break;
-            case MotionNotify: {
-                MouseP->x = (float32)Event.xmotion.x;
-                MouseP->y = (float32)Event.xmotion.y;
-            } break;
-
-            case ButtonRelease:
-            case ButtonPress: {
-                if (Event.xbutton.button == 1) {
-                    LinuxProcessKeyboardMessage(&Input->MouseButtons[PlatformMouseButton_Left],
-                                                Event.type == ButtonPress);
-                }
-                else if (Event.xbutton.button == 2) {
-                    LinuxProcessKeyboardMessage(&Input->MouseButtons[PlatformMouseButton_Middle],
-                                                Event.type == ButtonPress);
-                }
-                else if (Event.xbutton.button == 3) {
-                    LinuxProcessKeyboardMessage(&Input->MouseButtons[PlatformMouseButton_Right],
-                                                Event.type == ButtonPress);
-                }
-                else if (Event.xbutton.button == 4) {
-                    ++(Input->MouseZ);
-                }
-                else if (Event.xbutton.button == 5) {
-                    --(Input->MouseZ);
-                }
-                else if (Event.xbutton.button == 8) {
-                    LinuxProcessKeyboardMessage(&Input->MouseButtons[PlatformMouseButton_Extended0],
-                                                Event.type == ButtonPress);
-                }
-                else if (Event.xbutton.button == 9) {
-                    LinuxProcessKeyboardMessage(&Input->MouseButtons[PlatformMouseButton_Extended1],
-                                                Event.type == ButtonPress);
-                    // } else {
-                    //     printf("Uncaught button: %u\n", Event.xbutton.button);
-                }
-            } break;
-
-            case KeyRelease:
-            case KeyPress: {
-                bool32 AltKeyWasDown = Event.xkey.state & KEYCODE_ALT_MASK;
-                bool32 ShiftKeyWasDown = Event.xkey.state & KEYCODE_SHIFT_MASK;
-                
-                if (!GlobalPause) {
-                    if (Event.xkey.keycode == KEYCODE_W) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->MoveUp,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_A) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->MoveLeft,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_S) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->MoveDown,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_D) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->MoveRight,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_Q) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->LeftShoulder,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_E) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->RightShoulder,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_UP) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->ActionUp,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_DOWN) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->ActionDown,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_LEFT) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->ActionLeft,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_RIGHT) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->ActionRight,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_ESCAPE) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->Back,
-                            Event.type == KeyPress);
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_SPACE) {
-                        LinuxProcessKeyboardMessage(
-                            &KeyboardController->Start,
-                            Event.type == KeyPress);
-                    }
-                }
-                
-                if ((Event.xkey.keycode == KEYCODE_SHIFT_L)
-                || (Event.xkey.keycode == KEYCODE_SHIFT_R)) {
-                    Input->ShiftDown = (Event.type == KeyPress);
-                }
-                else if ((Event.xkey.keycode == KEYCODE_ALT_L)
-                || (Event.xkey.keycode == KEYCODE_ALT_R)) {
-                    Input->AltDown = (Event.type == KeyPress);
-                }
-                else if ((Event.xkey.keycode == KEYCODE_CTRL_L)
-                || (Event.xkey.keycode == KEYCODE_CTRL_R)) {
-                    Input->ControlDown = (Event.type == KeyPress);
-                }
-
-#if GAME_INTERNAL
-                else if (Event.xkey.keycode == KEYCODE_P) {
-                    if (Event.type == KeyPress) {
-                        GlobalPause = !GlobalPause;
-                    }
-                }
-                else if (Event.xkey.keycode == KEYCODE_L) {
-                    if (Event.type == KeyPress) {
-                        if (AltKeyWasDown) {
-                            LinuxBeginInputPlayBack(State, 1);
-                        }
-                        else {
-                            if (State->InputPlayingIndex == 0) {
-                                if (State->InputRecordingIndex == 0) {
-                                    LinuxBeginRecordingInput(State, 1);
-                                }
-                                else {
-                                    LinuxEndRecordingInput(State);
-                                    LinuxBeginInputPlayBack(State, 1);
-                                }
-                            }
-                            else {
-                                LinuxEndInputPlayBack(State);
-                            }
-                        }
-                    }
-                }
-#endif
-                if (Event.type == KeyPress) {
-                    if (Event.xkey.keycode == KEYCODE_PLUS) {
-                        if (ShiftKeyWasDown) {
-                            OpenGL.DebugLightBufferIndex += 1;
-                        }
-                        else {
-                            OpenGL.DebugLightBufferTexIndex += 1;
-                        }
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_MINUS) {
-                        if (ShiftKeyWasDown) {
-                            OpenGL.DebugLightBufferIndex -= 1;
-                        }
-                        else {
-                            OpenGL.DebugLightBufferTexIndex -= 1;
-                        }
-                    }
-                    else if ((Event.xkey.keycode == KEYCODE_ENTER)
-                    && AltKeyWasDown) {
-                        ToggleFullscreen(display, window);
-                    }
-                    else if ((Event.xkey.keycode >= KEYCODE_F1)
-                    && (Event.xkey.keycode <= KEYCODE_F10)) {
-                        Input->FKeyPressed[Event.xkey.keycode - KEYCODE_F1 + 1] = true;
-                    }
-                    else if ((Event.xkey.keycode >= KEYCODE_F11)
-                    && (Event.xkey.keycode <= KEYCODE_F12)) {
-                        // NOTE(michiel): Because of X11 mapping we get to do the function keys in 2 steps :)
-                        Input->FKeyPressed[Event.xkey.keycode - KEYCODE_F11 + 1] = true;
-                    }
-                }
-            } break;
-
-            default: {
-            } break;
-        }
-    }
-}
 #endif
 
 //
@@ -1664,7 +1667,7 @@ internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
     DEBUG_PRINT("Buffer size (secs): %f\n",
         (float)gameAudio->bufferSize / gameAudio->sampleRate);
     DEBUG_PRINT("Almost done with sound. Press Enter to continue\n");
-    getchar();
+    //getchar();
 
     // Apply HW parameter settings to PCM device and prepare device
     err = snd_pcm_hw_params(audio->pcmHandle, hwParams);
@@ -1678,19 +1681,19 @@ internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
 
 int main(int argc, char **argv)
 {
-    int width = 800;
-    int height = 600;
-
     #if GAME_SLOW
     debugPrint_ = DEBUGPlatformPrint;
     #endif
 
-    LinuxState state = {};
-    LinuxGetEXEFileName(&state);
+    LinuxState linuxState = {};
+    LinuxGetEXEFileName(&linuxState);
 
-    RemoveFileNameFromPath(state.exeFilePath, pathToApp_, LINUX_STATE_FILE_NAME_COUNT);
+    RemoveFileNameFromPath(linuxState.exeFilePath, pathToApp_, LINUX_STATE_FILE_NAME_COUNT);
     DEBUG_PRINT("Path to application: %s\n", pathToApp_);
     
+    ScreenInfo screenInfo;
+    screenInfo.width = 800;
+    screenInfo.height = 600;
     Display* display = XOpenDisplay(NULL);
     if (!display) {
         DEBUG_PRINT("Failed to open display\n");
@@ -1704,7 +1707,8 @@ int main(int argc, char **argv)
     GLXFBConfig* framebufferConfigs = LinuxGetOpenGLFramebufferConfig(display);
     GLXFBConfig framebufferConfig = framebufferConfigs[0];
     XFree(framebufferConfigs);
-    XVisualInfo* visualInfo = glXGetVisualFromFBConfig(display, framebufferConfig);
+    XVisualInfo* visualInfo = glXGetVisualFromFBConfig(display,
+        framebufferConfig);
     if (!visualInfo) {
         DEBUG_PRINT("Failed to get framebuffer visual info\n");
         return 1;
@@ -1723,7 +1727,7 @@ int main(int argc, char **argv)
                                 KeyPressMask | KeyReleaseMask);
 
     Window glWindow = XCreateWindow(display, root,
-        100, 100, width, height,
+        100, 100, screenInfo.width, screenInfo.height,
         0, visualInfo->depth, InputOutput, visualInfo->visual,
         CWBorderPixel | CWColormap | CWEventMask /*| CWOverrideRedirect*/,
         &windowAttribs);
@@ -1735,8 +1739,8 @@ int main(int argc, char **argv)
     XSizeHints sizeHints = {};
     sizeHints.x = 100;
     sizeHints.y = 100;
-    sizeHints.width  = width;
-    sizeHints.height = height;
+    sizeHints.width  = screenInfo.width;
+    sizeHints.height = screenInfo.height;
     sizeHints.flags = USSize | USPosition; // US vs PS?
 
     XSetNormalHints(display, glWindow, &sizeHints);
@@ -1766,7 +1770,8 @@ int main(int argc, char **argv)
     DEBUG_PRINT("Created GLX context\n");
 
 	OpenGLFunctions glFuncs = {};
-    if (!LinuxInitOpenGL(&glFuncs, display, glWindow, width, height)) {
+    if (!LinuxInitOpenGL(&glFuncs, display, glWindow,
+    screenInfo.width, screenInfo.height)) {
         return 1;
     }
     DEBUG_PRINT("Initialized Linux OpenGL\n");
@@ -1777,7 +1782,7 @@ int main(int argc, char **argv)
     if (!LinuxInitAudio(&linuxAudio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
         return 1;
     }
-    unsigned char* data;
+    /*unsigned char* data;
     int pcmreturn;
     int frames;
 
@@ -1799,7 +1804,7 @@ int main(int argc, char **argv)
         }
     }
     DEBUG_PRINT("Done playing? Press Enter to continue");
-    getchar();
+    getchar();*/
     DEBUG_PRINT("Initialized Linux audio\n");
 
 #if GAME_INTERNAL
@@ -1829,24 +1834,60 @@ int main(int argc, char **argv)
 	gameMemory.transientStorage = ((uint8*)gameMemory.permanentStorage +
 		gameMemory.permanentStorageSize);
 
-	state.gameMemorySize = totalSize;
-	state.gameMemoryBlock = gameMemory.permanentStorage;
+	linuxState.gameMemorySize = totalSize;
+	linuxState.gameMemoryBlock = gameMemory.permanentStorage;
 	if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
 		// TODO log
 		return 1;
 	}
 	DEBUG_PRINT("Initialized game memory\n");
 
-    /*char SourceGameCodeDLLFullPath[LINUX_STATE_FILE_NAME_COUNT];
-    LinuxBuildEXEPathFileName(&state, "libHandmade.so",
-        sizeof(SourceGameCodeDLLFullPath), SourceGameCodeDLLFullPath);*/
+    char gameCodeLibPath[LINUX_STATE_FILE_NAME_COUNT];
+    LinuxBuildEXEPathFileName(&linuxState, "315k_game.so",
+        sizeof(gameCodeLibPath), gameCodeLibPath);
 
 	GameInput input[2] = {};
 	GameInput *newInput = &input[0];
 	GameInput *oldInput = &input[1];
 
+    //struct timespec lastCounter = LinuxGetWallClock();
+    //struct timespec flipWallClock = LinuxGetWallClock();
+
+    LinuxGameCode gameCode = {};
+    LinuxLoadGameCode(&gameCode, gameCodeLibPath, LinuxFileId(gameCodeLibPath));
+
+    // IMPORTANT LEFTOVER NOTES:
+    // Querying X11 every frame can cause hickups because of a sync of X11 state
+
     running_ = true;
     while (running_) {
+        Vec2 mousePos;
+        LinuxProcessPendingMessages(&linuxState, display,
+            glWindow, wmDeleteWindow,
+            newInput, &mousePos, &screenInfo);
+
+        if (gameCode.gameUpdateAndRender) {
+            // name(ThreadContext* thread, GameMemory* memory, ScreenInfo screenInfo, GameInput* input, GameAudio* audio, OpenGLFunctions* glFunctions)
+			ThreadContext thread = {};
+            gameCode.gameUpdateAndRender(&thread, &gameMemory, screenInfo,
+                newInput, &gameAudio, &glFuncs);
+        }
+        
+        glXSwapBuffers(display, glWindow);
+
+        /*FlipWallClock = LinuxGetWallClock();
+
+        struct timespec EndCounter = LinuxGetWallClock();
+        float32 MeasuredSecondsPerFrame = LinuxGetSecondsElapsed(LastCounter, EndCounter);
+        float32 ExactTargetFramesPerUpdate = MeasuredSecondsPerFrame*(float32)MonitorRefreshHz;
+        uint32 NewExpectedFramesPerUpdate = RoundReal32ToInt32(ExactTargetFramesPerUpdate);
+        ExpectedFramesPerUpdate = NewExpectedFramesPerUpdate;
+
+        TargetSecondsPerFrame = MeasuredSecondsPerFrame;
+
+        FRAME_MARKER(MeasuredSecondsPerFrame);
+        LastCounter = EndCounter;*/
+
 		GameInput *temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
@@ -1854,408 +1895,273 @@ int main(int argc, char **argv)
     }
 
 #if 0
-        // Platform = GameMemory.PlatformAPI;
+        int DebugTimeMarkerIndex = 0;
+        linux_debug_time_marker DebugTimeMarkers[30] = {0};
 
-        if (Samples != MAP_FAILED)
+        uint32 AudioLatencyBytes = 0;
+        float32 AudioLatencySeconds = 0.0f;
+        bool32 SoundIsValid = false;
+
+        uint32 ExpectedFramesPerUpdate = 1;
+        float32 TargetSecondsPerFrame = (float32)ExpectedFramesPerUpdate / (float32)GameUpdateHz;
+        
+        while (GlobalRunning)
         {
-            uint32 NrJoysticks = LinuxFindJoysticks();
-
-            game_input Input[2] = {};
-            game_input *NewInput = &Input[0];
-            game_input *OldInput = &Input[1];
-
-            struct timespec LastCounter = LinuxGetWallClock();
-            struct timespec FlipWallClock = LinuxGetWallClock();
-
-            int DebugTimeMarkerIndex = 0;
-            linux_debug_time_marker DebugTimeMarkers[30] = {0};
-
-            uint32 AudioLatencyBytes = 0;
-            float32 AudioLatencySeconds = 0.0f;
-            bool32 SoundIsValid = false;
-
-            linux_game_code Game = {};
-            LinuxLoadGameCode(&Game, SourceGameCodeDLLFullPath, LinuxFileId(SourceGameCodeDLLFullPath));
-
-            DEBUGSetEventRecording(Game.IsValid);
-
-            // NOTE(michiel): And display the window on the screen
-            XMapRaised(display, GlWindow);
-            uint32 ExpectedFramesPerUpdate = 1;
-            float32 TargetSecondsPerFrame = (float32)ExpectedFramesPerUpdate / (float32)GameUpdateHz;
-            
-            // NOTE(michiel): Querying X11 every frame can cause hickups because of a sync of X11 state
-            linux_window_dimension Dimension = LinuxGetWindowDimension(display, GlWindow);
-            v2 MouseP = LinuxGetMousePosition(display, GlWindow);
-            
-            while (GlobalRunning)
+            if(state->InputRecordingIndex)
             {
-                {DEBUG_DATA_BLOCK("Platform");
-                    DEBUG_VALUE(ExpectedFramesPerUpdate);
-                }
-                {DEBUG_DATA_BLOCK("Platform/Controls");
-                    DEBUG_B32(GlobalPause);
-                    DEBUG_B32(GlobalSoftwareRendering);
-                }
-
-                //
-                //
-                //
-
-                NewInput->dtForFrame = TargetSecondsPerFrame;
-
-                //
-                //
-                //
-
-                BEGIN_BLOCK("Input Processing");
-
-                // TODO(casey): Zeroing macro
-                // TODO(casey): We can't zero everything because the up/down state will
-                // be wrong!!!
-                game_controller_input *OldKeyboardController = GetController(OldInput, 0);
-                game_controller_input *NewKeyboardController = GetController(NewInput, 0);
-                {
-                    TIMED_BLOCK("Resetting Buttons");
-                    *NewKeyboardController = {};
-                    NewKeyboardController->IsConnected = true;
-                    for(uint32 ButtonIndex = 0;
-                        ButtonIndex < ArrayCount(NewKeyboardController->Buttons);
-                        ++ButtonIndex)
-                    {
-                        NewKeyboardController->Buttons[ButtonIndex].EndedDown =
-                            OldKeyboardController->Buttons[ButtonIndex].EndedDown;
-                    }
-                    for(uint32 ButtonIndex = 0;
-                        ButtonIndex < PlatformMouseButton_Count;
-                        ++ButtonIndex)
-                    {
-                        NewInput->MouseButtons[ButtonIndex] = OldInput->MouseButtons[ButtonIndex];
-                        NewInput->MouseButtons[ButtonIndex].HalfTransitionCount = 0;
-                    }
-                }
-                
-                {
-                    TIMED_BLOCK("Linux Keyboard and Message Processing");
-                    ZeroStruct(NewInput->FKeyPressed);
-                    LinuxProcessPendingMessages(state, display, GlWindow, WmDeleteWindow,
-                        /*NewKeyboardController,*/ NewInput, &MouseP, &Dimension);
-                }
-                rectangle2i DrawRegion;
-                {
-                    TIMED_BLOCK("Aspect fitting");
-                    DrawRegion = AspectRatioFit(RenderCommands.Settings.Width, RenderCommands.Settings.Height,
-                                                Dimension.Width, Dimension.Height);
-                }
-                
-                {
-                    TIMED_BLOCK("Mouse Position");
-                    float32 MouseX = (float32)MouseP.x;
-                    float32 MouseY = (float32)((Dimension.Height - 1) - MouseP.y);
-                    
-                    float32 MouseU = Clamp01MapToRange((float32)DrawRegion.MinX, MouseX, (float32)DrawRegion.MaxX);
-                    float32 MouseV = Clamp01MapToRange((float32)DrawRegion.MinY, MouseY, (float32)DrawRegion.MaxY);
-                    
-                    NewInput->MouseX = (float32)RenderCommands.Settings.Width*MouseU;
-                    NewInput->MouseY = (float32)RenderCommands.Settings.Height*MouseV;
-                    NewInput->MouseZ = 0.0f;
-                }
-                
-
-                if (!GlobalPause)
-                {
-                    TIMED_BLOCK("Joystick processing");
-                    // set the third parameter to the start where to fill in joystick data
-                    LinuxJoystickPopulateGameInput(NewInput, OldInput, 1, NrJoysticks);
-                }
-                END_BLOCK();
-
-                //
-                //
-                //
-
-                BEGIN_BLOCK("Game Update");
-                
-                RenderCommands.LightPointIndex = 1;
-                
-                game_offscreen_buffer Buffer = {};
-                Buffer.Memory = GlobalBackbuffer.Memory;
-                Buffer.Width = GlobalBackbuffer.Width;
-                Buffer.Height = GlobalBackbuffer.Height;
-                Buffer.Pitch = GlobalBackbuffer.Pitch;
-                if(!GlobalPause)
-                {
-                    if(state->InputRecordingIndex)
-                    {
-                        LinuxRecordInput(state, NewInput);
-                    }
-
-                    if(state->InputPlayingIndex)
-                    {
-                        game_input Temp = *NewInput;
-                        LinuxPlayBackInput(state, NewInput);
-                        for (uint32 MouseButtonIndex = 0;
-                            MouseButtonIndex < PlatformMouseButton_Count;
-                            ++MouseButtonIndex)
-                        {
-                            NewInput->MouseButtons[MouseButtonIndex] = Temp.MouseButtons[MouseButtonIndex];
-                        }
-                        NewInput->MouseX = Temp.MouseX;
-                        NewInput->MouseY = Temp.MouseY;
-                        NewInput->MouseZ = Temp.MouseZ;
-                    }
-                    if(Game.UpdateAndRender)
-                    {
-                        Game.UpdateAndRender(&GameMemory, NewInput, &RenderCommands);
-                        if(NewInput->QuitRequested)
-                        {
-                            GlobalRunning = false;
-                        }
-                    }
-                }
-
-                END_BLOCK();
-
-                //
-                //
-                //
-
-                BEGIN_BLOCK("Audio Update");
-
-                if(!GlobalPause)
-                {
-                    /* NOTE(casey):
-                        Here is how sound output computation works.
-                        We define a safety value that is the number
-                        of samples we think our game update loop
-                        may vary by (let's say up to 2ms)
-                        When we wake up to write audio, we will look
-                        and see what the play cursor position is and we
-                        will forecast ahead where we think the play
-                        cursor will be on the next frame boundary.
-                        We will then look to see if the write cursor is
-                        before that by at least our safety value.  If
-                        it is, the target fill position is that frame
-                        boundary plus one frame.  This gives us perfect
-                        audio sync in the case of a card that has low
-                        enough latency.
-                        If the write cursor is _after_ that safety
-                        margin, then we assume we can never sync the
-                        audio perfectly, so we will write one frame's
-                        worth of audio plus the safety margin's worth
-                        of guard samples.
-                    */
-                    uint32 PlayCursor = SoundOutput.Buffer.ReadIndex;
-                    uint32 WriteCursor = PlayCursor + AUDIO_WRITE_SAFE_SAMPLES * SoundOutput.BytesPerSample;
-                    if (!SoundIsValid)
-                    {
-                        SoundOutput.RunningSampleIndex = WriteCursor / SoundOutput.BytesPerSample;
-                        SoundIsValid = true;
-                    }
-
-                    uint32 ByteToLock = ((SoundOutput.RunningSampleIndex*SoundOutput.BytesPerSample) %
-                                        SoundOutput.Buffer.Size);
-
-                    uint32 ExpectedSoundBytesPerFrame =
-                        (uint32)((float32)(SoundOutput.SamplesPerSecond*SoundOutput.BytesPerSample) /
-                                GameUpdateHz);
-
-                    uint32 ExpectedFrameBoundaryByte = PlayCursor + ExpectedSoundBytesPerFrame;
-
-                    uint32 SafeWriteCursor = WriteCursor + SoundOutput.SafetyBytes;
-                    bool32 AudioCardIsLowLatency = (SafeWriteCursor < ExpectedFrameBoundaryByte);
-
-                    uint32 TargetCursor = 0;
-                    if(AudioCardIsLowLatency)
-                    {
-                        TargetCursor = (ExpectedFrameBoundaryByte + ExpectedSoundBytesPerFrame);
-                    }
-                    else
-                    {
-                        TargetCursor = (WriteCursor + ExpectedSoundBytesPerFrame +
-                                        SoundOutput.SafetyBytes);
-                    }
-                    TargetCursor = (TargetCursor % SoundOutput.Buffer.Size);
-
-                    uint32 BytesToWrite = 0;
-                    if(ByteToLock > TargetCursor)
-                    {
-                        BytesToWrite = (SoundOutput.Buffer.Size - ByteToLock);
-                        BytesToWrite += TargetCursor;
-                    }
-                    else
-                    {
-                        BytesToWrite = TargetCursor - ByteToLock;
-                    }
-
-                    game_sound_output_buffer SoundBuffer = {};
-                    SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
-                    SoundBuffer.SampleCount = Align8(BytesToWrite / SoundOutput.BytesPerSample);
-                    BytesToWrite = SoundBuffer.SampleCount*SoundOutput.BytesPerSample;
-                    SoundBuffer.Samples = Samples;
-                    if(Game.GetSoundSamples)
-                    {
-                        Game.GetSoundSamples(&GameMemory, &SoundBuffer);
-                    }
-
-#if GAME_INTERNAL
-                    linux_debug_time_marker *Marker = &DebugTimeMarkers[DebugTimeMarkerIndex];
-                    Marker->OutputPlayCursor = PlayCursor;
-                    Marker->OutputWriteCursor = WriteCursor;
-                    Marker->OutputLocation = ByteToLock;
-                    Marker->OutputByteCount = BytesToWrite;
-                    Marker->ExpectedFlipPlayCursor = ExpectedFrameBoundaryByte;
-
-                    uint32 UnwrappedWriteCursor = WriteCursor;
-                    if(UnwrappedWriteCursor < PlayCursor)
-                    {
-                        UnwrappedWriteCursor += SoundOutput.Buffer.Size;
-                    }
-                    AudioLatencyBytes = UnwrappedWriteCursor - PlayCursor;
-                    AudioLatencySeconds =
-                        (((float32)AudioLatencyBytes / (float32)SoundOutput.BytesPerSample) / (float32)SoundOutput.SamplesPerSecond);
-#endif
-                    LinuxFillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer);
-                }
-
-                END_BLOCK();
-
-                //
-                //
-                //
-
-#if GAME_INTERNAL
-                BEGIN_BLOCK("Debug Collation");
-
-                // Reload code if necessary
-                ino_t GameLibId = LinuxFileId(SourceGameCodeDLLFullPath);
-                bool32 ExecutableNeedsToBeReloaded = (GameLibId != Game.GameLibID);
-
-                GameMemory.ExecutableReloaded = false;
-                if(ExecutableNeedsToBeReloaded)
-                {
-                    LinuxCompleteAllWork(&HighPriorityQueue);
-                    LinuxCompleteAllWork(&LowPriorityQueue);
-                    DEBUGSetEventRecording(false);
-                }
-
-                if(Game.DEBUGFrameEnd)
-                {
-                    Game.DEBUGFrameEnd(&GameMemory, NewInput, &RenderCommands);
-                }
-
-                if(ExecutableNeedsToBeReloaded)
-                {
-                    bool32 IsValid = false;
-                    for(uint32 LoadTryIndex = 0;
-                        !IsValid && (LoadTryIndex < 100);
-                        ++LoadTryIndex)
-                    {
-                        IsValid = LinuxLoadGameCode(&Game, SourceGameCodeDLLFullPath, GameLibId);
-                        usleep(100000);
-                    }
-
-                    GameMemory.ExecutableReloaded = true;
-                    DEBUGSetEventRecording(Game.IsValid);
-                }
-
-                END_BLOCK();
-#endif
-
-                //
-                //
-                //
-
-#if 0
-                BEGIN_BLOCK("Framerate Wait");
-
-                if (!GlobalPause)
-                {
-                    struct timespec WorkCounter = LinuxGetWallClock();
-                    float32 WorkSecondsElapsed = LinuxGetSecondsElapsed(LastCounter, WorkCounter);
-
-                    float32 SecondsElapsedForFrame = WorkSecondsElapsed;
-                    if (SecondsElapsedForFrame < TargetSecondsPerFrame)
-                    {
-                        uint32 SleepUs = (uint32)(0.99e6f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
-                        usleep(SleepUs);
-                        while (SecondsElapsedForFrame < TargetSecondsPerFrame)
-                        {
-                            SecondsElapsedForFrame = LinuxGetSecondsElapsed(LastCounter, LinuxGetWallClock());
-                        }
-                    }
-                    else
-                    {
-                        // Missed frame rate
-                    }
-                }
-                END_BLOCK();
-#endif
-
-                //
-                //
-                //
-
-                BEGIN_BLOCK("Frame Display");
-
-                BeginTicketMutex(&TextureOpQueue->Mutex);
-                texture_op *FirstTextureOp = TextureOpQueue->First;
-                texture_op *LastTextureOp = TextureOpQueue->Last;
-                TextureOpQueue->Last = TextureOpQueue->First = 0;
-                EndTicketMutex(&TextureOpQueue->Mutex);
-
-                if(FirstTextureOp)
-                {
-                    Assert(LastTextureOp);
-                    OpenGLManageTextures(FirstTextureOp);
-                    BeginTicketMutex(&TextureOpQueue->Mutex);
-                    LastTextureOp->Next = TextureOpQueue->FirstFree;
-                    TextureOpQueue->FirstFree = FirstTextureOp;
-                    EndTicketMutex(&TextureOpQueue->Mutex);
-                }
-                
-                glXSwapBuffers(display, GlWindow);
-
-                /*LinuxDisplayBufferInWindow(&HighPriorityQueue, &RenderCommands, display, GlWindow,
-                                            DrawRegion, Dimension.Width, Dimension.Height,
-                                            &FrameTempArena);*/
-
-                RenderCommands.PushBufferDataAt = RenderCommands.PushBufferBase;
-                RenderCommands.VertexCount = 0;
-                RenderCommands.LightBoxCount = 0;
-
-                FlipWallClock = LinuxGetWallClock();
-
-                game_input *Temp = NewInput;
-                NewInput = OldInput;
-                OldInput = Temp;
-                // TODO(casey): Should I clear these here?
-
-                END_BLOCK();
-
-                struct timespec EndCounter = LinuxGetWallClock();
-                float32 MeasuredSecondsPerFrame = LinuxGetSecondsElapsed(LastCounter, EndCounter);
-                float32 ExactTargetFramesPerUpdate = MeasuredSecondsPerFrame*(float32)MonitorRefreshHz;
-                uint32 NewExpectedFramesPerUpdate = RoundReal32ToInt32(ExactTargetFramesPerUpdate);
-                ExpectedFramesPerUpdate = NewExpectedFramesPerUpdate;
-
-                TargetSecondsPerFrame = MeasuredSecondsPerFrame;
-
-                FRAME_MARKER(MeasuredSecondsPerFrame);
-                LastCounter = EndCounter;
+                LinuxRecordInput(state, NewInput);
             }
 
-            LinuxCompleteAllWork(&HighPriorityQueue);
-            LinuxCompleteAllWork(&LowPriorityQueue);
+            if(state->InputPlayingIndex)
+            {
+                game_input Temp = *NewInput;
+                LinuxPlayBackInput(state, NewInput);
+                for (uint32 MouseButtonIndex = 0;
+                    MouseButtonIndex < PlatformMouseButton_Count;
+                    ++MouseButtonIndex)
+                {
+                    NewInput->MouseButtons[MouseButtonIndex] = Temp.MouseButtons[MouseButtonIndex];
+                }
+                NewInput->MouseX = Temp.MouseX;
+                NewInput->MouseY = Temp.MouseY;
+                NewInput->MouseZ = Temp.MouseZ;
+            }
+            if(Game.UpdateAndRender)
+            {
+                Game.UpdateAndRender(&GameMemory, NewInput, &RenderCommands);
+                if(NewInput->QuitRequested)
+                {
+                    GlobalRunning = false;
+                }
+            }
 
-            LinuxUnloadGameCode(&Game);
-            LinuxStopPlayingSound();
+            BEGIN_BLOCK("Audio Update");
+
+            /* NOTE(casey):
+                Here is how sound output computation works.
+                We define a safety value that is the number
+                of samples we think our game update loop
+                may vary by (let's say up to 2ms)
+                When we wake up to write audio, we will look
+                and see what the play cursor position is and we
+                will forecast ahead where we think the play
+                cursor will be on the next frame boundary.
+                We will then look to see if the write cursor is
+                before that by at least our safety value.  If
+                it is, the target fill position is that frame
+                boundary plus one frame.  This gives us perfect
+                audio sync in the case of a card that has low
+                enough latency.
+                If the write cursor is _after_ that safety
+                margin, then we assume we can never sync the
+                audio perfectly, so we will write one frame's
+                worth of audio plus the safety margin's worth
+                of guard samples.
+            */
+            uint32 PlayCursor = SoundOutput.Buffer.ReadIndex;
+            uint32 WriteCursor = PlayCursor + AUDIO_WRITE_SAFE_SAMPLES * SoundOutput.BytesPerSample;
+            if (!SoundIsValid)
+            {
+                SoundOutput.RunningSampleIndex = WriteCursor / SoundOutput.BytesPerSample;
+                SoundIsValid = true;
+            }
+
+            uint32 ByteToLock = ((SoundOutput.RunningSampleIndex*SoundOutput.BytesPerSample) %
+                                SoundOutput.Buffer.Size);
+
+            uint32 ExpectedSoundBytesPerFrame =
+                (uint32)((float32)(SoundOutput.SamplesPerSecond*SoundOutput.BytesPerSample) /
+                        GameUpdateHz);
+
+            uint32 ExpectedFrameBoundaryByte = PlayCursor + ExpectedSoundBytesPerFrame;
+
+            uint32 SafeWriteCursor = WriteCursor + SoundOutput.SafetyBytes;
+            bool32 AudioCardIsLowLatency = (SafeWriteCursor < ExpectedFrameBoundaryByte);
+
+            uint32 TargetCursor = 0;
+            if(AudioCardIsLowLatency)
+            {
+                TargetCursor = (ExpectedFrameBoundaryByte + ExpectedSoundBytesPerFrame);
+            }
+            else
+            {
+                TargetCursor = (WriteCursor + ExpectedSoundBytesPerFrame +
+                                SoundOutput.SafetyBytes);
+            }
+            TargetCursor = (TargetCursor % SoundOutput.Buffer.Size);
+
+            uint32 BytesToWrite = 0;
+            if(ByteToLock > TargetCursor)
+            {
+                BytesToWrite = (SoundOutput.Buffer.Size - ByteToLock);
+                BytesToWrite += TargetCursor;
+            }
+            else
+            {
+                BytesToWrite = TargetCursor - ByteToLock;
+            }
+
+            game_sound_output_buffer SoundBuffer = {};
+            SoundBuffer.SamplesPerSecond = SoundOutput.SamplesPerSecond;
+            SoundBuffer.SampleCount = Align8(BytesToWrite / SoundOutput.BytesPerSample);
+            BytesToWrite = SoundBuffer.SampleCount*SoundOutput.BytesPerSample;
+            SoundBuffer.Samples = Samples;
+            if(Game.GetSoundSamples)
+            {
+                Game.GetSoundSamples(&GameMemory, &SoundBuffer);
+            }
+
+#if GAME_INTERNAL
+            linux_debug_time_marker *Marker = &DebugTimeMarkers[DebugTimeMarkerIndex];
+            Marker->OutputPlayCursor = PlayCursor;
+            Marker->OutputWriteCursor = WriteCursor;
+            Marker->OutputLocation = ByteToLock;
+            Marker->OutputByteCount = BytesToWrite;
+            Marker->ExpectedFlipPlayCursor = ExpectedFrameBoundaryByte;
+
+            uint32 UnwrappedWriteCursor = WriteCursor;
+            if(UnwrappedWriteCursor < PlayCursor)
+            {
+                UnwrappedWriteCursor += SoundOutput.Buffer.Size;
+            }
+            AudioLatencyBytes = UnwrappedWriteCursor - PlayCursor;
+            AudioLatencySeconds =
+                (((float32)AudioLatencyBytes / (float32)SoundOutput.BytesPerSample) / (float32)SoundOutput.SamplesPerSecond);
+#endif
+            LinuxFillSoundBuffer(&SoundOutput, ByteToLock, BytesToWrite, &SoundBuffer);
+
+            END_BLOCK();
+
+            //
+            //
+            //
+
+#if GAME_INTERNAL
+            BEGIN_BLOCK("Debug Collation");
+
+            // Reload code if necessary
+            ino_t GameLibId = LinuxFileId(SourceGameCodeDLLFullPath);
+            bool32 ExecutableNeedsToBeReloaded = (GameLibId != Game.GameLibID);
+
+            GameMemory.ExecutableReloaded = false;
+            if(ExecutableNeedsToBeReloaded)
+            {
+                LinuxCompleteAllWork(&HighPriorityQueue);
+                LinuxCompleteAllWork(&LowPriorityQueue);
+                DEBUGSetEventRecording(false);
+            }
+
+            if(Game.DEBUGFrameEnd)
+            {
+                Game.DEBUGFrameEnd(&GameMemory, NewInput, &RenderCommands);
+            }
+
+            if(ExecutableNeedsToBeReloaded)
+            {
+                bool32 IsValid = false;
+                for(uint32 LoadTryIndex = 0;
+                    !IsValid && (LoadTryIndex < 100);
+                    ++LoadTryIndex)
+                {
+                    IsValid = LinuxLoadGameCode(&Game, SourceGameCodeDLLFullPath, GameLibId);
+                    usleep(100000);
+                }
+
+                GameMemory.ExecutableReloaded = true;
+                DEBUGSetEventRecording(Game.IsValid);
+            }
+
+            END_BLOCK();
+#endif
+
+            //
+            //
+            //
+
+#if 0
+            BEGIN_BLOCK("Framerate Wait");
+
+            if (!GlobalPause)
+            {
+                struct timespec WorkCounter = LinuxGetWallClock();
+                float32 WorkSecondsElapsed = LinuxGetSecondsElapsed(LastCounter, WorkCounter);
+
+                float32 SecondsElapsedForFrame = WorkSecondsElapsed;
+                if (SecondsElapsedForFrame < TargetSecondsPerFrame)
+                {
+                    uint32 SleepUs = (uint32)(0.99e6f * (TargetSecondsPerFrame - SecondsElapsedForFrame));
+                    usleep(SleepUs);
+                    while (SecondsElapsedForFrame < TargetSecondsPerFrame)
+                    {
+                        SecondsElapsedForFrame = LinuxGetSecondsElapsed(LastCounter, LinuxGetWallClock());
+                    }
+                }
+                else
+                {
+                    // Missed frame rate
+                }
+            }
+            END_BLOCK();
+#endif
+
+            //
+            //
+            //
+
+            BEGIN_BLOCK("Frame Display");
+
+            BeginTicketMutex(&TextureOpQueue->Mutex);
+            texture_op *FirstTextureOp = TextureOpQueue->First;
+            texture_op *LastTextureOp = TextureOpQueue->Last;
+            TextureOpQueue->Last = TextureOpQueue->First = 0;
+            EndTicketMutex(&TextureOpQueue->Mutex);
+
+            if(FirstTextureOp)
+            {
+                Assert(LastTextureOp);
+                OpenGLManageTextures(FirstTextureOp);
+                BeginTicketMutex(&TextureOpQueue->Mutex);
+                LastTextureOp->Next = TextureOpQueue->FirstFree;
+                TextureOpQueue->FirstFree = FirstTextureOp;
+                EndTicketMutex(&TextureOpQueue->Mutex);
+            }
+            
+            glXSwapBuffers(display, GlWindow);
+
+            /*LinuxDisplayBufferInWindow(&HighPriorityQueue, &RenderCommands, display, GlWindow,
+                                        DrawRegion, Dimension.Width, Dimension.Height,
+                                        &FrameTempArena);*/
+
+            RenderCommands.PushBufferDataAt = RenderCommands.PushBufferBase;
+            RenderCommands.VertexCount = 0;
+            RenderCommands.LightBoxCount = 0;
+
+            FlipWallClock = LinuxGetWallClock();
+
+            game_input *Temp = NewInput;
+            NewInput = OldInput;
+            OldInput = Temp;
+            // TODO(casey): Should I clear these here?
+
+            END_BLOCK();
+
+            struct timespec EndCounter = LinuxGetWallClock();
+            float32 MeasuredSecondsPerFrame = LinuxGetSecondsElapsed(LastCounter, EndCounter);
+            float32 ExactTargetFramesPerUpdate = MeasuredSecondsPerFrame*(float32)MonitorRefreshHz;
+            uint32 NewExpectedFramesPerUpdate = RoundReal32ToInt32(ExactTargetFramesPerUpdate);
+            ExpectedFramesPerUpdate = NewExpectedFramesPerUpdate;
+
+            TargetSecondsPerFrame = MeasuredSecondsPerFrame;
+
+            FRAME_MARKER(MeasuredSecondsPerFrame);
+            LastCounter = EndCounter;
         }
-        else
-        {
-            LinuxStopPlayingSound();
-            fprintf(stderr, "Unable to allocate space for the sound\n");
-        }
+
+        LinuxCompleteAllWork(&HighPriorityQueue);
+        LinuxCompleteAllWork(&LowPriorityQueue);
+
+        LinuxUnloadGameCode(&Game);
+        LinuxStopPlayingSound();
 #endif
 
     return 0;

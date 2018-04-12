@@ -73,13 +73,13 @@ struct LinuxDebugTimeMarker
 
 struct LinuxGameCode
 {
-    void *GameLibHandle;
-    ino_t GameLibID;
+    void* gameLibHandle;
+    ino_t gameLibId;
 
     // NOTE: Callbacks can be 0!  You must check before calling
     GameUpdateAndRenderFunc* gameUpdateAndRender;
 
-    bool32 IsValid;
+    bool32 isValid;
 };
 
 struct LinuxState
@@ -87,11 +87,11 @@ struct LinuxState
 	uint64 gameMemorySize;
 	void* gameMemoryBlock;
 
-    int32 RecordingHandle;
-    int32 InputRecordingIndex;
+    int32 recordingHandle;
+    int32 inputRecordingIndex;
 
-    int32 PlaybackHandle;
-    int32 InputPlayingIndex;
+    int32 playbackHandle;
+    int32 inputPlayingIndex;
 
     char exeFilePath[LINUX_STATE_FILE_NAME_COUNT];
     char* exeOnePastLastSlash;

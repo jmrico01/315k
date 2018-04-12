@@ -120,7 +120,7 @@ def WinCompileDebug():
         "cl",
         macros, compilerFlags, compilerWarningFlags, includePaths,
         "/LD", "/Fe315k_game.dll", paths["main-cpp"],
-        "/link", linkerFlags, libPaths, libs,
+        "/link", linkerFlags, #libPaths, libs,
         "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
 
     compileCommand = " ".join([
@@ -176,13 +176,15 @@ def LinuxCompileDebug():
         #"-I" + paths["include-lodepng"]
     ])
 
+    linkerFlags = " ".join([
+        "-fvisibility=hidden"
+    ])
     libPaths = " ".join([
         #"-L" + paths["lib-glfw-linux"],
         #"-L" + paths["lib-ft-linux"]
     ])
     libs = " ".join([
         # main external libs
-        #"-lglfw3",
         #"-lfreetype",
 
         # GLFW3 dependencies
@@ -197,15 +199,23 @@ def LinuxCompileDebug():
         #"-lpng"
     ])
 
+    #pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    compileLibCommand = " ".join([
+        "gcc",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "-shared", "-fPIC", paths["main-cpp"], "-o 315k_game.so"
+    ])
+
     compileCommand = " ".join([
         "gcc", "-DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
         paths["linux-main-cpp"], "-o 315k_linux",
-        libPaths, libs
+        linkerFlags, libPaths, libs
     ])
 
     os.system("bash -c \"" + " ; ".join([
         "pushd " + paths["build"] + " > /dev/null",
+        compileLibCommand,
         compileCommand,
         "popd > /dev/null"
     ]) + "\"")

@@ -4,17 +4,8 @@
 #include "km_input.h"
 #include "km_math.h"
 #include "opengl.h"
+#include "opengl_global.h"
 #include "ogl_base.h"
-
-// TODO maybe there's a better way of doing this...
-#define FUNC(returntype, name, ...) name##Func* name;
-    GL_FUNCTIONS_BASE
-    GL_FUNCTIONS_ALL
-#undef FUNC
-
-#if GAME_SLOW
-DEBUGPlatformPrintFunc* debugPrint_;
-#endif
 
 struct Tiles
 {
@@ -275,14 +266,14 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		gameState->rectShader = LoadShaders(thread,
 			memory->DEBUGPlatformReadFile, memory->DEBUGPlatformFreeFileMemory,
 			"shaders/rect.vert", "shaders/rect.frag");
-		GLfloat rectPosData[] = {
+		/*GLfloat rectPosData[] = {
 			0.0f, 0.0f,
 			1.0f, 0.0f,
 			1.0f, 1.0f,
 			1.0f, 1.0f,
 			0.0f, 1.0f,
 			0.0f, 0.0f
-		};
+		};*/
 		gameState->rectVAO = LoadRectVAO(thread);
 		if (!gameState->rectShader) {
 			// TODO logging / EXIT GAME! no way to do this yet...
@@ -317,15 +308,15 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	float32 speed = 0.01f;
 	Vec3 playerRight = Normalize(Vec3{ 1.0f, 1.0f, 0.0f });
 	Vec3 playerForward = Normalize(Vec3{ -1.0f, 1.0f, 0.0f });
-	Vec3 vel = {};
+	Vec3 vel = Vec3::zero;
 	if (input0->isConnected) {
 		vel = (input0->end.x * playerRight + input0->end.y * playerForward)
             * speed;
 	}
 	gameState->pos += vel;
 
-	screenInfo.width;
-	screenInfo.height;
+	//screenInfo.width;
+	//screenInfo.height;
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

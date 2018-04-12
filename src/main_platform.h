@@ -41,8 +41,8 @@ typedef DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFileFunc);
 
 struct ScreenInfo
 {
-	int width;
-	int height;
+	uint32 width;
+	uint32 height;
 
 	int8 colorBits;
 	int8 alphaBits;

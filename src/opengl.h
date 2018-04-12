@@ -2,13 +2,11 @@
 
 #include "km_defines.h"
 
-#ifdef GAME_LINUX
-
+#if defined(GAME_LINUX) && defined(GAME_PLATFORM_CODE)
 #include <GL/gl.h>
-
 #endif
 
-#ifdef GAME_WIN32
+#if !defined(GAME_PLATFORM_CODE) || defined(GAME_WIN32)
 
 #define GL_FALSE					0
 #define GL_TRUE						1

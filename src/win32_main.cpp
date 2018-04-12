@@ -43,7 +43,7 @@ global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 
 // From km_debug.h
 #if GAME_SLOW
-DEBUGPlatformPrintFunc* debugPrint_;
+global_var DEBUGPlatformPrintFunc* debugPrint_;
 #endif
 
 // XInput functions
@@ -1262,8 +1262,8 @@ int CALLBACK WinMain(
 		}
 #endif
 
-		ThreadContext thread = {};
 		if (gameCode.gameUpdateAndRender) {
+			ThreadContext thread = {};
 			gameCode.gameUpdateAndRender(&thread, &gameMemory,
                 screenInfo, newInput, &gameAudio, &glFuncs);
         }
