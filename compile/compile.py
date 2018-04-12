@@ -166,8 +166,6 @@ def LinuxCompileDebug():
 
         # disable the following warnings:
         "-Wno-char-subscripts" # using char as an array subscript
-
-        ,"-Wno-unused-function" # TODO temporary! remove this!
     ])
     includePaths = " ".join([
         #"-I" + paths["include-glew"],
@@ -187,12 +185,12 @@ def LinuxCompileDebug():
         # main external libs
         #"-lfreetype",
 
-        # GLFW3 dependencies
         "-lm",      # math
         "-ldl",     # dynamic linking loader
         "-lGL",     # OpenGL
         "-lX11",    # X11
-        "-lasound"  # ALSA lib
+        "-lasound", # ALSA lib
+        "-lpthread"
 
         # FreeType dependencies
         #"-lz",

@@ -1124,7 +1124,6 @@ int CALLBACK WinMain(
         Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
     
     // TODO This is actually game-specific code
-    float32 toneHz = 300.0f;
     uint32 runningSampleIndex = 0;
     float32 tSine1 = 0.0f;
     float32 tSine2 = 0.0f;

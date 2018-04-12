@@ -313,6 +313,18 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		vel = (input0->end.x * playerRight + input0->end.y * playerForward)
             * speed;
 	}
+	if (input->keyboard[KM_KEY_D].isDown) {
+		vel += playerRight * speed;
+	}
+	if (input->keyboard[KM_KEY_A].isDown) {
+		vel -= playerRight * speed;
+	}
+	if (input->keyboard[KM_KEY_W].isDown) {
+		vel += playerForward * speed;
+	}
+	if (input->keyboard[KM_KEY_S].isDown) {
+		vel -= playerForward * speed;
+	}
 	gameState->pos += vel;
 
 	//screenInfo.width;
