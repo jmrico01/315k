@@ -41,11 +41,6 @@ global_var ScreenInfo* screenInfo_ = nullptr;       // for WndProc WM_SIZE
 global_var bool32 DEBUGshowCursor_;
 global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 
-// From km_debug.h
-#if GAME_SLOW
-global_var DEBUGPlatformPrintFunc* debugPrint_;
-#endif
-
 // XInput functions
 #define XINPUT_GET_STATE_FUNC(name) DWORD WINAPI name(DWORD dwUserIndex, \
     XINPUT_STATE *pState)
