@@ -849,11 +849,8 @@ internal void LinuxProcessPendingMessages(
                 //bool32 altWasDown = event.xkey.state & KEYCODE_ALT_MASK;
                 //bool32 shiftWasDown = event.xkey.state & KEYCODE_SHIFT_MASK;
                 
-                if (event.xkey.keycode == KEYCODE_W) {
-                    DEBUG_PRINT("w key press or something\n");
-                    /*LinuxProcessKeyboardMessage(
-                        &KeyboardController->MoveUp,
-                        event.type == KeyPress);*/
+                if (event.xkey.keycode == KEYCODE_ESCAPE) {
+                    running_ = false;
                 }
                 /*else if (event.xkey.keycode == KEYCODE_A) {
                     LinuxProcessKeyboardMessage(
@@ -1666,7 +1663,7 @@ internal bool LinuxInitAudio(LinuxAudio* audio, GameAudio* gameAudio,
     DEBUG_PRINT("Buffer size (frames): %d\n", gameAudio->bufferSize);
     DEBUG_PRINT("Buffer size (secs): %f\n",
         (float)gameAudio->bufferSize / gameAudio->sampleRate);
-    DEBUG_PRINT("Almost done with sound. Press Enter to continue\n");
+    //DEBUG_PRINT("Almost done with sound. Press Enter to continue\n");
     //getchar();
 
     // Apply HW parameter settings to PCM device and prepare device
