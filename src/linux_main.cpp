@@ -30,7 +30,7 @@
 #include "km_input.h"
 
 #define SAMPLERATE 44100
-#define NUM_PERIODS 64
+#define NUM_PERIODS 32
 #define PERIOD_SIZE 256
 
 global_var char pathToApp_[LINUX_STATE_FILE_NAME_COUNT];
@@ -909,11 +909,9 @@ LinuxPlayBackInput(linux_state *State, game_input *NewInput)
 }
 #endif
 
-void CopyAudioBuffer(int count, const int16* src, int16* dst)
+void CopyAudioBuffer(int numSamples, const int16* src, int16* dst)
 {
-    for (int i = 0; i < count; i++) {
-        dst[i] = src[i];
-    }
+
 }
 
 internal void* LinuxAudioRunner(void* data)
@@ -941,19 +939,23 @@ internal void* LinuxAudioRunner(void* data)
         }*/
         uint32 regionSize1 = linuxAudio->periodSize;
         uint32 regionSize2 = 0;
+        uint32 channels = linuxAudio->channels;
         if (linuxAudio->readIndex + regionSize1 >= linuxAudio->bufferSize) {
             uint32 diff = linuxAudio->bufferSize - linuxAudio->readIndex;
             regionSize2 = regionSize1 - diff;
             regionSize1 = diff;
-            CopyAudioBuffer(regionSize1,
-                linuxAudio->buffer + linuxAudio->readIndex, buffer);
-            CopyAudioBuffer(regionSize2,
-                linuxAudio->buffer, buffer + regionSize1);
+            CopyAudioBuffer(regionSize1 * channels,
+                linuxAudio->buffer + linuxAudio->readIndex * channels,
+                buffer);
+            CopyAudioBuffer(regionSize2 * channels,
+                linuxAudio->buffer,
+                buffer + regionSize1 * channels);
             linuxAudio->readIndex = regionSize2;
         }
         else {
-            CopyAudioBuffer(regionSize1,
-                linuxAudio->buffer + linuxAudio->readIndex, buffer);
+            CopyAudioBuffer(regionSize1 * channels,
+                linuxAudio->buffer + linuxAudio->readIndex * channels,
+                buffer);
             linuxAudio->readIndex += regionSize1;
         }
         pthread_mutex_unlock(&globalAudioMutex);
