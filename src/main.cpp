@@ -33,7 +33,7 @@ struct GameState
 	GLuint rectVAO;
 };
 
-internal GLint LoadRectVAO(ThreadContext* thread)
+internal GLint LoadRectVAO(const ThreadContext* thread)
 {
 	GLfloat vertData[] = {
 		0.0f, 0.0f,
@@ -59,7 +59,7 @@ internal GLint LoadRectVAO(ThreadContext* thread)
 }
 
 internal void DrawRect(
-	ThreadContext* thread,
+	const ThreadContext* thread,
 	GLuint rectShader, GLuint rectVAO,
 	Mat4 mvp, float32 r, float32 g, float32 b, float32 a)
 {
@@ -77,7 +77,7 @@ internal void DrawRect(
 }
 
 internal void InitTiles(
-	ThreadContext* thread,
+	const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory,
 	Tiles* tiles)
@@ -153,7 +153,7 @@ internal void InitTiles(
 }
 
 internal void DrawTiles(
-	ThreadContext* thread,
+	const ThreadContext* thread,
 	Tiles* tiles, Mat4 vp)
 {
 	glUseProgram(tiles->shader);
@@ -206,7 +206,7 @@ internal void DrawTiles(
 }
 
 internal void TintTiles(
-	ThreadContext* thread,
+	const ThreadContext* thread,
 	Tiles* tiles, Vec3 pos)
 {
 	Vec3 offset = {
@@ -226,15 +226,16 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	DEBUG_ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
 
 	GameState *gameState = (GameState*)memory->permanentStorage;
-    if (memory->DEBUGShouldInitGlobals) {
+    if (memory->DEBUGShouldInitGlobalFuncs) {
 	    // Initialize global function names
-        debugPrint_ = memory->DEBUGPlatformPrint;
-        #define FUNC(returntype, name, ...) name = glFunctions->name;
+        debugPrint_ = platformFuncs->DEBUGPlatformPrint;
+        #define FUNC(returntype, name, ...) name = \
+        platformFuncs->glFunctions.name;
             GL_FUNCTIONS_BASE
             GL_FUNCTIONS_ALL
         #undef FUNC
 
-        memory->DEBUGShouldInitGlobals = false;
+        memory->DEBUGShouldInitGlobalFuncs = false;
     }
 	if (!memory->isInitialized) {
 # if 0
@@ -251,8 +252,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #endif
 		
 		InitTiles(thread,
-			memory->DEBUGPlatformReadFile,
-			memory->DEBUGPlatformFreeFileMemory,
+			platformFuncs->DEBUGPlatformReadFile,
+			platformFuncs->DEBUGPlatformFreeFileMemory,
 			&gameState->tiles);
 
 		gameState->pos.x = 0.0f;
@@ -264,7 +265,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		gameState->angle = 2.0f * PI_F / 3.0f;
 
 		gameState->rectShader = LoadShaders(thread,
-			memory->DEBUGPlatformReadFile, memory->DEBUGPlatformFreeFileMemory,
+			platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory,
 			"shaders/rect.vert", "shaders/rect.frag");
 		/*GLfloat rectPosData[] = {
 			0.0f, 0.0f,
@@ -303,15 +305,15 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		memory->isInitialized = true;
 	}
 
-	GameControllerInput* input0 = &input->controllers[0];
+	const GameControllerInput* input0 = &input->controllers[0];
 
 	float32 speed = 0.01f;
 	Vec3 playerRight = Normalize(Vec3{ 1.0f, 1.0f, 0.0f });
 	Vec3 playerForward = Normalize(Vec3{ -1.0f, 1.0f, 0.0f });
 	Vec3 vel = Vec3::zero;
 	if (input0->isConnected) {
-		vel = (input0->end.x * playerRight + input0->end.y * playerForward)
-            * speed;
+		vel = (input0->leftEnd.x * playerRight
+        + input0->leftEnd.y * playerForward) * speed;
 	}
 	if (input->keyboard[KM_KEY_D].isDown) {
 		vel += playerRight * speed;
@@ -346,7 +348,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
 	float zHalfRange = 10.0f;
 	Mat4 proj = Scale(Vec3 {
-        (float32)screenInfo.height / (float32)screenInfo.width,
+        (float32)screenInfo.size.y / (float32)screenInfo.size.x,
 		1.0f,
         1.0f / zHalfRange
     });

@@ -401,8 +401,8 @@ LRESULT CALLBACK WndProc(
                 glViewport_(0, 0, width, height);
             }
             if (screenInfo_) {
-                screenInfo_->width = width;
-                screenInfo_->height = height;
+                screenInfo_->size.x = width;
+                screenInfo_->size.y = height;
             }
         } break;
 
@@ -551,6 +551,56 @@ internal void Win32ProcessMessages(
             }
 		} break;
 
+        case WM_LBUTTONDOWN: {
+            gameInput->mouseButtons[0].isDown = true;
+            gameInput->mouseButtons[0].transitions = 1;
+        } break;
+        case WM_LBUTTONUP: {
+            gameInput->mouseButtons[0].isDown = false;
+            gameInput->mouseButtons[0].transitions = 1;
+        } break;
+        case WM_RBUTTONDOWN: {
+            gameInput->mouseButtons[1].isDown = true;
+            gameInput->mouseButtons[1].transitions = 1;
+        } break;
+        case WM_RBUTTONUP: {
+            gameInput->mouseButtons[1].isDown = false;
+            gameInput->mouseButtons[1].transitions = 1;
+        } break;
+        case WM_MBUTTONDOWN: {
+            gameInput->mouseButtons[2].isDown = true;
+            gameInput->mouseButtons[2].transitions = 1;
+        } break;
+        case WM_MBUTTONUP: {
+            gameInput->mouseButtons[2].isDown = false;
+            gameInput->mouseButtons[2].transitions = 1;
+        } break;
+        case WM_XBUTTONDOWN: {
+            if ((msg.wParam & MK_XBUTTON1) != 0) {
+                gameInput->mouseButtons[3].isDown = true;
+                gameInput->mouseButtons[3].transitions = 1;
+            }
+            else if ((msg.wParam & MK_XBUTTON2) != 0) {
+                gameInput->mouseButtons[4].isDown = true;
+                gameInput->mouseButtons[4].transitions = 1;
+            }
+        } break;
+        case WM_XBUTTONUP: {
+            if ((msg.wParam & MK_XBUTTON1) != 0) {
+                gameInput->mouseButtons[3].isDown = false;
+                gameInput->mouseButtons[3].transitions = 1;
+            }
+            else if ((msg.wParam & MK_XBUTTON2) != 0) {
+                gameInput->mouseButtons[4].isDown = false;
+                gameInput->mouseButtons[4].transitions = 1;
+            }
+        } break;
+
+        case WM_MOUSEWHEEL: {
+            // TODO: standardize these units
+            gameInput->mouseWheel += GET_WHEEL_DELTA_WPARAM(msg.wParam);
+        } break;
+
 		default: {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
@@ -561,11 +611,17 @@ internal void Win32ProcessMessages(
 
 internal void Win32ClearInput(GameInput* input, GameInput* inputPrev)
 {
+    for (int i = 0; i < 5; i++) {
+        input->mouseButtons[i].isDown = inputPrev->mouseButtons[i].isDown;
+        input->mouseButtons[i].transitions = 0;
+    }
+    input->mousePos = inputPrev->mousePos;
+    input->mouseWheel = inputPrev->mouseWheel;
+
     for (int i = 0; i < KM_KEY_LAST; i++) {
         input->keyboard[i].isDown = inputPrev->keyboard[i].isDown;
         input->keyboard[i].transitions = 0;
     }
-
     input->keyboardString[0] = '\0';
     input->keyboardStringLen = 0;
 }
@@ -987,8 +1043,8 @@ int CALLBACK WinMain(
 	RECT clientRect;
 	GetClientRect(hWnd, &clientRect);
 	ScreenInfo screenInfo = {};
-	screenInfo.width = clientRect.right - clientRect.left;
-	screenInfo.height = clientRect.bottom - clientRect.top;
+	screenInfo.size.x = clientRect.right - clientRect.left;
+	screenInfo.size.y = clientRect.bottom - clientRect.top;
 	// TODO is cColorBits ACTUALLY excluding alpha bits? Doesn't seem like it
 	screenInfo.colorBits = 32;
 	screenInfo.alphaBits = 8;
@@ -1003,10 +1059,15 @@ int CALLBACK WinMain(
     }
     DEBUG_PRINT("Created Win32 OpenGL rendering context\n");
 
-	OpenGLFunctions glFuncs = {};
+    PlatformFunctions platformFuncs = {};
+	platformFuncs.DEBUGPlatformPrint = DEBUGPlatformPrint;
+	platformFuncs.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
+	platformFuncs.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
+	platformFuncs.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
 
 	// Initialize OpenGL
-	if (!Win32InitOpenGL(&glFuncs, screenInfo.width, screenInfo.height)) {
+	if (!Win32InitOpenGL(&platformFuncs.glFunctions,
+    screenInfo.size.x, screenInfo.size.y)) {
 		return 1;
     }
     DEBUG_PRINT("Initialized Win32 OpenGL\n");
@@ -1044,15 +1105,10 @@ int CALLBACK WinMain(
 #endif
 
 	GameMemory gameMemory = {};
+    gameMemory.DEBUGShouldInitGlobalFuncs = true;
+
 	gameMemory.permanentStorageSize = MEGABYTES(64);
 	gameMemory.transientStorageSize = GIGABYTES(1);
-
-	gameMemory.DEBUGPlatformPrint = DEBUGPlatformPrint;
-	gameMemory.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
-	gameMemory.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
-	gameMemory.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
-
-    gameMemory.DEBUGShouldInitGlobals = true;
 
 	// TODO Look into using large virtual pages for this
     // potentially big allocation
@@ -1135,23 +1191,27 @@ int CALLBACK WinMain(
 		if (CompareFileTime(&newDLLWriteTime, &gameCode.lastDLLWriteTime) > 0) {
 			Win32UnloadGameCode(&gameCode);
 			gameCode = Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
-            gameMemory.DEBUGShouldInitGlobals = true;
+            gameMemory.DEBUGShouldInitGlobalFuncs = true;
 		}
 
         // Process keyboard input & other messages
-		Win32ProcessMessages(hWnd, newInput, &glFuncs);
+		Win32ProcessMessages(hWnd, newInput, &platformFuncs.glFunctions);
 
 		POINT mousePos;
 		GetCursorPos(&mousePos);
 		ScreenToClient(hWnd, &mousePos);
-		newInput->mouseX = mousePos.x;
-		newInput->mouseY = screenInfo.height - mousePos.y;
-		newInput->mouseWheel = 0;
-		newInput->mouseButtons[0].isDown = (int32)GetKeyState(VK_LBUTTON);
-		newInput->mouseButtons[1].isDown = (int32)GetKeyState(VK_RBUTTON);
-		newInput->mouseButtons[2].isDown = (int32)GetKeyState(VK_MBUTTON);
-		newInput->mouseButtons[3].isDown = (int32)GetKeyState(VK_XBUTTON1);
-		newInput->mouseButtons[4].isDown = (int32)GetKeyState(VK_XBUTTON2);
+        Vec2Int mousePosPrev = newInput->mousePos;
+        newInput->mousePos.x = mousePos.x;
+		newInput->mousePos.y = screenInfo_->size.y - mousePos.y;
+        newInput->mouseDelta = newInput->mousePos - mousePosPrev;
+        if (mousePos.x < 0 || mousePos.x > screenInfo_->size.x
+        || mousePos.y < 0 || mousePos.y > screenInfo_->size.y) {
+            for (int i = 0; i < 5; i++) {
+                int transitions = newInput->mouseButtons[i].isDown ? 1 : 0;
+                newInput->mouseButtons[i].isDown = false;
+                newInput->mouseButtons[i].transitions = transitions;
+            }
+        }
 
 		DWORD maxControllerCount = XUSER_MAX_COUNT;
 		if (maxControllerCount > ARRAY_COUNT(newInput->controllers)) {
@@ -1196,13 +1256,18 @@ int CALLBACK WinMain(
 					&oldController->rShoulder, XINPUT_GAMEPAD_RIGHT_SHOULDER,
 					&newController->rShoulder);
 
-				newController->start = oldController->end;
+				newController->leftStart = oldController->leftEnd;
+				newController->rightStart = oldController->rightEnd;
 
-				// TODO check if the deadzone is round
-				newController->end.x = Win32ProcessXInputStickValue(
+				// TODO: check if the deadzone is round
+				newController->leftEnd.x = Win32ProcessXInputStickValue(
 					pad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
-				newController->end.y = Win32ProcessXInputStickValue(
+				newController->leftEnd.y = Win32ProcessXInputStickValue(
 					pad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+				newController->rightEnd.x = Win32ProcessXInputStickValue(
+					pad->sThumbRX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+				newController->rightEnd.y = Win32ProcessXInputStickValue(
+					pad->sThumbRY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
 
 #if 0
 				XINPUT_VIBRATION vibration;
@@ -1258,8 +1323,9 @@ int CALLBACK WinMain(
 
 		if (gameCode.gameUpdateAndRender) {
 			ThreadContext thread = {};
-			gameCode.gameUpdateAndRender(&thread, &gameMemory,
-                screenInfo, newInput, &gameAudio, &glFuncs);
+			gameCode.gameUpdateAndRender(&thread, &platformFuncs,
+                newInput, screenInfo,
+                &gameMemory, &gameAudio);
         }
 
         XAUDIO2_VOICE_STATE voiceState;
@@ -1280,11 +1346,14 @@ int CALLBACK WinMain(
             writeLen = fillTarget - writeTo;
         }
 
-        float tone1Hz = 261.6f;
-        float tone2Hz = tone1Hz
-            * (1.0f + 0.5f * newInput->controllers[0].end.x)
-            * (1.0f + 0.1f * newInput->controllers[0].end.y);
-        DEBUG_PRINT("tone freq: %f\n", tone2Hz);
+        float baseTone = 261.0f;
+        float tone1Hz = baseTone
+            * (1.0f + 0.5f * newInput->controllers[0].rightEnd.x)
+            * (1.0f + 0.1f * newInput->controllers[0].rightEnd.y);
+        float tone2Hz = baseTone
+            * (1.0f + 0.5f * newInput->controllers[0].leftEnd.x)
+            * (1.0f + 0.1f * newInput->controllers[0].leftEnd.y);
+        //DEBUG_PRINT("tone freq: %f\n", tone2Hz);
         for (uint32 i = 0; i < writeLen; i++) {
             uint32 ind = (writeTo + i) % gameAudio.bufferSize;
             //float32 t = (float32)runningSampleIndex / gameAudio.sampleRate;

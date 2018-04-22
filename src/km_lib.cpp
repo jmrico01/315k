@@ -5,17 +5,17 @@
 #define DYNAMIC_ARRAY_START_CAPACITY 10
 
 template <typename T>
-DynamicArray<T>::DynamicArray()
-    : DynamicArray(DYNAMIC_ARRAY_START_CAPACITY)
+void DynamicArray<T>::Init()
 {
+    Init(DYNAMIC_ARRAY_START_CAPACITY);
 }
 
 template <typename T>
-DynamicArray<T>::DynamicArray(uint32 capacity)
+void DynamicArray<T>::Init(uint32 cap)
 {
     size = 0;
-    this->capacity = capacity;
-    data = (T*)malloc(sizeof(T) * capacity);
+    this->capacity = cap;
+    data = (T*)malloc(sizeof(T) * cap);
     if (!data) {
         // TODO error!
         printf("ERROR: not enough memory!\n");
@@ -38,6 +38,10 @@ DynamicArray<T> DynamicArray<T>::Copy() const
 template <typename T>
 void DynamicArray<T>::Append(T element)
 {
+#if GAME_SLOW
+    DEBUG_ASSERT(capacity > 0);
+#endif
+
     if (size >= capacity) {
         capacity *= 2;
         data = (T*)realloc(data, sizeof(T) * capacity);

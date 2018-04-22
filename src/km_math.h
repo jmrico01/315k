@@ -6,6 +6,43 @@
 
 #define PI_F 3.14159265f
 
+inline int MinInt(int a, int b) {
+    return a < b ? a : b;
+}
+inline int MaxInt(int a, int b) {
+    return a > b ? a : b;
+}
+inline int ClampInt(int a, int min, int max) {
+    return MinInt(MaxInt(a, min), max);
+}
+inline uint32 MinUInt32(uint32 a, uint32 b) {
+    return a < b ? a : b;
+}
+inline uint32 MaxUInt32(uint32 a, uint32 b) {
+    return a > b ? a : b;
+}
+inline uint32 ClampUInt32(uint32 a, uint32 min, uint32 max) {
+    return MinUInt32(MaxUInt32(a, min), max);
+}
+inline float32 MinFloat32(float32 a, float32 b) {
+    return a < b ? a : b;
+}
+inline float32 MaxFloat32(float32 a, float32 b) {
+    return a > b ? a : b;
+}
+inline float32 ClampFloat32(float32 a, float32 min, float32 max) {
+    return MinFloat32(MaxFloat32(a, min), max);
+}
+// TODO: quick and dirty round implementation
+inline int RoundFloat32Fast(float32 a) {
+    if (a < 0.0) {
+        return (int)(a - 0.5);
+    }
+    else {
+        return (int)(a + 0.5);
+    }
+}
+
 // ========== MATH TYPES ==========
 
 union Vec2
@@ -20,6 +57,17 @@ union Vec2
 		float32 x, y;
 	};
 	float32 e[2];
+};
+
+union Vec2Int
+{
+    const static Vec2Int zero;
+
+    struct
+    {
+        int x, y;
+    };
+    int e[2];
 };
 
 union Vec3
@@ -204,6 +252,97 @@ inline Vec2 Normalize(Vec2 v)
 	return v / Mag(v);
 }
 
+// ------------------ Vec2Int -------------------
+const Vec2Int Vec2Int::zero = {
+    0, 0
+};
+
+inline Vec2 ToVec2(Vec2Int v)
+{
+    Vec2 result;
+    result.x = (float32)v.x;
+    result.y = (float32)v.y;
+    return result;
+}
+
+inline Vec2Int operator-(Vec2Int v)
+{
+	Vec2Int result;
+	result.x = -v.x;
+	result.y = -v.y;
+	return result;
+}
+
+inline Vec2Int operator+(Vec2Int v1, Vec2Int v2)
+{
+	Vec2Int result;
+	result.x = v1.x + v2.x;
+	result.y = v1.y + v2.y;
+	return result;
+}
+inline Vec2Int& operator+=(Vec2Int& v1, Vec2Int v2)
+{
+	v1 = v1 + v2;
+	return v1;
+}
+
+inline Vec2Int operator-(Vec2Int v1, Vec2Int v2)
+{
+	Vec2Int result;
+	result.x = v1.x - v2.x;
+	result.y = v1.y - v2.y;
+	return result;
+}
+inline Vec2Int& operator-=(Vec2Int& v1, Vec2Int v2)
+{
+	v1 = v1 - v2;
+	return v1;
+}
+
+inline Vec2Int operator*(int s, Vec2Int v)
+{
+	Vec2Int result;
+	result.x = s * v.x;
+	result.y = s * v.y;
+	return result;
+}
+inline Vec2Int operator*(Vec2Int v, int s)
+{
+	return s * v;
+}
+inline Vec2Int& operator*=(Vec2Int& v, int s)
+{
+	v = s * v;
+	return v;
+}
+
+inline Vec2Int operator/(Vec2Int v, int s)
+{
+	Vec2Int result;
+	result.x = v.x / s;
+	result.y = v.y / s;
+	return result;
+}
+inline Vec2Int& operator/=(Vec2Int& v, int s)
+{
+	v = v / s;
+	return v;
+}
+
+inline bool operator==(const Vec2Int& v1, const Vec2Int& v2)
+{
+    return v1.x == v2.x && v1.y == v2.y;
+}
+
+inline int MagSq(Vec2Int v)
+{
+	return v.x*v.x + v.y*v.y;
+}
+inline int Mag(Vec2Int v)
+{
+	return (int)sqrtf((float32)v.x*v.x + v.y*v.y);
+}
+
 // -------------------- Vec3 --------------------
 const Vec3 Vec3::zero = {
     0.0f, 0.0f, 0.0f
@@ -220,6 +359,23 @@ const Vec3 Vec3::unitY = {
 const Vec3 Vec3::unitZ = {
     0.0f, 0.0f, 1.0f
 };
+
+inline Vec2 ToVec2(Vec3 v)
+{
+    Vec2 result;
+    result.x = v.x;
+    result.y = v.y;
+    return result;
+}
+inline Vec4 ToVec4(Vec3 v, float32 w)
+{
+    Vec4 result;
+    result.x = v.x;
+    result.y = v.y;
+    result.z = v.z;
+    result.w = w;
+    return result;
+}
 
 inline Vec3 operator-(Vec3 v)
 {
@@ -587,12 +743,6 @@ Mat4 Projection(float32 fov, float32 aspect,
         0.0f, 0.0f, (farZ + nearZ) / nearMinusFar, -1.0f,
         0.0f, 0.0f, 2.0f*farZ*nearZ / nearMinusFar, 0.0f
     };
-	/*Mat4 proj = {
-        xScale, 0, 0, 0,
-        0, yScale, 0, 0,
-        0, 0, (farZ + nearZ) / nearMinusFar, 2.0f*farZ*nearZ / nearMinusFar,
-        0, 0, -1.0f, 0 
-    };*/
 
 	return proj;
 }

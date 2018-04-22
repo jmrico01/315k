@@ -23,15 +23,15 @@ struct DEBUGReadFileResult
 typedef DEBUG_PLATFORM_PRINT_FUNC(DEBUGPlatformPrintFunc);
 
 #define DEBUG_PLATFORM_FREE_FILE_MEMORY_FUNC(name) \
-    void name(ThreadContext* thread, DEBUGReadFileResult* file)
+    void name(const ThreadContext* thread, DEBUGReadFileResult* file)
 typedef DEBUG_PLATFORM_FREE_FILE_MEMORY_FUNC(DEBUGPlatformFreeFileMemoryFunc);
 
 #define DEBUG_PLATFORM_READ_FILE_FUNC(name) \
-    DEBUGReadFileResult name(ThreadContext* thread, const char* fileName)
+    DEBUGReadFileResult name(const ThreadContext* thread, const char* fileName)
 typedef DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFileFunc);
 
 #define DEBUG_PLATFORM_WRITE_FILE_FUNC(name) \
-    bool32 name(ThreadContext* thread, const char* fileName, \
+    bool32 name(const ThreadContext* thread, const char* fileName, \
         uint32 memorySize, const void* memory)
 typedef DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFileFunc);
 
@@ -41,8 +41,7 @@ typedef DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFileFunc);
 
 struct ScreenInfo
 {
-	uint32 width;
-	uint32 height;
+    Vec2Int size;
 
 	int8 colorBits;
 	int8 alphaBits;
@@ -60,8 +59,10 @@ struct GameControllerInput
 {
 	bool32 isConnected;
 
-	Vec2 start;
-	Vec2 end;
+	Vec2 leftStart;
+	Vec2 leftEnd;
+	Vec2 rightStart;
+	Vec2 rightEnd;
 
 	union
 	{
@@ -81,7 +82,9 @@ struct GameControllerInput
 struct GameInput
 {
 	GameButtonState mouseButtons[5];
-	int32 mouseX, mouseY, mouseWheel;
+    Vec2Int mousePos;
+    Vec2Int mouseDelta;
+	int mouseWheel;
 
     GameButtonState keyboard[KM_KEY_LAST];
     char keyboardString[MAX_KEYS_PER_FRAME];
@@ -99,6 +102,16 @@ struct GameAudio
     int16* buffer;
 };
 
+struct PlatformFunctions
+{
+	DEBUGPlatformPrintFunc*			    DEBUGPlatformPrint;
+	DEBUGPlatformFreeFileMemoryFunc*	DEBUGPlatformFreeFileMemory;
+	DEBUGPlatformReadFileFunc*			DEBUGPlatformReadFile;
+	DEBUGPlatformWriteFileFunc*			DEBUGPlatformWriteFile;
+
+    OpenGLFunctions glFunctions;
+};
+
 struct GameMemory
 {
 	bool32 isInitialized;
@@ -111,18 +124,15 @@ struct GameMemory
 	// Required to be cleared to zero at startup
 	void* transientStorage;
 
-	DEBUGPlatformPrintFunc*			    DEBUGPlatformPrint;
-	DEBUGPlatformFreeFileMemoryFunc*	DEBUGPlatformFreeFileMemory;
-	DEBUGPlatformReadFileFunc*			DEBUGPlatformReadFile;
-	DEBUGPlatformWriteFileFunc*			DEBUGPlatformWriteFile;
-
     #if GAME_INTERNAL
-    bool32 DEBUGShouldInitGlobals;
+    bool32 DEBUGShouldInitGlobalFuncs;
     #endif
 };
 
 // ------------------------------ Game functions ------------------------------
-#define GAME_UPDATE_AND_RENDER_FUNC(name) void name(ThreadContext* thread, \
-	GameMemory* memory, ScreenInfo screenInfo, GameInput* input, \
-    GameAudio* audio, OpenGLFunctions* glFunctions)
+#define GAME_UPDATE_AND_RENDER_FUNC(name) void name( \
+    const ThreadContext* thread, \
+    const PlatformFunctions* platformFuncs, \
+    const GameInput* input, ScreenInfo screenInfo, \
+	GameMemory* memory, GameAudio* audio)
 typedef GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRenderFunc);

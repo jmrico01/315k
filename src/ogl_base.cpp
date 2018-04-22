@@ -68,7 +68,7 @@ internal bool CompileAndCheckShader(GLuint shaderID,
 }
 
 GLuint LoadShaders(
-	ThreadContext* thread,
+	const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory,
     const char* vertFilePath, const char* fragFilePath)
