@@ -873,12 +873,12 @@ internal bool Win32InitAudio(Win32Audio* winAudio, GameAudio* gameAudio,
         return false;
     }
 
-    // TODO temporary malloc use
     gameAudio->channels = channels;
     gameAudio->sampleRate = sampleRate;
     gameAudio->bufferSize = bufSampleLength;
-    gameAudio->buffer = (int16*)malloc(
-        bufSampleLength * channels * sizeof(int16));
+	gameAudio->buffer = (int16*)VirtualAlloc(0,
+        bufSampleLength * channels * sizeof(int16),
+		MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     for (uint32 i = 0; i < bufSampleLength; i++) {
         gameAudio->buffer[i * channels] = 0;
         gameAudio->buffer[i * channels + 1] = 0;
