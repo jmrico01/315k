@@ -581,17 +581,6 @@ internal inline float32 LinuxGetSecondsElapsed(
         + ((float32)(end.tv_nsec - start.tv_nsec) * 1e-9f);
 }
 
-internal void LinuxClearInput(GameInput* input, GameInput* inputPrev)
-{
-    for (int i = 0; i < KM_KEY_LAST; i++) {
-        input->keyboard[i].isDown = inputPrev->keyboard[i].isDown;
-        input->keyboard[i].transitions = 0;
-    }
-
-    input->keyboardString[0] = '\0';
-    input->keyboardStringLen = 0;
-}
-
 // TODO change this to an array or something
 internal int LinuxKeyCodeToKM(unsigned int keycode)
 {
@@ -661,11 +650,11 @@ internal void LinuxProcessPendingMessages(
 
         switch (event.type) {
             case ConfigureNotify: {
-                uint32 w = (uint32)event.xconfigure.width;
-                uint32 h = (uint32)event.xconfigure.height;
-                if ((screenInfo->width != w) || (screenInfo->height != h)) {
-                    screenInfo->width = w;
-                    screenInfo->height = h;
+                int w = event.xconfigure.width;
+                int h = event.xconfigure.height;
+                if ((screenInfo->size.x != w) || (screenInfo->size.y != h)) {
+                    screenInfo->size.x = w;
+                    screenInfo->size.y = h;
                     glViewport(0, 0, w, h);
                 }
             } break;
@@ -679,7 +668,7 @@ internal void LinuxProcessPendingMessages(
             } break;
             case MotionNotify: {
                 mousePos->x = (float32)event.xmotion.x;
-                mousePos->y = (float32)(screenInfo->height - event.xmotion.y);
+                mousePos->y = (float32)(screenInfo->size.x - event.xmotion.y);
             } break;
 
             case ButtonRelease:
@@ -712,66 +701,6 @@ internal void LinuxProcessPendingMessages(
                 if (input->keyboard[KM_KEY_ESCAPE].isDown) {
                     running_ = false;
                 }
-/*
-#if GAME_INTERNAL
-                else if (Event.xkey.keycode == KEYCODE_P) {
-                    if (Event.type == KeyPress) {
-                        GlobalPause = !GlobalPause;
-                    }
-                }
-                else if (Event.xkey.keycode == KEYCODE_L) {
-                    if (Event.type == KeyPress) {
-                        if (AltKeyWasDown) {
-                            LinuxBeginInputPlayBack(state, 1);
-                        }
-                        else {
-                            if (state->InputPlayingIndex == 0) {
-                                if (state->InputRecordingIndex == 0) {
-                                    LinuxBeginRecordingInput(state, 1);
-                                }
-                                else {
-                                    LinuxEndRecordingInput(state);
-                                    LinuxBeginInputPlayBack(state, 1);
-                                }
-                            }
-                            else {
-                                LinuxEndInputPlayBack(state);
-                            }
-                        }
-                    }
-                }
-#endif
-                if (Event.type == KeyPress) {
-                    if (Event.xkey.keycode == KEYCODE_PLUS) {
-                        if (ShiftKeyWasDown) {
-                            OpenGL.DebugLightBufferIndex += 1;
-                        }
-                        else {
-                            OpenGL.DebugLightBufferTexIndex += 1;
-                        }
-                    }
-                    else if (Event.xkey.keycode == KEYCODE_MINUS) {
-                        if (ShiftKeyWasDown) {
-                            OpenGL.DebugLightBufferIndex -= 1;
-                        }
-                        else {
-                            OpenGL.DebugLightBufferTexIndex -= 1;
-                        }
-                    }
-                    else if ((Event.xkey.keycode == KEYCODE_ENTER)
-                    && AltKeyWasDown) {
-                        ToggleFullscreen(display, window);
-                    }
-                    else if ((Event.xkey.keycode >= KEYCODE_F1)
-                    && (Event.xkey.keycode <= KEYCODE_F10)) {
-                        Input->FKeyPressed[Event.xkey.keycode - KEYCODE_F1 + 1] = true;
-                    }
-                    else if ((Event.xkey.keycode >= KEYCODE_F11)
-                    && (Event.xkey.keycode <= KEYCODE_F12)) {
-                        // NOTE(michiel): Because of X11 mapping we get to do the function keys in 2 steps :)
-                        Input->FKeyPressed[Event.xkey.keycode - KEYCODE_F11 + 1] = true;
-                    }
-                }*/
             } break;
 
             default: {
@@ -1114,8 +1043,8 @@ int main(int argc, char **argv)
     DEBUG_PRINT("Path to application: %s\n", pathToApp_);
     
     ScreenInfo screenInfo;
-    screenInfo.width = 800;
-    screenInfo.height = 600;
+    screenInfo.size.x = 800;
+    screenInfo.size.y = 600;
     Display* display = XOpenDisplay(NULL);
     if (!display) {
         DEBUG_PRINT("Failed to open display\n");
@@ -1149,7 +1078,7 @@ int main(int argc, char **argv)
                                 KeyPressMask | KeyReleaseMask);
 
     Window glWindow = XCreateWindow(display, root,
-        100, 100, screenInfo.width, screenInfo.height,
+        100, 100, screenInfo.size.x, screenInfo.size.y,
         0, visualInfo->depth, InputOutput, visualInfo->visual,
         CWBorderPixel | CWColormap | CWEventMask /*| CWOverrideRedirect*/,
         &windowAttribs);
@@ -1161,8 +1090,8 @@ int main(int argc, char **argv)
     XSizeHints sizeHints = {};
     sizeHints.x = 100;
     sizeHints.y = 100;
-    sizeHints.width  = screenInfo.width;
-    sizeHints.height = screenInfo.height;
+    sizeHints.width  = screenInfo.size.x;
+    sizeHints.height = screenInfo.size.y;
     sizeHints.flags = USSize | USPosition; // US vs PS?
 
     XSetNormalHints(display, glWindow, &sizeHints);
@@ -1191,9 +1120,13 @@ int main(int argc, char **argv)
     }
     DEBUG_PRINT("Created GLX context\n");
 
-	OpenGLFunctions glFuncs = {};
-    if (!LinuxInitOpenGL(&glFuncs, display, glWindow,
-    screenInfo.width, screenInfo.height)) {
+    PlatformFunctions platformFuncs = {};
+	platformFuncs.DEBUGPlatformPrint = DEBUGPlatformPrint;
+	platformFuncs.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
+	platformFuncs.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
+	platformFuncs.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
+    if (!LinuxInitOpenGL(&platformFuncs.glFunctions, display, glWindow,
+    screenInfo.size.x, screenInfo.size.y)) {
         return 1;
     }
     DEBUG_PRINT("Initialized Linux OpenGL\n");
@@ -1212,15 +1145,10 @@ int main(int argc, char **argv)
 #endif
     
     GameMemory gameMemory = {};
+    gameMemory.DEBUGShouldInitGlobalFuncs = true;
 	gameMemory.permanentStorageSize = MEGABYTES(64);
 	gameMemory.transientStorageSize = GIGABYTES(1);
 
-	gameMemory.DEBUGPlatformPrint = DEBUGPlatformPrint;
-	gameMemory.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
-	gameMemory.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
-	gameMemory.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
-
-    gameMemory.DEBUGShouldInitGlobals = true;
 
 	// TODO Look into using large virtual pages for this
     // potentially big allocation
@@ -1274,8 +1202,9 @@ int main(int argc, char **argv)
 
         if (gameCode.gameUpdateAndRender) {
 			ThreadContext thread = {};
-            gameCode.gameUpdateAndRender(&thread, &gameMemory, screenInfo,
-                newInput, &gameAudio_, &glFuncs);
+            gameCode.gameUpdateAndRender(&thread, &platformFuncs,
+                newInput, screenInfo,
+                &gameMemory, &gameAudio_);
         }
 
         pthread_mutex_lock(&globalAudioMutex);
@@ -1375,7 +1304,7 @@ int main(int argc, char **argv)
 		GameInput *temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
-        LinuxClearInput(newInput, oldInput);
+        ClearInput(newInput, oldInput);
     }
 
     LinuxUnloadGameCode(&gameCode);
