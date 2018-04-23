@@ -4,9 +4,8 @@
 #include <stdarg.h>
 #include <Xinput.h>
 #include <intrin.h> // __rdtsc
-//#include <mmdeviceapi.h>
-//#include <audioclient.h>
 
+#include "win32_audio.h"
 #include "opengl.h"
 #include "km_debug.h"
 
@@ -61,14 +60,6 @@ XINPUT_SET_STATE_FUNC(XInputSetStateStub)
 }
 internal XInputSetStateFunc *xInputSetState_ = XInputSetStateStub;
 #define XInputSetState xInputSetState_
-
-// XAudio2 functions
-typedef HRESULT XAudio2CreateFunc(
-    _Out_   IXAudio2**          ppXAudio2,
-    _In_    UINT32              flags,
-    _In_    XAUDIO2_PROCESSOR   xAudio2Processor);
-internal XAudio2CreateFunc* xAudio2Create_ = NULL;
-#define XAudio2Create xAudio2Create_
 
 // WGL functions
 typedef BOOL WINAPI wglSwapIntervalEXTFunc(int interval);
