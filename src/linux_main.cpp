@@ -1517,5 +1517,5 @@ int main(int argc, char **argv)
     return 0;
 }
 
-// TODO temporary, remove this!
+// TODO: temporary! this is a bad idea! already compiled in main.cpp
 #include "km_input.cpp"

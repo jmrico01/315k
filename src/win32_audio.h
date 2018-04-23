@@ -3,6 +3,10 @@
 #include <Xaudio2.h>
 
 #include "km_defines.h"
+#include "main_platform.h"
+
+#define SAMPLERATE 48000
+#define AUDIO_BUFFER_SIZE_MILLISECONDS  2000
 
 struct Win32Audio
 {
@@ -22,3 +26,7 @@ typedef HRESULT XAudio2CreateFunc(
     _In_    XAUDIO2_PROCESSOR   xAudio2Processor);
 internal XAudio2CreateFunc* xAudio2Create_ = NULL;
 #define XAudio2Create xAudio2Create_
+
+
+internal bool Win32InitAudio(Win32Audio* winAudio, GameAudio* gameAudio,
+    uint32 channels, uint32 sampleRate, uint32 bufSampleLength);
