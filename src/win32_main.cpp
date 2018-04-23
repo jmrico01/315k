@@ -600,23 +600,6 @@ internal void Win32ProcessMessages(
 	}
 }
 
-internal void Win32ClearInput(GameInput* input, GameInput* inputPrev)
-{
-    for (int i = 0; i < 5; i++) {
-        input->mouseButtons[i].isDown = inputPrev->mouseButtons[i].isDown;
-        input->mouseButtons[i].transitions = 0;
-    }
-    input->mousePos = inputPrev->mousePos;
-    input->mouseWheel = inputPrev->mouseWheel;
-
-    for (int i = 0; i < KM_KEY_LAST; i++) {
-        input->keyboard[i].isDown = inputPrev->keyboard[i].isDown;
-        input->keyboard[i].transitions = 0;
-    }
-    input->keyboardString[0] = '\0';
-    input->keyboardStringLen = 0;
-}
-
 internal void Win32ProcessXInputButton(
 	DWORD xInputButtonState,
 	GameButtonState *oldState,
@@ -1404,7 +1387,7 @@ int CALLBACK WinMain(
 		GameInput *temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
-        Win32ClearInput(newInput, oldInput);
+        ClearInput(newInput, oldInput);
 	}
 
     winAudio.sourceVoice->Stop();
