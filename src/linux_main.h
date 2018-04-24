@@ -2,8 +2,6 @@
 
 #include <sys/types.h>
 
-#include <alsa/asoundlib.h>
-
 #include "km_defines.h"
 #include "main_platform.h"
 
@@ -14,34 +12,6 @@ struct LinuxWindowDimension
 {
     uint32 Width;
     uint32 Height;
-};
-
-struct LinuxAudio
-{
-    snd_pcm_t* pcmHandle;
-    snd_pcm_uframes_t periodSize;
-    
-    uint32 channels;
-    uint32 sampleRate;
-
-    int16* buffer;
-    uint32 bufferSize;
-    uint32 readIndex;
-
-    pthread_t thread;
-    bool32 isPlaying;
-};
-
-struct LinuxDebugTimeMarker
-{
-    uint32 OutputPlayCursor;
-    uint32 OutputWriteCursor;
-    uint32 OutputLocation;
-    uint32 OutputByteCount;
-    uint32 ExpectedFlipPlayCursor;
-
-    uint32 FlipPlayCursor;
-    uint32 FlipWriteCursor;
 };
 
 struct LinuxGameCode
