@@ -334,12 +334,12 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if (input0->x.isDown) {
+	/*if (input0->x.isDown) {
 		gameState->angle -= 0.005f;
     }
 	if (input0->b.isDown) {
 		gameState->angle += 0.005f;
-    }
+    }*/
 
 	float isoZ = PI_F / 4.0f;
 	float isoX = acosf(tanf((PI_F - gameState->angle) / 2.0f));

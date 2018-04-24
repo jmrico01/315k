@@ -1061,6 +1061,7 @@ int CALLBACK WinMain(
     uint32 runningSampleIndex = 0;
     float32 tSine1 = 0.0f;
     float32 tSine2 = 0.0f;
+    float amplitude = 1.0f;
 
 	running_ = true;
 	while (running_) {
@@ -1225,6 +1226,13 @@ int CALLBACK WinMain(
         }
 
         float baseTone = 261.0f;
+        if (newInput->controllers[0].x.isDown) {
+            amplitude -= 0.01f;
+        }
+        if (newInput->controllers[0].b.isDown) {
+            amplitude += 0.01f;
+        }
+        amplitude = ClampFloat32(amplitude, 0.0f, 1.0f);
         float tone1Hz = baseTone
             * (1.0f + 0.5f * newInput->controllers[0].leftEnd.x)
             * (1.0f + 0.1f * newInput->controllers[0].leftEnd.y);
@@ -1234,9 +1242,9 @@ int CALLBACK WinMain(
         //DEBUG_PRINT("tone freq: %f\n", tone2Hz);
         for (int i = 0; i < writeLen; i++) {
             uint32 ind = (writeTo + i) % winAudio.bufferSizeSamples;
-            int16 sin1Sample = (int16)(INT16_MAXVAL * sinf(
+            int16 sin1Sample = (int16)(INT16_MAXVAL * amplitude * sinf(
                 /*2.0f * PI_F * tone1Hz * t*/tSine1));
-            int16 sin2Sample = (int16)(INT16_MAXVAL * sinf(
+            int16 sin2Sample = (int16)(INT16_MAXVAL * amplitude * sinf(
                 /*2.0f * PI_F * tone2Hz * t*/tSine2));
             winAudio.buffer[ind * winAudio.channels]      = sin1Sample;
             winAudio.buffer[ind * winAudio.channels + 1]  = sin2Sample;
