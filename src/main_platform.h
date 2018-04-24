@@ -95,10 +95,9 @@ struct GameInput
 
 struct GameAudio
 {
-    uint32 channels;
-    uint32 sampleRate;
-    
-    uint32 bufferSize;
+    int sampleRate;
+    int channels;
+    int bufferSizeSamples;
     int16* buffer;
 };
 

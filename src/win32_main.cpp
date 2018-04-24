@@ -954,12 +954,21 @@ int CALLBACK WinMain(
 
     // Initialize audio
     Win32Audio winAudio = {};
-    GameAudio gameAudio = {};
-    uint32 bufNumSamples = SAMPLERATE * AUDIO_BUFFER_SIZE_MILLISECONDS / 1000;
-    if (!Win32InitAudio(&winAudio, &gameAudio, 2, SAMPLERATE, bufNumSamples)) {
+    uint32 bufferSizeSamples = AUDIO_SAMPLERATE
+        * AUDIO_BUFFER_SIZE_MILLISECONDS / 1000;
+    if (!Win32InitAudio(&winAudio,
+    AUDIO_SAMPLERATE, AUDIO_CHANNELS, bufferSizeSamples)) {
         return 1;
     }
-    winAudio.sampleLatency = SAMPLERATE / 10;
+    winAudio.sampleLatency = AUDIO_SAMPLERATE / 10;
+
+    GameAudio gameAudio = {};
+    gameAudio.sampleRate = winAudio.sampleRate;
+    gameAudio.channels = winAudio.channels;
+    gameAudio.bufferSizeSamples = gameAudio.sampleRate;
+    gameAudio.buffer = (int16*)VirtualAlloc(0,
+        gameAudio.bufferSizeSamples * gameAudio.channels * sizeof(int16),
+		MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1199,17 +1208,17 @@ int CALLBACK WinMain(
 
         XAUDIO2_VOICE_STATE voiceState;
         winAudio.sourceVoice->GetState(&voiceState);
-        uint32 playMark = (uint32)voiceState.SamplesPlayed
-            % gameAudio.bufferSize;
-        uint32 fillTarget = (playMark + winAudio.sampleLatency)
-            % gameAudio.bufferSize;
-        uint32 writeTo = runningSampleIndex % gameAudio.bufferSize;
-        uint32 writeLen;
+        int playMark = (int)voiceState.SamplesPlayed
+            % winAudio.bufferSizeSamples;
+        int fillTarget = (playMark + winAudio.sampleLatency)
+            % winAudio.bufferSizeSamples;
+        int writeTo = runningSampleIndex % winAudio.bufferSizeSamples;
+        int writeLen;
         if (writeTo == fillTarget) {
-            writeLen = gameAudio.bufferSize;
+            writeLen = winAudio.bufferSizeSamples;
         }
         else if (writeTo > fillTarget) {
-            writeLen = gameAudio.bufferSize - (writeTo - fillTarget);
+            writeLen = winAudio.bufferSizeSamples - (writeTo - fillTarget);
         }
         else {
             writeLen = fillTarget - writeTo;
@@ -1223,20 +1232,19 @@ int CALLBACK WinMain(
             * (1.0f + 0.5f * newInput->controllers[0].rightEnd.x)
             * (1.0f + 0.1f * newInput->controllers[0].rightEnd.y);
         //DEBUG_PRINT("tone freq: %f\n", tone2Hz);
-        for (uint32 i = 0; i < writeLen; i++) {
-            uint32 ind = (writeTo + i) % gameAudio.bufferSize;
-            //float32 t = (float32)runningSampleIndex / gameAudio.sampleRate;
+        for (int i = 0; i < writeLen; i++) {
+            uint32 ind = (writeTo + i) % winAudio.bufferSizeSamples;
             int16 sin1Sample = (int16)(INT16_MAXVAL * sinf(
                 /*2.0f * PI_F * tone1Hz * t*/tSine1));
             int16 sin2Sample = (int16)(INT16_MAXVAL * sinf(
                 /*2.0f * PI_F * tone2Hz * t*/tSine2));
-            gameAudio.buffer[ind * gameAudio.channels]      = sin1Sample;
-            gameAudio.buffer[ind * gameAudio.channels + 1]  = sin2Sample;
+            winAudio.buffer[ind * winAudio.channels]      = sin1Sample;
+            winAudio.buffer[ind * winAudio.channels + 1]  = sin2Sample;
 
             tSine1 += 2.0f * PI_F * tone1Hz * 1.0f
-                / (float32)gameAudio.sampleRate;
+                / (float32)winAudio.sampleRate;
             tSine2 += 2.0f * PI_F * tone2Hz * 1.0f
-                / (float32)gameAudio.sampleRate;
+                / (float32)winAudio.sampleRate;
 
             //gameAudio.buffer[ind * gameAudio.channels] = sinSample2;
 

@@ -1,7 +1,7 @@
 #include "win32_audio.h"
 
-internal bool Win32InitAudio(Win32Audio* winAudio, GameAudio* gameAudio,
-    uint32 channels, uint32 sampleRate, uint32 bufSampleLength)
+internal bool Win32InitAudio(Win32Audio* winAudio,
+    int sampleRate, int channels, int bufferSizeSamples)
 {
     // Only support stereo for now
     DEBUG_ASSERT(channels == 2);
@@ -30,13 +30,15 @@ internal bool Win32InitAudio(Win32Audio* winAudio, GameAudio* gameAudio,
     }
 
     HRESULT hr;
-    hr = XAudio2Create(&winAudio->xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+    IXAudio2* xAudio2;
+    hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to create XAudio2 instance, HRESULT %x\n", hr);
         return false;
     }
 
-    hr = winAudio->xAudio2->CreateMasteringVoice(&winAudio->masterVoice,
+    IXAudio2MasteringVoice* masterVoice;
+    hr = xAudio2->CreateMasteringVoice(&masterVoice,
         channels,
         sampleRate,
         0,
@@ -47,49 +49,51 @@ internal bool Win32InitAudio(Win32Audio* winAudio, GameAudio* gameAudio,
         return false;
     }
 
-    winAudio->format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-    winAudio->format.Format.nChannels = (WORD)channels;
-    winAudio->format.Format.nSamplesPerSec = (DWORD)sampleRate;
-    winAudio->format.Format.nAvgBytesPerSec = (DWORD)(
+    WAVEFORMATEXTENSIBLE format;
+    format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    format.Format.nChannels = (WORD)channels;
+    format.Format.nSamplesPerSec = (DWORD)sampleRate;
+    format.Format.nAvgBytesPerSec = (DWORD)(
         sampleRate * channels * sizeof(int16));
-    winAudio->format.Format.nBlockAlign = (WORD)(channels * sizeof(int16));
-    winAudio->format.Format.wBitsPerSample = (WORD)(sizeof(int16) * 8);
-    winAudio->format.Format.cbSize = (WORD)(
+    format.Format.nBlockAlign = (WORD)(channels * sizeof(int16));
+    format.Format.wBitsPerSample = (WORD)(sizeof(int16) * 8);
+    format.Format.cbSize = (WORD)(
         sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX));
-    winAudio->format.Samples.wValidBitsPerSample =
-        winAudio->format.Format.wBitsPerSample;
-    winAudio->format.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-    winAudio->format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+    format.Samples.wValidBitsPerSample =
+        format.Format.wBitsPerSample;
+    format.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+    format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
 
-    hr = winAudio->xAudio2->CreateSourceVoice(&winAudio->sourceVoice,
-        (const WAVEFORMATEX*)&winAudio->format);
+    hr = xAudio2->CreateSourceVoice(&winAudio->sourceVoice,
+        (const WAVEFORMATEX*)&format);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to create source voice, HRESULT %x\n", hr);
         return false;
     }
 
-    gameAudio->channels = channels;
-    gameAudio->sampleRate = sampleRate;
-    gameAudio->bufferSize = bufSampleLength;
-	gameAudio->buffer = (int16*)VirtualAlloc(0,
-        bufSampleLength * channels * sizeof(int16),
+    winAudio->channels = channels;
+    winAudio->sampleRate = sampleRate;
+    winAudio->bufferSizeSamples = bufferSizeSamples;
+	winAudio->buffer = (int16*)VirtualAlloc(0,
+        bufferSizeSamples * channels * sizeof(int16),
 		MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    for (uint32 i = 0; i < bufSampleLength; i++) {
-        gameAudio->buffer[i * channels] = 0;
-        gameAudio->buffer[i * channels + 1] = 0;
+    for (int i = 0; i < bufferSizeSamples; i++) {
+        winAudio->buffer[i * channels] = 0;
+        winAudio->buffer[i * channels + 1] = 0;
     }
 
-    winAudio->buffer.Flags = 0;
-    winAudio->buffer.AudioBytes = bufSampleLength * channels * sizeof(int16);
-    winAudio->buffer.pAudioData = (const BYTE*)gameAudio->buffer;
-    winAudio->buffer.PlayBegin = 0;
-    winAudio->buffer.PlayLength = 0;
-    winAudio->buffer.LoopBegin = 0;
-    winAudio->buffer.LoopLength = 0;
-    winAudio->buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
-    winAudio->buffer.pContext = NULL;
+    XAUDIO2_BUFFER buffer;
+    buffer.Flags = 0;
+    buffer.AudioBytes = bufferSizeSamples * channels * sizeof(int16);
+    buffer.pAudioData = (const BYTE*)winAudio->buffer;
+    buffer.PlayBegin = 0;
+    buffer.PlayLength = 0;
+    buffer.LoopBegin = 0;
+    buffer.LoopLength = 0;
+    buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
+    buffer.pContext = NULL;
 
-    hr = winAudio->sourceVoice->SubmitSourceBuffer(&winAudio->buffer);
+    hr = winAudio->sourceVoice->SubmitSourceBuffer(&buffer);
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to submit buffer, HRESULT %x\n", hr);
         return false;
