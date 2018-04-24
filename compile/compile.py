@@ -146,7 +146,89 @@ def WinCompileDebug():
     ]))
 
 def WinCompileRelease():
-    return
+    macros = " ".join([
+        "/DGAME_INTERNAL=1",
+        "/DGAME_SLOW=0",
+        "/DGAME_WIN32",
+        "/D_CRT_SECURE_NO_WARNINGS"
+    ])
+    compilerFlags = " ".join([
+        "/MT",      # CRT static link
+        "/nologo",  # disables the "Microsoft C/C++ Optimizing Compiler" message
+        "/Gm-",     # disable incremental build things
+        "/GR-",     # disable type information
+        "/EHa-",    # disable exception handling
+        "/EHsc",    # handle stdlib errors
+        "/Ox",      # full optimization
+        "/Z7"       # minimal "old school" debug information
+    ])
+    compilerWarningFlags = " ".join([
+        "/WX",      # treat warnings as errors
+        "/W4",      # level 4 warnings
+
+        # disable the following warnings:
+        "/wd4100",  # unused function arguments
+        "/wd4189",  # unused initialized local variable
+        "/wd4201",  # nonstandard extension used: nameless struct/union
+        "/wd4505",  # unreferenced local function has been removed
+    ])
+    includePaths = " ".join([
+        #"/I" + paths["include-freetype"],
+        #"/I" + paths["include-lodepng"]
+    ])
+
+    linkerFlags = " ".join([
+        "/incremental:no",  # disable incremental linking
+        "/opt:ref"          # get rid of extraneous linkages
+    ])
+    libPaths = " ".join([
+        #"/LIBPATH:" + paths["lib-ft-win-d"]
+    ])
+    libs = " ".join([
+        "user32.lib",
+        "gdi32.lib",
+        "opengl32.lib",
+        "xaudio2.lib"
+        #"freetype281MTd.lib"
+    ])
+
+    # Clear old PDB files
+    for fileName in os.listdir(paths["build"]):
+        if ".pdb" in fileName:
+            try:
+                os.remove(os.path.join(paths["build"], fileName))
+            except:
+                print("Couldn't remove " + fileName)
+
+    pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    compileDLLCommand = " ".join([
+        "cl",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "/LD", "/Fe315k_game.dll", paths["main-cpp"],
+        "/link", linkerFlags, #libPaths, libs,
+        "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
+
+    compileCommand = " ".join([
+        "cl", "/DGAME_PLATFORM_CODE",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
+        "/link", linkerFlags, libPaths, libs])
+    
+    devenvCommand = "rem"
+    if len(sys.argv) > 2:
+        if sys.argv[2] == "devenv":
+            devenvCommand = "devenv 315k_win32.exe"
+
+    loadCompiler = "call \"C:\\Program Files (x86)" + \
+        "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
+    os.system(" & ".join([
+        "pushd " + paths["build"],
+        loadCompiler,
+        compileDLLCommand,
+        compileCommand,
+        devenvCommand,
+        "popd"
+    ]))
 
 def LinuxCompileDebug():
     macros = " ".join([
@@ -342,7 +424,7 @@ def Release():
 
     platformName = platform.system()
     if platformName == "Windows":
-        print "Release: UNIMPLEMENTED"
+        WinCompileRelease()
     elif platformName == "Linux":
         print "Release: UNIMPLEMENTED"
     else:

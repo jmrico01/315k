@@ -744,7 +744,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 	wglSwapInterval = (wglSwapIntervalEXTFunc*)
         wglGetProcAddress("wglSwapIntervalEXT");
 	if (wglSwapInterval) {
-		wglSwapInterval(0);
+		wglSwapInterval(1);
 	}
 	else {
 		// TODO no vsync. logging? just exit? just exit for now

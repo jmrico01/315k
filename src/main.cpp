@@ -228,7 +228,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	GameState *gameState = (GameState*)memory->permanentStorage;
     if (memory->DEBUGShouldInitGlobalFuncs) {
 	    // Initialize global function names
+#if GAME_SLOW
         debugPrint_ = platformFuncs->DEBUGPlatformPrint;
+#endif
         #define FUNC(returntype, name, ...) name = \
         platformFuncs->glFunctions.name;
             GL_FUNCTIONS_BASE
