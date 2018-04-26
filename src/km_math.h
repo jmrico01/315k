@@ -33,7 +33,7 @@ inline float32 MaxFloat32(float32 a, float32 b) {
 inline float32 ClampFloat32(float32 a, float32 min, float32 max) {
     return MinFloat32(MaxFloat32(a, min), max);
 }
-// TODO: quick and dirty round implementation
+// TODO quick and dirty round implementation
 inline int RoundFloat32Fast(float32 a) {
     if (a < 0.0) {
         return (int)(a - 0.5);

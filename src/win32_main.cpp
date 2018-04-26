@@ -600,7 +600,7 @@ internal void Win32ProcessMessages(
         } break;
 
         case WM_MOUSEWHEEL: {
-            // TODO: standardize these units
+            // TODO standardize these units
             gameInput->mouseWheel += GET_WHEEL_DELTA_WPARAM(msg.wParam);
         } break;
 
@@ -1151,7 +1151,7 @@ int CALLBACK WinMain(
                 newController->leftStart = oldController->leftEnd;
                 newController->rightStart = oldController->rightEnd;
 
-                // TODO: check if the deadzone is round
+                // TODO check if the deadzone is round
                 newController->leftEnd.x = Win32ProcessXInputStickValue(
                     pad->sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                 newController->leftEnd.y = Win32ProcessXInputStickValue(
@@ -1321,5 +1321,5 @@ int CALLBACK WinMain(
 
 #include "win32_audio.cpp"
 
-// TODO: temporary! this is a bad idea! already compiled in main.cpp
+// TODO temporary! this is a bad idea! already compiled in main.cpp
 #include "km_input.cpp"

@@ -1335,5 +1335,5 @@ int main(int argc, char **argv)
 
 #include "linux_audio.cpp"
 
-// TODO: temporary! this is a bad idea! already compiled in main.cpp
+// TODO temporary! this is a bad idea! already compiled in main.cpp
 #include "km_input.cpp"
