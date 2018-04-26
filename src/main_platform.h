@@ -103,10 +103,12 @@ struct GameAudio
 
 struct PlatformFunctions
 {
+#if GAME_INTERNAL
 	DEBUGPlatformPrintFunc*			    DEBUGPlatformPrint;
 	DEBUGPlatformFreeFileMemoryFunc*	DEBUGPlatformFreeFileMemory;
 	DEBUGPlatformReadFileFunc*			DEBUGPlatformReadFile;
 	DEBUGPlatformWriteFileFunc*			DEBUGPlatformWriteFile;
+#endif
 
     OpenGLFunctions glFunctions;
 };
@@ -123,9 +125,9 @@ struct GameMemory
 	// Required to be cleared to zero at startup
 	void* transientStorage;
 
-    #if GAME_INTERNAL
+#if GAME_INTERNAL
     bool32 DEBUGShouldInitGlobalFuncs;
-    #endif
+#endif
 };
 
 // ------------------------------ Game functions ------------------------------
