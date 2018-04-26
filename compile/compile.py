@@ -24,6 +24,8 @@ def NormalizePathSlashes(pathDict):
     for name in pathDict:
         pathDict[name] = pathDict[name].replace("/", os.sep)
 
+PROJECT_NAME = "315k"
+
 # Important directory & file paths
 paths = { "root": GetLastSlashPath(GetScriptPath()) }
 
@@ -115,24 +117,26 @@ def WinCompileDebug():
             except:
                 print("Couldn't remove " + fileName)
 
-    pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
     compileDLLCommand = " ".join([
         "cl",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/LD", "/Fe315k_game.dll", paths["main-cpp"],
+        "/LD", "/Fe" + PROJECT_NAME + "_game.dll", paths["main-cpp"],
         "/link", linkerFlags, #libPaths, libs,
         "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
 
     compileCommand = " ".join([
         "cl", "/DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
+        "/Fe" + PROJECT_NAME + "_win32.exe",
+        "/Fm" + PROJECT_NAME + "_win32.map",
+        paths["win32-main-cpp"],
         "/link", linkerFlags, libPaths, libs])
     
     devenvCommand = "rem"
     if len(sys.argv) > 2:
         if sys.argv[2] == "devenv":
-            devenvCommand = "devenv 315k_win32.exe"
+            devenvCommand = "devenv " + PROJECT_NAME + "_win32.exe"
 
     loadCompiler = "call \"C:\\Program Files (x86)" + \
         "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
@@ -200,24 +204,26 @@ def WinCompileRelease():
             except:
                 print("Couldn't remove " + fileName)
 
-    pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
     compileDLLCommand = " ".join([
         "cl",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/LD", "/Fe315k_game.dll", paths["main-cpp"],
+        "/LD", "/Fe" + PROJECT_NAME + "_game.dll", paths["main-cpp"],
         "/link", linkerFlags, #libPaths, libs,
         "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
 
     compileCommand = " ".join([
         "cl", "/DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
+        "/Fe" + PROJECT_NAME + "_win32.exe",
+        "/Fm" + PROJECT_NAME + "_win32.map",
+        paths["win32-main-cpp"],
         "/link", linkerFlags, libPaths, libs])
     
     devenvCommand = "rem"
     if len(sys.argv) > 2:
         if sys.argv[2] == "devenv":
-            devenvCommand = "devenv 315k_win32.exe"
+            devenvCommand = "devenv " + PROJECT_NAME + "_win32.exe"
 
     loadCompiler = "call \"C:\\Program Files (x86)" + \
         "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
@@ -279,17 +285,19 @@ def LinuxCompileDebug():
         #"-lpng"
     ])
 
-    #pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    #pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
     compileLibCommand = " ".join([
         "gcc",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "-shared", "-fPIC", paths["main-cpp"], "-o 315k_game.so"
+        "-shared", "-fPIC", paths["main-cpp"],
+        "-o " + PROJECT_NAME + "_game.so"
     ])
 
     compileCommand = " ".join([
         "gcc", "-DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        paths["linux-main-cpp"], "-o 315k_linux",
+        paths["linux-main-cpp"],
+        "-o " + PROJECT_NAME + "_linux",
         linkerFlags, libPaths, libs
     ])
 
