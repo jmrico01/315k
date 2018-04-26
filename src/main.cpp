@@ -223,6 +223,14 @@ internal void TintTiles(
 
 extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 {
+    // NOTE: for clarity
+    // A call to this function means the following has happened:
+    //  - A frame has been displayed to the user
+    //  - The latest user input has been processed by the platform layer
+    //
+    // This function is expected to update the state of the game
+    // and draw the frame that will be displayed, ideally, some constant
+    // amount of time in the future.
 	DEBUG_ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
 
 	GameState *gameState = (GameState*)memory->permanentStorage;
