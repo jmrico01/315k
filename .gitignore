@@ -1,7 +1,5 @@
 build
-.vscode/*
-!.vscode/launch.json
-!.vscode/tasks.json
+
 .DS_Store
 .clang_complete
 *~
