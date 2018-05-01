@@ -24,6 +24,8 @@ def NormalizePathSlashes(pathDict):
     for name in pathDict:
         pathDict[name] = pathDict[name].replace("/", os.sep)
 
+PROJECT_NAME = "315k"
+
 # Important directory & file paths
 paths = { "root": GetLastSlashPath(GetScriptPath()) }
 
@@ -35,27 +37,29 @@ paths["build-data"]     = paths["build"] + "/data"
 paths["build-shaders"]  = paths["build"] + "/shaders"
 paths["src-shaders"]    = paths["src"] + "/shaders"
 
-
+# Main source files
 paths["main-cpp"]       = paths["src"] + "/main.cpp"
 paths["linux-main-cpp"] = paths["src"] + "/linux_main.cpp"
 paths["win32-main-cpp"] = paths["src"] + "/win32_main.cpp"
 
-"""
-paths["include-glew"]       = paths["external"] + "/glew-2.1.0/include"
-paths["include-glfw"]       = paths["external"] + "/glfw-3.2.1/include"
-paths["include-freetype"]   = paths["external"] + "/freetype-2.8.1/include"
-paths["include-lodepng"]    = paths["external"] + "/lodepng/include"
-
-paths["lib-glfw-win-d"] = paths["external"] + "/glfw-3.2.1/lib/win/debug"
-paths["lib-glfw-win-r"] = paths["external"] + "/glfw-3.2.1/lib/win/release"
-paths["lib-glfw-linux"] = paths["external"] + "/glfw-3.2.1/lib/linux"
-paths["lib-ft-win-d"]   = paths["external"] + "/freetype-2.8.1/lib/win/debug"
-paths["lib-ft-win-r"]   = paths["external"] + "/freetype-2.8.1/lib/win/release"
-paths["lib-ft-linux"]   = paths["external"] + "/freetype-2.8.1/lib/linux"
-"""
-
+# Source hashes for if-changed compilation
 paths["src-hashes"]     = paths["build"] + "/src_hashes"
 paths["src-hashes-old"] = paths["build"] + "/src_hashes_old"
+
+# External dependencies
+# TODO think of a better way of doing this
+paths["include-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/include"
+paths["lib-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/objs/vc2010/x64"
+
+#paths["include-libpng-win"] = "D:/Development/Libraries/lpng1634"
+#paths["lib-libpng-win-d"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/DebugLibrary"
+#paths["lib-libpng-win-r"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/ReleaseLibrary"
+
+#paths["include-freetype-linux"] = "/usr/local/include/freetype2"
+#paths["lib-freetype-linux"] = "/home/legionjr/Documents/Libraries"
+
+#paths["include-libpng-linux"] = "/usr/local/include/libpng16"
+#paths["lib-libpng-linux"] = "/home/legionjr/Documents/Libraries"
 
 NormalizePathSlashes(paths)
 
@@ -68,7 +72,7 @@ def WinCompileDebug():
     ])
     compilerFlags = " ".join([
         "/MTd",     # CRT static link (debug)
-        "/nologo",  # disables the "Microsoft C/C++ Optimizing Compiler" message
+        "/nologo",  # disable the "Microsoft C/C++ Optimizing Compiler" message
         "/Gm-",     # disable incremental build things
         "/GR-",     # disable type information
         "/EHa-",    # disable exception handling
@@ -88,23 +92,26 @@ def WinCompileDebug():
         "/wd4505",  # unreferenced local function has been removed
     ])
     includePaths = " ".join([
-        #"/I" + paths["include-freetype"],
-        #"/I" + paths["include-lodepng"]
+        "/I" + paths["include-freetype-win"]
     ])
 
     linkerFlags = " ".join([
         "/incremental:no",  # disable incremental linking
         "/opt:ref"          # get rid of extraneous linkages
     ])
-    libPaths = " ".join([
-        #"/LIBPATH:" + paths["lib-ft-win-d"]
+    libPathsPlatform = " ".join([
     ])
-    libs = " ".join([
+    libsPlatform = " ".join([
         "user32.lib",
         "gdi32.lib",
         "opengl32.lib",
         "xaudio2.lib"
-        #"freetype281MTd.lib"
+    ])
+    libPathsGame = " ".join([
+        "/LIBPATH:" + paths["lib-freetype-win"]
+    ])
+    libsGame = " ".join([
+        "freetype281MTd.lib"
     ])
 
     # Clear old PDB files
@@ -115,24 +122,27 @@ def WinCompileDebug():
             except:
                 print("Couldn't remove " + fileName)
 
-    pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
     compileDLLCommand = " ".join([
         "cl",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/LD", "/Fe315k_game.dll", paths["main-cpp"],
-        "/link", linkerFlags, #libPaths, libs,
+        "/LD", "/Fe" + PROJECT_NAME + "_game.dll",
+        paths["main-cpp"],
+        "/link", linkerFlags, libPathsGame, libsGame,
         "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
 
     compileCommand = " ".join([
         "cl", "/DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
-        "/link", linkerFlags, libPaths, libs])
+        "/Fe" + PROJECT_NAME + "_win32.exe",
+        "/Fm" + PROJECT_NAME + "_win32.map",
+        paths["win32-main-cpp"],
+        "/link", linkerFlags, libPathsPlatform, libsPlatform])
     
     devenvCommand = "rem"
     if len(sys.argv) > 2:
         if sys.argv[2] == "devenv":
-            devenvCommand = "devenv 315k_win32.exe"
+            devenvCommand = "devenv " + PROJECT_NAME + "_win32.exe"
 
     loadCompiler = "call \"C:\\Program Files (x86)" + \
         "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
@@ -146,89 +156,10 @@ def WinCompileDebug():
     ]))
 
 def WinCompileRelease():
-    macros = " ".join([
-        "/DGAME_INTERNAL=1",
-        "/DGAME_SLOW=0",
-        "/DGAME_WIN32",
-        "/D_CRT_SECURE_NO_WARNINGS"
-    ])
-    compilerFlags = " ".join([
-        "/MT",      # CRT static link
-        "/nologo",  # disables the "Microsoft C/C++ Optimizing Compiler" message
-        "/Gm-",     # disable incremental build things
-        "/GR-",     # disable type information
-        "/EHa-",    # disable exception handling
-        "/EHsc",    # handle stdlib errors
-        "/Ox",      # full optimization
-        "/Z7"       # minimal "old school" debug information
-    ])
-    compilerWarningFlags = " ".join([
-        "/WX",      # treat warnings as errors
-        "/W4",      # level 4 warnings
+    print("UNIMPLEMENTED")
 
-        # disable the following warnings:
-        "/wd4100",  # unused function arguments
-        "/wd4189",  # unused initialized local variable
-        "/wd4201",  # nonstandard extension used: nameless struct/union
-        "/wd4505",  # unreferenced local function has been removed
-    ])
-    includePaths = " ".join([
-        #"/I" + paths["include-freetype"],
-        #"/I" + paths["include-lodepng"]
-    ])
-
-    linkerFlags = " ".join([
-        "/incremental:no",  # disable incremental linking
-        "/opt:ref"          # get rid of extraneous linkages
-    ])
-    libPaths = " ".join([
-        #"/LIBPATH:" + paths["lib-ft-win-d"]
-    ])
-    libs = " ".join([
-        "user32.lib",
-        "gdi32.lib",
-        "opengl32.lib",
-        "xaudio2.lib"
-        #"freetype281MTd.lib"
-    ])
-
-    # Clear old PDB files
-    for fileName in os.listdir(paths["build"]):
-        if ".pdb" in fileName:
-            try:
-                os.remove(os.path.join(paths["build"], fileName))
-            except:
-                print("Couldn't remove " + fileName)
-
-    pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
-    compileDLLCommand = " ".join([
-        "cl",
-        macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/LD", "/Fe315k_game.dll", paths["main-cpp"],
-        "/link", linkerFlags, #libPaths, libs,
-        "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
-
-    compileCommand = " ".join([
-        "cl", "/DGAME_PLATFORM_CODE",
-        macros, compilerFlags, compilerWarningFlags, includePaths,
-        "/Fe315k_win32.exe", "/Fm315k_win32.map", paths["win32-main-cpp"],
-        "/link", linkerFlags, libPaths, libs])
-    
-    devenvCommand = "rem"
-    if len(sys.argv) > 2:
-        if sys.argv[2] == "devenv":
-            devenvCommand = "devenv 315k_win32.exe"
-
-    loadCompiler = "call \"C:\\Program Files (x86)" + \
-        "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
-    os.system(" & ".join([
-        "pushd " + paths["build"],
-        loadCompiler,
-        compileDLLCommand,
-        compileCommand,
-        devenvCommand,
-        "popd"
-    ]))
+def WinRun():
+    os.system(paths["build"] + os.sep + PROJECT_NAME + "_win32.exe")
 
 def LinuxCompileDebug():
     macros = " ".join([
@@ -279,17 +210,19 @@ def LinuxCompileDebug():
         #"-lpng"
     ])
 
-    #pdbName = "315k_game" + str(random.randrange(99999)) + ".pdb"
+    #pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
     compileLibCommand = " ".join([
         "gcc",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "-shared", "-fPIC", paths["main-cpp"], "-o 315k_game.so"
+        "-shared", "-fPIC", paths["main-cpp"],
+        "-o " + PROJECT_NAME + "_game.so"
     ])
 
     compileCommand = " ".join([
         "gcc", "-DGAME_PLATFORM_CODE",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        paths["linux-main-cpp"], "-o 315k_linux",
+        paths["linux-main-cpp"],
+        "-o " + PROJECT_NAME + "_linux",
         linkerFlags, libPaths, libs
     ])
 
@@ -443,14 +376,22 @@ def Clean():
             # ... exceptions are so ugly.
             print e
 
+def Run():
+    platformName = platform.system()
+    if platformName == "Windows":
+        WinRun()
+    else:
+        print "Unsupported platform: " + platformName
+
 def Main():
     if not os.path.exists(paths["build"]):
         os.makedirs(paths["build"])
 
-    arg1 = ""
-    if len(sys.argv) > 1:
-        arg1 = sys.argv[1]
+    if (len(sys.argv) <= 1):
+        print("Compile script expected at least one argument")
+        return
 
+    arg1 = sys.argv[1]
     if arg1 == "debug":
         Debug()
     elif arg1 == "ifchanged":
@@ -459,7 +400,9 @@ def Main():
         Release()
     elif arg1 == "clean":
         Clean()
+    elif arg1 == "run":
+        Run()
     else:
-        print("Compile script expected one argument")
+        print("Unrecognized argument: " + arg1)
 
 Main()

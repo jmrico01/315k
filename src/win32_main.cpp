@@ -1087,7 +1087,9 @@ int CALLBACK WinMain(
         }
 
         // Process keyboard input & other messages
+        int mouseWheelPrev = newInput->mouseWheel;
         Win32ProcessMessages(hWnd, newInput, &platformFuncs.glFunctions);
+        newInput->mouseWheelDelta = newInput->mouseWheel - mouseWheelPrev;
 
         POINT mousePos;
         GetCursorPos(&mousePos);

@@ -4,8 +4,8 @@
 #include "km_input.h"
 #include "km_math.h"
 #include "opengl.h"
-#include "opengl_global.h"
-#include "ogl_base.h"
+#include "opengl_funcs.h"
+#include "opengl_base.h"
 
 struct Tiles
 {
@@ -93,9 +93,9 @@ internal void InitTiles(
 	
 	// Initialize shader
 	tiles->shader = LoadShaders(thread,
+        "shaders/rectAlt.vert", "shaders/rectAlt.frag",
 		DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemory,
-		"shaders/rectAlt.vert", "shaders/rectAlt.frag");
+		DEBUGPlatformFreeFileMemory);
 
 	// Initialize VAO
 	glGenVertexArrays(1, &tiles->vao);
@@ -171,9 +171,10 @@ internal void DrawTiles(
 			pos.z = 0.0f;
 
 			Mat4 model = Translate(pos + offset) * Scale(Vec3{ TILE_SIZE, TILE_SIZE, 1.0f });
+            Mat4 mvp = vp * model;
 			glUniformMatrix4fv(
 				glGetUniformLocation(tiles->shader, "mvp"),
-                1, GL_FALSE, &(vp * model).e[0][0]);
+                1, GL_FALSE, &mvp.e[0][0]);
 			glUniform4fv(
 				glGetUniformLocation(tiles->shader, "color"),
                 1, &tiles->color[i][j].e[0]);
@@ -188,7 +189,7 @@ internal void DrawTiles(
 			model = Translate(pos + offset) * Scale(Vec3{ TILE_SIZE, TILE_SIZE, 1.0f });
 			glUniformMatrix4fv(
 				glGetUniformLocation(tiles->shader, "mvp"),
-                1, GL_FALSE, &(vp * model).e[0][0]);
+                1, GL_FALSE, &mvp.e[0][0]);
 			Vec4 color = { 0.1f, 0.1f, 0.1f, 1.0f };
 			glUniform4fv(
 				glGetUniformLocation(tiles->shader, "color"),
@@ -248,18 +249,20 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         memory->DEBUGShouldInitGlobalFuncs = false;
     }
 	if (!memory->isInitialized) {
-# if 0
-		// TODO round tripping, not final
-		char* filename = __FILE__;
-		DEBUGReadFileResult readResult =
-            memory->DEBUGPlatformReadFile(thread, filename);
-		if (readResult.data)
-		{
-			memory->DEBUGPlatformWriteFile(thread, "test.out",
-				(uint32)readResult.size, readResult.data);
-			memory->DEBUGPlatformFreeFileMemory(thread, readResult.data);
-		}
-#endif
+        glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
+        // Very explicit depth testing setup (DEFAULT VALUES)
+        // NDC is left-handed with this setup
+        // (very subtle left-handedness definition:
+        //  front objects have z = -1, far objects have z = 1)
+        glEnable(GL_DEPTH_TEST);
+        // Nearer objects have less z than farther objects
+        glDepthFunc(GL_LESS);
+        // Depth buffer clears to farthest z-value (1)
+        glClearDepth(1.0);
+        // Depth buffer transforms -1 to 1 range to 0 to 1 range
+        glDepthRange(0.0, 1.0);
+
+        glDisable(GL_BLEND);
 		
 		InitTiles(thread,
 			platformFuncs->DEBUGPlatformReadFile,
@@ -275,9 +278,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		gameState->angle = 2.0f * PI_F / 3.0f;
 
 		gameState->rectShader = LoadShaders(thread,
+            "shaders/rect.vert", "shaders/rect.frag",
 			platformFuncs->DEBUGPlatformReadFile,
-            platformFuncs->DEBUGPlatformFreeFileMemory,
-			"shaders/rect.vert", "shaders/rect.frag");
+            platformFuncs->DEBUGPlatformFreeFileMemory);
 		/*GLfloat rectPosData[] = {
 			0.0f, 0.0f,
 			1.0f, 0.0f,
@@ -295,21 +298,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			// TODO logging / exit
 			DEBUG_PANIC("LoadRectVAO failed");
 		}
-
-		glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
-		// Very explicit depth testing setup (DEFAULT VALUES)
-		// NDC is left-handed with this setup
-		// (very subtle left-handedness definition:
-		//	front objects have z = -1, far objects have z = 1)
-		glEnable(GL_DEPTH_TEST);
-		// Nearer objects have less z than farther objects
-		glDepthFunc(GL_LESS);
-		// Depth buffer clears to farthest z-value (1)
-		glClearDepth(1.0);
-		// Depth buffer transforms -1 to 1 range to 0 to 1 range
-		glDepthRange(0.0, 1.0);
-
-		glDisable(GL_BLEND);
 
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
@@ -389,5 +377,5 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
 }
 
-#include "ogl_base.cpp"
 #include "km_input.cpp"
+#include "opengl_base.cpp"
