@@ -233,6 +233,9 @@ def LinuxCompileDebug():
         "popd > /dev/null"
     ]) + "\"")
 
+def LinuxRun():
+    os.system(paths["build"] + os.sep + PROJECT_NAME + "_linux")
+
 def MacCompileDebug():
     compilerFlags = " ".join([
         "-std=c++11",       # use C++11 standard
@@ -245,30 +248,13 @@ def MacCompileDebug():
         "-Wall",    # enable all warnings
 
         # disable the following warnings:
-        "-Wno-missing-braces"  # Not sure why this complains
     ])
     includePaths = " ".join([
-        "-I" + paths["include-glew"],
-        "-I" + paths["include-glfw"],
-        "-I" + paths["include-freetype"],
-        "-I" + paths["include-lodepng"]
     ])
 
     libPaths = " ".join([
-        "-L" + paths["lib-glfw-linux"],
-        "-L" + paths["lib-ft-linux"]
     ])
     libs = " ".join([
-        # main external libs
-        "-lglfw3",
-        "-lfreetype",
-
-        # GLFW3 dependencies
-        "-framework OpenGL",
-
-        # FreeType dependencies
-        "-lz",
-        "-lpng"
     ])
 
     compileCommand = " ".join([
@@ -325,7 +311,7 @@ def Debug():
     elif platformName == "Linux":
         LinuxCompileDebug()
     else:
-        print "Unsupported platform: " + platformName
+        print("Unsupported platform: " + platformName)
         
 
 def IfChanged():
@@ -349,7 +335,7 @@ def IfChanged():
     if changed:
         Debug()
     else:
-        print "No changes. Nothing to compile."
+        print("No changes. Nothing to compile.")
 
 def Release():
     CopyDir(paths["data"], paths["build-data"])
@@ -359,9 +345,9 @@ def Release():
     if platformName == "Windows":
         WinCompileRelease()
     elif platformName == "Linux":
-        print "Release: UNIMPLEMENTED"
+        print("Release: UNIMPLEMENTED")
     else:
-        print "Release: UNIMPLEMENTED"
+        print("Release: UNIMPLEMENTED")
 
 def Clean():
     for fileName in os.listdir(paths["build"]):
@@ -374,14 +360,16 @@ def Clean():
         except Exception as e:
             # Handles file-in-use kinds of things.
             # ... exceptions are so ugly.
-            print e
+            print(e)
 
 def Run():
     platformName = platform.system()
     if platformName == "Windows":
         WinRun()
+    elif platformName == "Linux":
+        LinuxRun()
     else:
-        print "Unsupported platform: " + platformName
+        print("Unsupported platform: " + platformName)
 
 def Main():
     if not os.path.exists(paths["build"]):
