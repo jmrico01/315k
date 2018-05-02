@@ -958,12 +958,18 @@ int CALLBACK WinMain(
     // TODO make this more reliable
     int monitorRefreshHz = 60;
     {
-        HDC hDC = GetDC(hWnd);
+        /*HDC hDC = GetDC(hWnd);
         int win32RefreshRate = GetDeviceCaps(hDC, VREFRESH);
         if (win32RefreshRate > 1)
             monitorRefreshHz = win32RefreshRate;
-        ReleaseDC(hWnd, hDC);
+        ReleaseDC(hWnd, hDC);*/
+        DEVMODE devmode;
+        devmode.dmSize = sizeof(DEVMODE);
+        devmode.dmDriverExtra = 0;
+        EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devmode);
+        monitorRefreshHz = (int)devmode.dmDisplayFrequency;
     }
+    DEBUG_PRINT("Refresh rate: %d\n", monitorRefreshHz);
 
     // Initialize audio
     Win32Audio winAudio = {};
@@ -978,10 +984,8 @@ int CALLBACK WinMain(
     GameAudio gameAudio = {};
     gameAudio.sampleRate = winAudio.sampleRate;
     gameAudio.channels = winAudio.channels;
-    gameAudio.bufferSizeSamples = gameAudio.sampleRate;
-    gameAudio.buffer = (int16*)VirtualAlloc(0,
-        gameAudio.bufferSizeSamples * gameAudio.channels * sizeof(int16),
-        MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    gameAudio.bufferSizeSamples = gameAudio.bufferSizeSamples;
+    gameAudio.buffer = winAudio.buffer;
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1215,13 +1219,6 @@ int CALLBACK WinMain(
         }
 #endif
 
-        if (gameCode.gameUpdateAndRender) {
-            ThreadContext thread = {};
-            gameCode.gameUpdateAndRender(&thread, &platformFuncs,
-                newInput, screenInfo,
-                &gameMemory, &gameAudio);
-        }
-
         XAUDIO2_VOICE_STATE voiceState;
         winAudio.sourceVoice->GetState(&voiceState);
         int playMark = (int)voiceState.SamplesPlayed
@@ -1274,6 +1271,32 @@ int CALLBACK WinMain(
             runningSampleIndex++;
         }
 
+        LARGE_INTEGER timerEnd;
+        QueryPerformanceCounter(&timerEnd);
+        uint64 cyclesEnd = __rdtsc();
+
+        int64 cyclesElapsed = cyclesEnd - cyclesLast;
+        int64 timerElapsed = timerEnd.QuadPart - timerLast.QuadPart;
+        float32 elapsed = (float32)timerElapsed / timerFreq;
+        float32 fps = (float32)timerFreq / timerElapsed;
+        int mCyclesPerFrame = (int)(cyclesElapsed / (1000 * 1000));
+
+        /*DEBUG_PRINT("Rest of loop took %d ms\n",
+            elapsedMS - vsyncElapsedMS);*/
+
+        /*DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
+            elapsedMS, fps, mCyclesPerFrame);*/
+
+        timerLast = timerEnd;
+        cyclesLast = cyclesEnd;
+
+        if (gameCode.gameUpdateAndRender) {
+            ThreadContext thread = {};
+            gameCode.gameUpdateAndRender(&thread, &platformFuncs,
+                newInput, screenInfo, elapsed,
+                &gameMemory, &gameAudio);
+        }
+
         LARGE_INTEGER vsyncStart;
         QueryPerformanceCounter(&vsyncStart);
         // NOTE
@@ -1290,25 +1313,6 @@ int CALLBACK WinMain(
         int64 vsyncElapsed = vsyncEnd.QuadPart - vsyncStart.QuadPart;
         float32 vsyncElapsedMS = 1000.0f * vsyncElapsed / timerFreq;
         //DEBUG_PRINT("SwapBuffers took %f ms\n", vsyncElapsedMS);
-
-        LARGE_INTEGER timerEnd;
-        QueryPerformanceCounter(&timerEnd);
-        uint64 cyclesEnd = __rdtsc();
-
-        int64 cyclesElapsed = cyclesEnd - cyclesLast;
-        int64 timerElapsed = timerEnd.QuadPart - timerLast.QuadPart;
-        float32 elapsedMS = 1000.0f * timerElapsed / timerFreq;
-        float32 fps = (float32)timerFreq / timerElapsed;
-        int32 mCyclesPerFrame = (int32)(cyclesElapsed / (1000 * 1000));
-
-        /*DEBUG_PRINT("Rest of loop took %d ms\n",
-            elapsedMS - vsyncElapsedMS);*/
-
-        /*DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
-            elapsedMS, fps, mCyclesPerFrame);*/
-
-        timerLast = timerEnd;
-        cyclesLast = cyclesEnd;
 
         GameInput *temp = newInput;
         newInput = oldInput;

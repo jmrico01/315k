@@ -135,6 +135,6 @@ struct GameMemory
 #define GAME_UPDATE_AND_RENDER_FUNC(name) void name( \
     const ThreadContext* thread, \
     const PlatformFunctions* platformFuncs, \
-    const GameInput* input, ScreenInfo screenInfo, \
+    const GameInput* input, ScreenInfo screenInfo, float32 deltaTime, \
 	GameMemory* memory, GameAudio* audio)
 typedef GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRenderFunc);

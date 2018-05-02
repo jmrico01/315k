@@ -1,3 +1,5 @@
+#include "main.h"
+
 #include "main_platform.h"
 #include "km_debug.h"
 #include "km_defines.h"
@@ -6,32 +8,6 @@
 #include "opengl.h"
 #include "opengl_funcs.h"
 #include "opengl_base.h"
-
-struct Tiles
-{
-#define TILES_X		100
-#define TILES_Y		100
-#define TILE_SIZE	0.05f
-	float32 height[TILES_X][TILES_Y];
-	Vec4 color[TILES_X][TILES_Y];
-
-	GLuint vao;
-	GLuint quadIndBuffer;
-	GLuint lineIndBuffer;
-
-	GLuint shader;
-};
-
-struct GameState
-{
-	Tiles tiles;
-
-	Vec3 pos;
-	float32 angle;
-
-	GLuint rectShader;
-	GLuint rectVAO;
-};
 
 internal GLint LoadRectVAO(const ThreadContext* thread)
 {
@@ -180,6 +156,7 @@ internal void DrawTiles(
                 1, &tiles->color[i][j].e[0]);
 
 			// TODO the 6 is hard-coded
+            // TODO also this is horrible... wow. super slow.
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
                 tiles->quadIndBuffer);
 			glDrawElements(GL_TRIANGLES,
@@ -299,6 +276,19 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			DEBUG_PANIC("LoadRectVAO failed");
 		}
 
+        gameState->textGL = InitTextGL(thread,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+
+        FT_Error error = FT_Init_FreeType(&gameState->ftLibrary);
+        if (error) {
+            DEBUG_PRINT("FreeType init error: %d\n", error);
+        }
+        gameState->fontFace = LoadFontFace(thread, gameState->ftLibrary,
+            "data/fonts/computer-modern/serif.ttf", 18,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
 	}
@@ -375,7 +365,18 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         * Scale(Vec3{ boxSize, boxSize, 1.0f });
 	DrawRect(thread, gameState->rectShader, gameState->rectVAO,
 		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
+
+    char fpsStr[128];
+    sprintf(fpsStr, "FPS: %f", 1.0f / deltaTime);
+    Vec2Int fpsPos = {
+        screenInfo.size.x - 10,
+        screenInfo.size.y - 10,
+    };
+    DEBUG_PRINT("FPS: %f\n", 1.0f / deltaTime);
+    DrawText(gameState->textGL, gameState->fontFace, screenInfo,
+        fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one);
 }
 
 #include "km_input.cpp"
 #include "opengl_base.cpp"
+#include "text.cpp"

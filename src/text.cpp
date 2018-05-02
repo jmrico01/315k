@@ -2,7 +2,6 @@
 
 #include "km_debug.h"
 #include "main.h"
-#include "ogl_base.h"
 
 #define ATLAS_DIM_MIN 128
 #define ATLAS_DIM_MAX 2048
