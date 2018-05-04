@@ -8,6 +8,5 @@ uniform sampler2D textureSampler;
 
 void main()
 {
-    outColor.rgb = texture(textureSampler, fragUV).rgb;
-    outColor.a = 1.0;
+    outColor = texture(textureSampler, fragUV);
 }

@@ -18,7 +18,8 @@ struct Win32Audio
     int bufferSizeSamples;
     int16* buffer;
 
-    int sampleLatency;
+    int minLatency;
+    int maxLatency;
 };
 
 // XAudio2 functions

@@ -20,8 +20,22 @@ struct Tiles
     GLuint shader;
 };
 
+struct AudioState
+{
+    int runningSampleIndex;
+    float32 amplitude;
+    float32 tSine1;
+    float32 tSine2;
+
+#if GAME_INTERNAL
+    bool32 debugView;
+#endif
+};
+
 struct GameState
 {
+    AudioState audioState;
+
     Tiles tiles;
 
     Vec3 pos;
@@ -30,6 +44,7 @@ struct GameState
     GLuint rectShader;
     GLuint rectVAO;
 
+    LineGL lineGL;
     TextGL textGL;
     FT_Library ftLibrary;
     FontFace fontFace;

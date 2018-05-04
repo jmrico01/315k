@@ -1,5 +1,7 @@
 #include "win32_audio.h"
 
+#include "km_debug.h"
+
 internal bool Win32InitAudio(Win32Audio* winAudio,
     int sampleRate, int channels, int bufferSizeSamples)
 {

@@ -955,20 +955,12 @@ int CALLBACK WinMain(
     DEBUG_PRINT("Initialized Win32 OpenGL\n");
 
     // Try to get monitor refresh rate
-    // TODO make this more reliable
-    int monitorRefreshHz = 60;
-    {
-        /*HDC hDC = GetDC(hWnd);
-        int win32RefreshRate = GetDeviceCaps(hDC, VREFRESH);
-        if (win32RefreshRate > 1)
-            monitorRefreshHz = win32RefreshRate;
-        ReleaseDC(hWnd, hDC);*/
-        DEVMODE devmode;
-        devmode.dmSize = sizeof(DEVMODE);
-        devmode.dmDriverExtra = 0;
-        EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devmode);
-        monitorRefreshHz = (int)devmode.dmDisplayFrequency;
-    }
+    // TODO test how reliable this is
+    DEVMODE devmode;
+    devmode.dmSize = sizeof(DEVMODE);
+    devmode.dmDriverExtra = 0;
+    EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devmode);
+    int monitorRefreshHz = (int)devmode.dmDisplayFrequency;
     DEBUG_PRINT("Refresh rate: %d\n", monitorRefreshHz);
 
     // Initialize audio
@@ -979,13 +971,10 @@ int CALLBACK WinMain(
     AUDIO_SAMPLERATE, AUDIO_CHANNELS, bufferSizeSamples)) {
         return 1;
     }
-    winAudio.sampleLatency = AUDIO_SAMPLERATE / 10;
-
-    GameAudio gameAudio = {};
-    gameAudio.sampleRate = winAudio.sampleRate;
-    gameAudio.channels = winAudio.channels;
-    gameAudio.bufferSizeSamples = gameAudio.bufferSizeSamples;
-    gameAudio.buffer = winAudio.buffer;
+    winAudio.minLatency = AUDIO_SAMPLERATE / monitorRefreshHz;
+    winAudio.maxLatency = AUDIO_SAMPLERATE / 10;
+    DEBUG_PRINT("latency: %d - %d\n", winAudio.minLatency,
+        winAudio.maxLatency);
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1073,12 +1062,8 @@ int CALLBACK WinMain(
 
     Win32GameCode gameCode =
         Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
-    
-    // TODO This is actually game-specific code
-    uint32 runningSampleIndex = 0;
-    float32 tSine1 = 0.0f;
-    float32 tSine2 = 0.0f;
-    float amplitude = 1.0f;
+
+    uint64 samplesPlayedPrev = 0;
 
     running_ = true;
     while (running_) {
@@ -1219,76 +1204,34 @@ int CALLBACK WinMain(
         }
 #endif
 
+        GameAudio gameAudio = {};
+        gameAudio.sampleRate = winAudio.sampleRate;
+        gameAudio.channels = winAudio.channels;
+        gameAudio.bufferSizeSamples = winAudio.bufferSizeSamples;
+        gameAudio.buffer = winAudio.buffer;
         XAUDIO2_VOICE_STATE voiceState;
         winAudio.sourceVoice->GetState(&voiceState);
         int playMark = (int)voiceState.SamplesPlayed
             % winAudio.bufferSizeSamples;
-        int fillTarget = (playMark + winAudio.sampleLatency)
+        gameAudio.fillStart = (playMark + winAudio.minLatency)
             % winAudio.bufferSizeSamples;
-        int writeTo = runningSampleIndex % winAudio.bufferSizeSamples;
-        int writeLen;
-        if (writeTo == fillTarget) {
-            writeLen = winAudio.bufferSizeSamples;
-        }
-        else if (writeTo > fillTarget) {
-            writeLen = winAudio.bufferSizeSamples - (writeTo - fillTarget);
-        }
-        else {
-            writeLen = fillTarget - writeTo;
-        }
-
-        float baseTone = 261.0f;
-        if (newInput->controllers[0].x.isDown) {
-            amplitude -= 0.01f;
-        }
-        if (newInput->controllers[0].b.isDown) {
-            amplitude += 0.01f;
-        }
-        amplitude = ClampFloat32(amplitude, 0.0f, 1.0f);
-        float tone1Hz = baseTone
-            * (1.0f + 0.5f * newInput->controllers[0].leftEnd.x)
-            * (1.0f + 0.1f * newInput->controllers[0].leftEnd.y);
-        float tone2Hz = baseTone
-            * (1.0f + 0.5f * newInput->controllers[0].rightEnd.x)
-            * (1.0f + 0.1f * newInput->controllers[0].rightEnd.y);
-        //DEBUG_PRINT("tone freq: %f\n", tone2Hz);
-        for (int i = 0; i < writeLen; i++) {
-            uint32 ind = (writeTo + i) % winAudio.bufferSizeSamples;
-            int16 sin1Sample = (int16)(INT16_MAXVAL * amplitude * sinf(
-                /*2.0f * PI_F * tone1Hz * t*/tSine1));
-            int16 sin2Sample = (int16)(INT16_MAXVAL * amplitude * sinf(
-                /*2.0f * PI_F * tone2Hz * t*/tSine2));
-            winAudio.buffer[ind * winAudio.channels]      = sin1Sample;
-            winAudio.buffer[ind * winAudio.channels + 1]  = sin2Sample;
-
-            tSine1 += 2.0f * PI_F * tone1Hz * 1.0f
-                / (float32)winAudio.sampleRate;
-            tSine2 += 2.0f * PI_F * tone2Hz * 1.0f
-                / (float32)winAudio.sampleRate;
-
-            //gameAudio.buffer[ind * gameAudio.channels] = sinSample2;
-
-            runningSampleIndex++;
-        }
+        gameAudio.fillLength = winAudio.maxLatency * 2 - winAudio.minLatency;
+        gameAudio.fillStartDelta = (int)(
+            voiceState.SamplesPlayed - samplesPlayedPrev);
+        samplesPlayedPrev = voiceState.SamplesPlayed;
 
         LARGE_INTEGER timerEnd;
         QueryPerformanceCounter(&timerEnd);
         uint64 cyclesEnd = __rdtsc();
-
         int64 cyclesElapsed = cyclesEnd - cyclesLast;
         int64 timerElapsed = timerEnd.QuadPart - timerLast.QuadPart;
         float32 elapsed = (float32)timerElapsed / timerFreq;
         float32 fps = (float32)timerFreq / timerElapsed;
         int mCyclesPerFrame = (int)(cyclesElapsed / (1000 * 1000));
-
-        /*DEBUG_PRINT("Rest of loop took %d ms\n",
-            elapsedMS - vsyncElapsedMS);*/
-
-        /*DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
-            elapsedMS, fps, mCyclesPerFrame);*/
-
         timerLast = timerEnd;
         cyclesLast = cyclesEnd;
+        /*DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
+            elapsed, fps, mCyclesPerFrame);*/
 
         if (gameCode.gameUpdateAndRender) {
             ThreadContext thread = {};

@@ -9,196 +9,6 @@
 #include "opengl_funcs.h"
 #include "opengl_base.h"
 
-internal GLint LoadRectVAO(const ThreadContext* thread)
-{
-	GLfloat vertData[] = {
-		0.0f, 0.0f,
-		1.0f, 0.0f,
-		1.0f, 1.0f,
-		1.0f, 1.0f,
-		0.0f, 1.0f,
-		0.0f, 0.0f
-	};
-	GLuint vertBuffer;
-	glGenBuffers(1, &vertBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertData), vertData, GL_STATIC_DRAW);
-
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
-	return vao;
-}
-
-internal void DrawRect(
-	const ThreadContext* thread,
-	GLuint rectShader, GLuint rectVAO,
-	Mat4 mvp, float32 r, float32 g, float32 b, float32 a)
-{
-	glUseProgram(rectShader);
-	glUniformMatrix4fv(
-		glGetUniformLocation(rectShader, "mvp"),
-        1, GL_FALSE, &mvp.e[0][0]);
-	glUniform4f(
-		glGetUniformLocation(rectShader, "color"),
-        r, g, b, a);
-
-	glBindVertexArray(rectVAO);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
-	glBindVertexArray(0);
-}
-
-internal void InitTiles(
-	const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory,
-	Tiles* tiles)
-{
-	for (int i = 0; i < TILES_X; i++)
-	{
-		for (int j = 0; j < TILES_Y; j++)
-		{
-			tiles->height[i][j] = 0.0f;
-			tiles->color[i][j] = Vec4{ 0.3f, 0.3f, 0.3f, 1.0f };
-		}
-	}
-	
-	// Initialize shader
-	tiles->shader = LoadShaders(thread,
-        "shaders/rectAlt.vert", "shaders/rectAlt.frag",
-		DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemory);
-
-	// Initialize VAO
-	glGenVertexArrays(1, &tiles->vao);
-	glBindVertexArray(tiles->vao);
-
-	// Vertices
-	GLfloat vertexData[] = {
-		0.0f, 0.0f,
-		1.0f, 0.0f,
-		1.0f, 1.0f,
-		0.0f, 1.0f
-	};
-	GLuint vertBuffer;
-	glGenBuffers(1, &vertBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, vertBuffer);
-	glBufferData(GL_ARRAY_BUFFER,
-        sizeof(vertexData), vertexData, GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
-	// Indices for quad rendering
-	GLuint quadIndices[] = {
-		0, 1, 2,
-		2, 3, 0
-	};
-	glGenBuffers(1, &tiles->quadIndBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tiles->quadIndBuffer);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(quadIndices), quadIndices, GL_STATIC_DRAW);
-
-	// Indices for line (quad outline) rendering
-	GLuint lineIndices[] = {
-		0, 1,
-		1, 2,
-		2, 3,
-		3, 0
-	};
-	glGenBuffers(1, &tiles->lineIndBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, tiles->lineIndBuffer);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-        sizeof(lineIndices), lineIndices, GL_STATIC_DRAW);
-
-	if (!tiles->shader) {
-		DEBUG_ASSERT(0);
-    }
-	if (!tiles->vao) {
-		DEBUG_ASSERT(0);
-    }
-	if (!tiles->quadIndBuffer) {
-		DEBUG_ASSERT(0);
-    }
-	if (!tiles->lineIndBuffer) {
-		DEBUG_ASSERT(0);
-    }
-}
-
-internal void DrawTiles(
-	const ThreadContext* thread,
-	Tiles* tiles, Mat4 vp)
-{
-	glUseProgram(tiles->shader);
-	glBindVertexArray(tiles->vao);
-
-	Vec3 offset{ -(float32)TILES_X * TILE_SIZE / 2.0f, -(float32)TILES_Y * TILE_SIZE / 2.0f, 0.0f };
-
-	for (int i = 0; i < TILES_X; i++)
-	{
-		for (int j = 0; j < TILES_Y; j++)
-		{
-			Vec3 pos;
-			pos.x = (float32)i * TILE_SIZE;
-			pos.y = (float32)j * TILE_SIZE;
-			pos.z = 0.0f;
-
-			Mat4 model = Translate(pos + offset) * Scale(Vec3{ TILE_SIZE, TILE_SIZE, 1.0f });
-            Mat4 mvp = vp * model;
-			glUniformMatrix4fv(
-				glGetUniformLocation(tiles->shader, "mvp"),
-                1, GL_FALSE, &mvp.e[0][0]);
-			glUniform4fv(
-				glGetUniformLocation(tiles->shader, "color"),
-                1, &tiles->color[i][j].e[0]);
-
-			// TODO the 6 is hard-coded
-            // TODO also this is horrible... wow. super slow.
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
-                tiles->quadIndBuffer);
-			glDrawElements(GL_TRIANGLES,
-                6, GL_UNSIGNED_INT, (void*)0);
-
-			pos.z = 0.001f;
-			model = Translate(pos + offset) * Scale(Vec3{ TILE_SIZE, TILE_SIZE, 1.0f });
-			glUniformMatrix4fv(
-				glGetUniformLocation(tiles->shader, "mvp"),
-                1, GL_FALSE, &mvp.e[0][0]);
-			Vec4 color = { 0.1f, 0.1f, 0.1f, 1.0f };
-			glUniform4fv(
-				glGetUniformLocation(tiles->shader, "color"),
-                1, &color.e[0]);
-
-			// TODO the 8 is hard-coded
-			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,
-                tiles->lineIndBuffer);
-			glDrawElements(GL_LINES,
-                8, GL_UNSIGNED_INT, (void*)0);
-		}
-	}
-
-	glBindVertexArray(0);
-}
-
-internal void TintTiles(
-	const ThreadContext* thread,
-	Tiles* tiles, Vec3 pos)
-{
-	Vec3 offset = {
-        -(float32)TILES_X * TILE_SIZE / 2.0f,
-        -(float32)TILES_Y * TILE_SIZE / 2.0f,
-        0.0f
-    };
-
-	Vec3 indices = (pos - offset) / TILE_SIZE;
-	int i = (int)indices.x;
-	int j = (int)indices.y;
-	tiles->color[i][j] = Vec4 { 0.8f, 0.3f, 0.3f, 1.0f };
-}
-
 extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 {
     // NOTE: for clarity
@@ -239,43 +49,27 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         // Depth buffer transforms -1 to 1 range to 0 to 1 range
         glDepthRange(0.0, 1.0);
 
-        glDisable(GL_BLEND);
-		
-		InitTiles(thread,
-			platformFuncs->DEBUGPlatformReadFile,
-			platformFuncs->DEBUGPlatformFreeFileMemory,
-			&gameState->tiles);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		gameState->pos.x = 0.0f;
-		gameState->pos.y = 0.0f;
-		gameState->pos.z = 0.0f;
+        // Initialize audio state
+        gameState->audioState.runningSampleIndex = 0;
+        gameState->audioState.amplitude = 0.1f;
+        gameState->audioState.tSine1 = 0.0f;
+        gameState->audioState.tSine2 = 0.0f;
+#if GAME_INTERNAL
+        gameState->audioState.debugView = false;
+#endif
+
+		gameState->pos = Vec3::zero;
 
 		// Isometric angle to which completely upward-facing
 		// 90 degree angles get transformed
 		gameState->angle = 2.0f * PI_F / 3.0f;
 
-		gameState->rectShader = LoadShaders(thread,
-            "shaders/rect.vert", "shaders/rect.frag",
-			platformFuncs->DEBUGPlatformReadFile,
+        gameState->lineGL = InitLineGL(thread,
+            platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
-		/*GLfloat rectPosData[] = {
-			0.0f, 0.0f,
-			1.0f, 0.0f,
-			1.0f, 1.0f,
-			1.0f, 1.0f,
-			0.0f, 1.0f,
-			0.0f, 0.0f
-		};*/
-		gameState->rectVAO = LoadRectVAO(thread);
-		if (!gameState->rectShader) {
-			// TODO logging / EXIT GAME! no way to do this yet...
-			DEBUG_PANIC("LoadShaders failed");
-		}
-		if (!gameState->rectVAO) {
-			// TODO logging / exit
-			DEBUG_PANIC("LoadRectVAO failed");
-		}
-
         gameState->textGL = InitTextGL(thread,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
@@ -346,8 +140,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		Translate(-gameState->pos) *
 		Scale(Vec3 { 1.0f, 1.0f, -1.0f });
 
-	TintTiles(thread, &gameState->tiles, gameState->pos);
-	DrawTiles(thread, &gameState->tiles, proj * view);
+    proj = Mat4::one;
+    view = Translate(-gameState->pos);
 
 	float32 boxSize = 0.1f;
 	float32 boxGray = 0.5f;
@@ -356,7 +150,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		boxGray = 1.0f;
     }
 
-	Vec3 centeredPos = {
+	/*Vec3 centeredPos = {
         gameState->pos.x - boxSize / 2.0f,
 		gameState->pos.y - boxSize / 2.0f,
 		0.01f
@@ -364,7 +158,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	Mat4 playerMat = Translate(centeredPos)
         * Scale(Vec3{ boxSize, boxSize, 1.0f });
 	DrawRect(thread, gameState->rectShader, gameState->rectVAO,
-		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);
+		proj * view * playerMat, boxGray, boxGray, boxGray, 1.0f);*/
 
     char fpsStr[128];
     sprintf(fpsStr, "FPS: %f", 1.0f / deltaTime);
@@ -372,9 +166,84 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         screenInfo.size.x - 10,
         screenInfo.size.y - 10,
     };
-    DEBUG_PRINT("FPS: %f\n", 1.0f / deltaTime);
     DrawText(gameState->textGL, gameState->fontFace, screenInfo,
         fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one);
+
+    // Audio output
+    float32 baseTone = 261.0f;
+    float32 tone1Hz = baseTone
+        * (1.0f + 0.5f * input->controllers[0].leftEnd.x)
+        * (1.0f + 0.1f * input->controllers[0].leftEnd.y);
+    float32 tone2Hz = baseTone
+        * (1.0f + 0.5f * input->controllers[0].rightEnd.x)
+        * (1.0f + 0.1f * input->controllers[0].rightEnd.y);
+
+    AudioState* audioState = &gameState->audioState;
+    if (input->controllers[0].x.isDown) {
+        audioState->amplitude -= 0.01f;
+    }
+    if (input->controllers[0].b.isDown) {
+        audioState->amplitude += 0.01f;
+    }
+    audioState->amplitude = ClampFloat32(audioState->amplitude, 0.0f, 1.0f);
+    audioState->runningSampleIndex += audio->fillStartDelta;
+    audioState->tSine1 += 2.0f * PI_F * tone1Hz
+        * audio->fillStartDelta / audio->sampleRate;
+    audioState->tSine2 += 2.0f * PI_F * tone2Hz
+        * audio->fillStartDelta / audio->sampleRate;
+
+    for (int i = 0; i < audio->fillLength; i++) {
+        float32 tSine1Off = 2.0f * PI_F * tone1Hz
+            * i / audio->sampleRate;
+        float32 tSine2Off = 2.0f * PI_F * tone2Hz
+            * i / audio->sampleRate;
+        uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
+        int16 sin1Sample = (int16)(INT16_MAXVAL * audioState->amplitude * sinf(
+            audioState->tSine1 + tSine1Off));
+        int16 sin2Sample = (int16)(INT16_MAXVAL * audioState->amplitude * sinf(
+            audioState->tSine2 + tSine2Off));
+        audio->buffer[ind * audio->channels]      = sin1Sample;
+        audio->buffer[ind * audio->channels + 1]  = sin2Sample;
+    }
+
+#if GAME_INTERNAL
+    if (WasKeyPressed(input, KM_KEY_G)) {
+        audioState->debugView = !audioState->debugView;
+    }
+    if (audioState->debugView) {
+        DEBUG_ASSERT(memory->transientStorageSize >= sizeof(LineGLData));
+        DEBUG_ASSERT(audio->bufferSizeSamples <= MAX_LINE_POINTS);
+        LineGLData* lineData = (LineGLData*)memory->transientStorage;
+        lineData->count = audio->bufferSizeSamples;
+        float32 length = 1.0f;
+        float32 height = 1.0f;
+        float32 offset = 1.0f;
+        for (int i = 0; i < audio->bufferSizeSamples; i++) {
+            int16 val = audio->buffer[i * audio->channels];
+            float32 normVal = (float32)val / INT16_MAXVAL;
+            float32 t = (float32)i / (audio->bufferSizeSamples - 1);
+            lineData->pos[i] = {
+                t * length - length / 2.0f,
+                height * normVal + offset,
+                0.0f
+            };
+        }
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, Vec4::one);
+        for (int i = 0; i < audio->bufferSizeSamples; i++) {
+            int16 val = audio->buffer[i * audio->channels + 1];
+            float32 normVal = (float32)val / INT16_MAXVAL;
+            float32 t = (float32)i / (audio->bufferSizeSamples - 1);
+            lineData->pos[i] = {
+                t * length - length / 2.0f,
+                height * normVal - offset,
+                0.0f
+            };
+        }
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, Vec4::one);
+    }
+#endif
 }
 
 #include "km_input.cpp"

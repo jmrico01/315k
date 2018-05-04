@@ -4,6 +4,8 @@
 #include "opengl.h"
 #include "km_math.h"
 
+#define MAX_LINE_POINTS 100000
+
 struct RectGL
 {
     GLuint vertexArray;
@@ -46,6 +48,12 @@ struct RectCoordsNDC
     Vec2 size;
 };
 
+struct LineGLData
+{
+    Vec3 pos[MAX_LINE_POINTS];
+    int count;
+};
+
 RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size,
     ScreenInfo screenInfo);
 RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size, Vec2 anchor,
@@ -77,9 +85,11 @@ void DrawRect(RectGL rectGL, ScreenInfo screenInfo,
     Vec2Int pos, Vec2 anchor, Vec2Int size, Vec4 color);
 void DrawTexturedRect(TexturedRectGL texturedRectGL, ScreenInfo screenInfo,
     Vec2Int pos, Vec2 anchor, Vec2Int size, GLuint texture);
-void DrawLine(LineGL lineGL,
-    Mat4 proj, Mat4 view, Vec3 v1, Vec3 v2, Vec4 color);
 void DrawPlane(PlaneGL,
     Mat4 vp, Vec3 point, Vec3 normal, Vec4 color);
 void DrawBox(BoxGL boxGL,
     Mat4 vp, Vec3 min, Vec3 max, Vec4 color);
+
+// Batch functions
+void DrawLine(LineGL lineGL,
+    Mat4 proj, Mat4 view, const LineGLData* lineData, Vec4 color);

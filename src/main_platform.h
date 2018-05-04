@@ -100,6 +100,10 @@ struct GameAudio
     int channels;
     int bufferSizeSamples;
     int16* buffer;
+
+    int fillStart;
+    int fillLength;
+    int fillStartDelta;
 };
 
 struct PlatformFunctions
