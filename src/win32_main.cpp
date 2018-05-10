@@ -971,10 +971,20 @@ int CALLBACK WinMain(
     AUDIO_SAMPLERATE, AUDIO_CHANNELS, bufferSizeSamples)) {
         return 1;
     }
-    winAudio.minLatency = AUDIO_SAMPLERATE / monitorRefreshHz;
+    winAudio.minLatency = AUDIO_SAMPLERATE / monitorRefreshHz / 2;
     winAudio.maxLatency = AUDIO_SAMPLERATE / 10;
     DEBUG_PRINT("latency: %d - %d\n", winAudio.minLatency,
         winAudio.maxLatency);
+
+#if GAME_INTERNAL
+    // Debug audio output recording
+    Win32AudioRecording audioRecording;
+    audioRecording.recording = false;
+    audioRecording.bufferSizeSamples = 0;
+    audioRecording.buffer = (int16*)VirtualAlloc(0,
+        AUDIO_RECORDING_MAX_SAMPLES * winAudio.channels * sizeof(int16),
+        MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+#endif
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1203,7 +1213,6 @@ int CALLBACK WinMain(
             gameMemory.isInitialized = false;
         }
 #endif
-
         GameAudio gameAudio = {};
         gameAudio.sampleRate = winAudio.sampleRate;
         gameAudio.channels = winAudio.channels;
@@ -1211,6 +1220,29 @@ int CALLBACK WinMain(
         gameAudio.buffer = winAudio.buffer;
         XAUDIO2_VOICE_STATE voiceState;
         winAudio.sourceVoice->GetState(&voiceState);
+
+#if GAME_INTERNAL
+        if (WasKeyPressed(newInput, KM_KEY_R)) {
+            audioRecording.recording = !audioRecording.recording;
+            if (audioRecording.recording) {
+                DEBUG_PRINT("Started recording audio\n");
+            }
+            else {
+                DEBUG_PRINT("Stopped recording audio\n");
+            }
+        }
+#endif
+
+        // Audio request setup:
+        // Windows requests the game to fill up a specific section of the
+        // circular buffer which XAudio2 is playing.
+        // This section will always be
+        //  [playMark + minLatency, playMark + maxLatency * 2]
+        // This is passed with two parameters:
+        //  fillStart (playMark + minLatency)
+        //  fillLength (maxLatency * 2 - minLatency)
+        // This allows for smooth audio playback as long as frame updates
+        // take between minLatency and maxLatency to complete.
         int playMark = (int)voiceState.SamplesPlayed
             % winAudio.bufferSizeSamples;
         gameAudio.fillStart = (playMark + winAudio.minLatency)

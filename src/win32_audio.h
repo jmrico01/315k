@@ -33,3 +33,16 @@ internal XAudio2CreateFunc* xAudio2Create_ = NULL;
 
 internal bool Win32InitAudio(Win32Audio* winAudio,
     int sampleRate, int channels, int bufferSizeSamples);
+
+#if GAME_INTERNAL
+
+#define AUDIO_RECORDING_MAX_SAMPLES (AUDIO_SAMPLERATE * 30)
+
+struct Win32AudioRecording
+{
+    bool32 recording;
+    int bufferSizeSamples;
+    int16* buffer;
+};
+
+#endif
