@@ -40,6 +40,7 @@ paths["src-shaders"]    = paths["src"] + "/shaders"
 # Main source files
 paths["main-cpp"]       = paths["src"] + "/main.cpp"
 paths["linux-main-cpp"] = paths["src"] + "/linux_main.cpp"
+paths["macos-main-mm"] = paths["src"] + "/macos_main.mm"
 paths["win32-main-cpp"] = paths["src"] + "/win32_main.cpp"
 
 # Source hashes for if-changed compilation
@@ -237,9 +238,15 @@ def LinuxRun():
     os.system(paths["build"] + os.sep + PROJECT_NAME + "_linux")
 
 def MacCompileDebug():
+    macros = " ".join([
+        "-DGAME_INTERNAL=1",
+        "-DGAME_SLOW=1",
+        "-DGAME_MACOS"
+    ])
     compilerFlags = " ".join([
         "-std=c++11",       # use C++11 standard
-        "-ggdb3",           # generate level 3 (max) GDB debug info.
+        "-g",
+        #"-ggdb3",           # generate level 3 (max) GDB debug info.
         "-fno-rtti",        # disable run-time type info
         "-fno-exceptions"   # disable C++ exceptions (ew)
     ])
@@ -248,27 +255,73 @@ def MacCompileDebug():
         "-Wall",    # enable all warnings
 
         # disable the following warnings:
+        "-Wno-missing-braces" # braces around initialization of subobject (?!)
+        #"-Wno-char-subscripts" # using char as an array subscript
     ])
     includePaths = " ".join([
+        #"-I" + paths["include-glew"],
+        #"-I" + paths["include-glfw"],
+        #"-I" + paths["include-freetype"],
+        #"-I" + paths["include-lodepng"]
     ])
 
+    frameworks = " ".join([
+        "-framework Cocoa",
+        "-framework OpenGL"
+    ])
+    """
+    linkerFlags = " ".join([
+        "-fvisibility=hidden"
+    ])
     libPaths = " ".join([
+        #"-L" + paths["lib-glfw-linux"],
+        #"-L" + paths["lib-ft-linux"]
     ])
     libs = " ".join([
+        # main external libs
+        #"-lfreetype",
+
+        "-lm",      # math
+        "-ldl",     # dynamic linking loader
+        "-lGL",     # OpenGL
+        "-lX11",    # X11
+        "-lasound", # ALSA lib
+        "-lpthread"
+
+        # FreeType dependencies
+        #"-lz",
+        #"-lpng"
     ])
+    """
+
+    #pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
+    """
+    compileLibCommand = " ".join([
+        "gcc",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "-shared", "-fPIC", paths["main-cpp"],
+        "-o " + PROJECT_NAME + "_game.so"
+    ])
+    """
 
     compileCommand = " ".join([
-        "g++",
-        compilerFlags, compilerWarningFlags, includePaths,
-        paths["main-cpp"], "-o opengl",
-        libPaths, libs
+        "clang", "-DGAME_PLATFORM_CODE",
+        macros, compilerFlags, compilerWarningFlags, #includePaths,
+        frameworks,
+        paths["macos-main-mm"],
+        "-o " + PROJECT_NAME + "_macos"
+        #linkerFlags, libPaths, libs
     ])
 
     os.system("bash -c \"" + " ; ".join([
         "pushd " + paths["build"] + " > /dev/null",
+        #compileLibCommand,
         compileCommand,
         "popd > /dev/null"
     ]) + "\"")
+
+def MacRun():
+    os.system(paths["build"] + os.sep + PROJECT_NAME + "_macos")
 
 def FileMD5(filePath):
     md5 = hashlib.md5()
@@ -310,6 +363,8 @@ def Debug():
         WinCompileDebug()
     elif platformName == "Linux":
         LinuxCompileDebug()
+    elif platformName == "Darwin":
+        MacCompileDebug()
     else:
         print("Unsupported platform: " + platformName)
         
@@ -368,6 +423,8 @@ def Run():
         WinRun()
     elif platformName == "Linux":
         LinuxRun()
+    elif platformName == "Darwin":
+        MacRun()
     else:
         print("Unsupported platform: " + platformName)
 
