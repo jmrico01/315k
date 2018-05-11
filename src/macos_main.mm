@@ -14,14 +14,6 @@
 #include "km_defines.h"
 #include "km_debug.h"
 
-//#define Maximum(A, B) ((A > B) ? (A) : (B))
-
-//#import "handmade_platform.h"
-//#import "handmade_memory.h"
-//#import "osx_handmade.h"
-
-//#import "handmade_intrinsics.h"
-
 // Let the command line override
 //#ifndef HANDMADE_USE_VSYNC
 //#define HANDMADE_USE_VSYNC 1
@@ -31,23 +23,15 @@ global_var bool32 running_;
 global_var NSOpenGLContext* glContext_;
 global_var NSString* pathToApp_;
 
-///////////////////////////////////////////////////////////////////////
-// Application Delegate
-
 @interface KMAppDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
 @end
 
 @implementation KMAppDelegate
 
-
-///////////////////////////////////////////////////////////////////////
-// Application delegate methods
-//
 - (void)applicationDidFinishLaunching:(id)sender
 {
 	#pragma unused(sender)
 }
-
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender
 {
@@ -55,49 +39,15 @@ global_var NSString* pathToApp_;
 	return YES;
 }
 
-
 - (void)applicationWillTerminate:(NSApplication*)sender
 {
 	#pragma unused(sender)
 }
 
-
-
-///////////////////////////////////////////////////////////////////////
-// Window delegate methods
-//
 - (void)windowWillClose:(id)sender
 {
 	running_ = false;
 }
-
-
-- (NSSize)windowWillResize:(NSWindow*)window
-                    toSize:(NSSize)frameSize
-{
-	// Maintain the proper aspect ratio...
-	//frameSize.height = frameSize.width / GlobalAspectRatio;
-
-	/*NSRect windowRect = [window frame];
-	NSRect contentRect = [window contentRectForFrameRect:windowRect];
-
-	float32 widthAdd = (windowRect.size.width - contentRect.size.width);
-	float32 heightAdd = (windowRect.size.height - contentRect.size.height);
-
-	float32 renderWidth = 1920.0f;
-	float32 renderHeight = 1080.0f;
-	//r32 RenderWidth = 2560;
-	//r32 RenderHeight = 1440;
-
-	float32 newCy = (renderHeight * (frameSize.width - widthAdd))
-		/ renderWidth;
-
-	frameSize.height = newCy + heightAdd;
-
-	return frameSize;*/
-	return frameSize;
-}
-
 
 #if 0
 - (void)windowDidResize:(NSNotification*)notification
@@ -119,22 +69,18 @@ global_var NSString* pathToApp_;
 #endif
 
 @end
-//
-// Application Delegate
-///////////////////////////////////////////////////////////////////////
 
-
-void OSXCreateMainMenu()
+void MacOSCreateMainMenu()
 {
 	// Create the Menu. Two options right now:
-	//   Toggle Full Screen
-	//   Quit
-    NSMenu* menubar = [NSMenu new];
+	//	Toggle Full Screen
+	//  Quit
+    NSMenu* menu = [NSMenu new];
 
 	NSMenuItem* appMenuItem = [NSMenuItem new];
-	[menubar addItem:appMenuItem];
+	[menu addItem:appMenuItem];
 
-	[NSApp setMainMenu:menubar];
+	[NSApp setMainMenu:menu];
 
 	NSMenu* appMenu = [NSMenu new];
 
@@ -156,7 +102,7 @@ void OSXCreateMainMenu()
     [appMenuItem setSubmenu:appMenu];
 }
 
-void OSXKeyProcessing(bool32 isDown, uint32 key,
+void MacOSKeyProcessing(bool32 isDown, uint32 key,
 	int commandKeyFlag, int ctrlKeyFlag, int altKeyFlag,
 	GameInput* input)
 {
@@ -165,7 +111,7 @@ void OSXKeyProcessing(bool32 isDown, uint32 key,
 	}
 }
 
-void OSXProcessPendingMessages(GameInput* input)
+void MacOSProcessPendingMessages(GameInput* input)
 {
 	NSEvent* event;
 
@@ -185,7 +131,7 @@ void OSXProcessPendingMessages(GameInput* input)
 
 				int KeyDownFlag = 1;
 
-				OSXKeyProcessing(KeyDownFlag, ch,
+				MacOSKeyProcessing(KeyDownFlag, ch,
 					commandKeyFlag, ctrlKeyFlag, altKeyFlag,
 					input);
 			} break;
@@ -199,7 +145,7 @@ void OSXProcessPendingMessages(GameInput* input)
 
 				int KeyDownFlag = 0;
 
-				OSXKeyProcessing(KeyDownFlag, ch,
+				MacOSKeyProcessing(KeyDownFlag, ch,
 					commandKeyFlag, ctrlKeyFlag, altKeyFlag,
 					input);
 			} break;
@@ -273,7 +219,7 @@ int main(int argc, const char* argv[])
 	NSApplication* app = [NSApplication sharedApplication];
 	[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
-	OSXCreateMainMenu();
+	MacOSCreateMainMenu();
 
 	pathToApp_ = [[NSFileManager defaultManager] currentDirectoryPath];
 	NSLog(@"Path to executable: %@", pathToApp_);
@@ -393,7 +339,7 @@ int main(int argc, const char* argv[])
 	running_ = true;
 
 	while (running_) {
-		OSXProcessPendingMessages(newInput);
+		MacOSProcessPendingMessages(newInput);
 
 		[glContext_ makeCurrentContext];
 
