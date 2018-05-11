@@ -1,6 +1,8 @@
 #include "macos_main.h"
 
+#undef internal
 #include <Cocoa/Cocoa.h>
+#define internal static
 
 #import <OpenGL/OpenGL.h>
 #import <OpenGL/gl.h>
@@ -57,8 +59,6 @@ global_var NSString* pathToApp_;
 - (void)applicationWillTerminate:(NSApplication*)sender
 {
 	#pragma unused(sender)
-
-	printf("applicationWillTerminate\n");
 }
 
 
@@ -68,9 +68,7 @@ global_var NSString* pathToApp_;
 //
 - (void)windowWillClose:(id)sender
 {
-	printf("Main window will close. Stopping game.\n");
-
-	//OSXStopGame();
+	running_ = false;
 }
 
 
@@ -80,7 +78,7 @@ global_var NSString* pathToApp_;
 	// Maintain the proper aspect ratio...
 	//frameSize.height = frameSize.width / GlobalAspectRatio;
 
-	NSRect windowRect = [window frame];
+	/*NSRect windowRect = [window frame];
 	NSRect contentRect = [window contentRectForFrameRect:windowRect];
 
 	float32 widthAdd = (windowRect.size.width - contentRect.size.width);
@@ -96,6 +94,7 @@ global_var NSString* pathToApp_;
 
 	frameSize.height = newCy + heightAdd;
 
+	return frameSize;*/
 	return frameSize;
 }
 
@@ -157,113 +156,12 @@ void OSXCreateMainMenu()
     [appMenuItem setSubmenu:appMenu];
 }
 
-void OSXKeyProcessing(bool32 IsDown, uint32 Key,
-	int CommandKeyFlag, int ControlKeyFlag, int AlternateKeyFlag,
-	game_input* Input, osx_game_data* GameData)
+void OSXKeyProcessing(bool32 isDown, uint32 key,
+	int commandKeyFlag, int ctrlKeyFlag, int altKeyFlag,
+	GameInput* input)
 {
-	game_controller_input* Controller = GetController(Input, 0);
-
-	switch (Key)
-	{
-		case 'w':
-			OSXProcessKeyboardMessage(&Controller->MoveUp, IsDown);
-			break;
-
-		case 'a':
-			OSXProcessKeyboardMessage(&Controller->MoveLeft, IsDown);
-			break;
-
-		case 's':
-			OSXProcessKeyboardMessage(&Controller->MoveDown, IsDown);
-			break;
-
-		case 'd':
-			OSXProcessKeyboardMessage(&Controller->MoveRight, IsDown);
-			break;
-
-		case 'q':
-			if (IsDown && CommandKeyFlag)
-			{
-				OSXStopGame();
-			}
-			else
-			{
-				OSXProcessKeyboardMessage(&Controller->LeftShoulder, IsDown);
-			}
-			break;
-
-		case 'e':
-			OSXProcessKeyboardMessage(&Controller->RightShoulder, IsDown);
-			break;
-
-		case ' ':
-			OSXProcessKeyboardMessage(&Controller->Start, IsDown);
-			break;
-
-		case 27:
-			OSXProcessKeyboardMessage(&Controller->Back, IsDown);
-			break;
-
-		case 0xF700: //NSUpArrowFunctionKey
-			OSXProcessKeyboardMessage(&Controller->ActionUp, IsDown);
-			break;
-
-		case 0xF702: //NSLeftArrowFunctionKey
-			OSXProcessKeyboardMessage(&Controller->ActionLeft, IsDown);
-			break;
-
-		case 0xF701: //NSDownArrowFunctionKey
-			OSXProcessKeyboardMessage(&Controller->ActionDown, IsDown);
-			break;
-
-		case 0xF703: //NSRightArrowFunctionKey
-			OSXProcessKeyboardMessage(&Controller->ActionRight, IsDown);
-			break;
-
-#if HANDMADE_INTERNAL
-		case 'p':
-			if (IsDown)
-			{
-				OSXToggleGlobalPause();
-			}
-			break;
-
-		case 'l':
-#if 1
-			if (IsDown)
-			{
-				osx_state* OSXState = &GlobalOSXState;
-
-				if (CommandKeyFlag)
-				{
-					OSXBeginInputPlayback(OSXState, 1);
-				}
-				else
-				{
-					if (OSXState->InputPlayingIndex == 0)
-					{
-						if (OSXState->InputRecordingIndex == 0)
-						{
-							OSXBeginRecordingInput(OSXState, 1);
-						}
-						else
-						{
-							OSXEndRecordingInput(OSXState);
-							OSXBeginInputPlayback(OSXState, 1);
-						}
-					}
-					else
-					{
-						OSXEndInputPlayback(OSXState);
-					}
-				}
-			}
-#endif
-			break;
-#endif
-		default:
-			return;
-			break;
+	if (key == 'q' && isDown && commandKeyFlag) {
+		running_ = false;
 	}
 }
 
@@ -279,29 +177,29 @@ void OSXProcessPendingMessages(GameInput* input)
 
 		switch ([event type]) {
 			case NSKeyDown: {
-				unichar c = [[event charactersIgnoringModifiers] characterAtIndex:0];
+				unichar ch = [[event charactersIgnoringModifiers] characterAtIndex:0];
 				int modifierFlags = [event modifierFlags];
-				int commandKeyFlag = ModifierFlags & NSCommandKeyMask;
-				int ctrlKeyFlag = ModifierFlags & NSControlKeyMask;
-				int altKeyFlag = ModifierFlags & NSAlternateKeyMask;
+				int commandKeyFlag = modifierFlags & NSCommandKeyMask;
+				int ctrlKeyFlag = modifierFlags & NSControlKeyMask;
+				int altKeyFlag = modifierFlags & NSAlternateKeyMask;
 
 				int KeyDownFlag = 1;
 
-				OSXKeyProcessing(KeyDownFlag, C,
+				OSXKeyProcessing(KeyDownFlag, ch,
 					commandKeyFlag, ctrlKeyFlag, altKeyFlag,
 					input);
 			} break;
 
 			case NSKeyUp: {
-				unichar c = [[event charactersIgnoringModifiers] characterAtIndex:0];
+				unichar ch = [[event charactersIgnoringModifiers] characterAtIndex:0];
 				int modifierFlags = [event modifierFlags];
-				int commandKeyFlag = ModifierFlags & NSCommandKeyMask;
-				int ctrlKeyFlag = ModifierFlags & NSControlKeyMask;
-				int altKeyFlag = ModifierFlags & NSAlternateKeyMask;
+				int commandKeyFlag = modifierFlags & NSCommandKeyMask;
+				int ctrlKeyFlag = modifierFlags & NSControlKeyMask;
+				int altKeyFlag = modifierFlags & NSAlternateKeyMask;
 
 				int KeyDownFlag = 0;
 
-				OSXKeyProcessing(KeyDownFlag, C,
+				OSXKeyProcessing(KeyDownFlag, ch,
 					commandKeyFlag, ctrlKeyFlag, altKeyFlag,
 					input);
 			} break;
@@ -324,7 +222,6 @@ void OSXProcessPendingMessages(GameInput* input)
 - (id)init
 {
 	self = [super init];
-
 	return self;
 }
 
@@ -344,6 +241,7 @@ void OSXProcessPendingMessages(GameInput* input)
 	[glContext_ makeCurrentContext];
 	[glContext_ update];
 	glViewport(0, 0, bounds.size.width, bounds.size.height);
+	NSLog(@"glViewport called on resize");
 
 #if 0
 	printf("KMOpenGLView reshape: [%.0f, %.0f] [%.0f, %.0f]\n",
@@ -377,8 +275,8 @@ int main(int argc, const char* argv[])
 
 	OSXCreateMainMenu();
 
-	NSString *dir = [[NSFileManager defaultManager] currentDirectoryPath];
-	NSLog(@"Path to executable: %@", dir);
+	pathToApp_ = [[NSFileManager defaultManager] currentDirectoryPath];
+	NSLog(@"Path to executable: %@", pathToApp_);
 
 	NSFileManager* fileManager = [NSFileManager defaultManager];
 	NSString* appPath = [NSString stringWithFormat:@"%@/Contents/Resources",
@@ -392,8 +290,7 @@ int main(int argc, const char* argv[])
 	[app setDelegate:appDelegate];
     [NSApp finishLaunching];
 
-    NSOpenGLPixelFormatAttribute openGLAttributes[] =
-    {
+    NSOpenGLPixelFormatAttribute openGLAttributes[] = {
         NSOpenGLPFAAccelerated,
         NSOpenGLPFADoubleBuffer, // Enable for vsync
 		NSOpenGLPFAColorSize, 24,
@@ -482,6 +379,9 @@ int main(int argc, const char* argv[])
 	[[window contentView] enterFullScreenMode:[NSScreen mainScreen] withOptions:fullScreenOptions];
 #endif
 
+	GameInput input[2];
+	GameInput* newInput = &input[0];
+	GameInput* oldInput = &input[1];
 
 	///////////////////////////////////////////////////////////////////
 	// Run loop
@@ -492,10 +392,8 @@ int main(int argc, const char* argv[])
 	//float32 frameTime = 0.0f;
 	running_ = true;
 
-	while (running_)
-	{
-		//OSXProcessPendingMessages(&GameData);
-		OSXProcessPendingMessages();
+	while (running_) {
+		OSXProcessPendingMessages(newInput);
 
 		[glContext_ makeCurrentContext];
 
@@ -513,13 +411,12 @@ int main(int argc, const char* argv[])
 		BOOL mouseInWindowFlag = NSPointInRect(mousePosInScreen, windowFrame);
 		CGPoint mousePosInView = {};
 
-		if (mouseInWindowFlag)
-		{
+		if (mouseInWindowFlag) {
 			// NOTE(jeff): Use this instead of convertRectFromScreen: if you want to support Snow Leopard
 			// NSPoint PointInWindow = [[self window] convertScreenToBase:[NSEvent mouseLocation]];
 
-			// We don't actually care what the mouse screen coordinates are, we just want the
-			// coordinates relative to the content view
+			// We don't actually care what the mouse screen coordinates are,
+			// we just want the coordinates relative to the content view
 			NSRect rectInWindow = [window convertRectFromScreen:NSMakeRect(mousePosInScreen.x, mousePosInScreen.y, 1, 1)];
 			NSPoint pointInWindow = rectInWindow.origin;
 			mousePosInView = [[window contentView]
@@ -534,7 +431,7 @@ int main(int argc, const char* argv[])
 
 		// flushes and forces vsync
 		glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		[glContext_ flushBuffer];
 		//glFlush(); // no vsync
 
@@ -549,6 +446,11 @@ int main(int argc, const char* argv[])
 
 		//frameTime += MeasuredSecondsPerFrame;
 		//GameData.LastCounter = EndCounter;
+
+		GameInput* temp = newInput;
+		newInput = oldInput;
+		oldInput = temp;
+		ClearInput(newInput, oldInput);
 
 #if 0
 		++tickCounter;
@@ -567,3 +469,5 @@ int main(int argc, const char* argv[])
 
 	} // @autoreleasepool
 }
+
+#include "km_input.cpp"
