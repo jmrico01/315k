@@ -907,7 +907,6 @@ int CALLBACK WinMain(
 
     Win32State state = {};
     Win32GetExeFilePath(&state);
-
     RemoveFileNameFromPath(state.exeFilePath, pathToApp_, MAX_PATH);
     DEBUG_PRINT("Path to executable: %s\n", pathToApp_);
 
