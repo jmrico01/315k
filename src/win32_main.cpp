@@ -1301,5 +1301,5 @@ int CALLBACK WinMain(
 
 #include "win32_audio.cpp"
 
-// TODO temporary! this is a bad idea! already compiled in main.cpp
+// TODO temporary! this is a bad idea! already compiled in main.cppc
 #include "km_input.cpp"
