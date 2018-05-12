@@ -14,21 +14,10 @@ struct LinuxWindowDimension
     uint32 Height;
 };
 
-struct LinuxGameCode
-{
-    void* gameLibHandle;
-    ino_t gameLibId;
-
-    // NOTE: Callbacks can be 0!  You must check before calling
-    GameUpdateAndRenderFunc* gameUpdateAndRender;
-
-    bool32 isValid;
-};
-
 struct LinuxState
 {
-	uint64 gameMemorySize;
-	void* gameMemoryBlock;
+    uint64 gameMemorySize;
+    void* gameMemoryBlock;
 
     int32 recordingHandle;
     int32 inputRecordingIndex;
@@ -38,4 +27,16 @@ struct LinuxState
 
     char exeFilePath[LINUX_STATE_FILE_NAME_COUNT];
     char* exeOnePastLastSlash;
+};
+
+
+struct LinuxGameCode
+{
+    void* gameLibHandle;
+    ino_t gameLibId;
+
+    // NOTE: Callbacks can be 0!  You must check before calling
+    GameUpdateAndRenderFunc* gameUpdateAndRender;
+
+    bool32 isValid;
 };

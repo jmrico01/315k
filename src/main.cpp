@@ -143,7 +143,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     proj = Mat4::one;
     view = Translate(-gameState->pos);
 
-	float32 boxSize = 0.1f;
+	//float32 boxSize = 0.1f;
 	float32 boxGray = 0.5f;
 
 	if (input->controllers[0].a.isDown) {

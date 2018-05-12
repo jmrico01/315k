@@ -81,13 +81,23 @@ internal void* MacOSLoadLibrary(const char* libName)
     return handle;
 }
 
-/*internal void MacOSUnloadLibrary(void* handle)
+internal void MacOSUnloadLibrary(void* handle)
 {
     if (handle != NULL) {
         dlclose(handle);
         handle = NULL;
     }
-}*/
+}
+
+internal inline ino_t MacOSFileId(const char* fileName)
+{
+    struct stat attr = {};
+    if (stat(fileName, &attr)) {
+        attr.st_ino = 0;
+    }
+
+    return attr.st_ino;
+}
 
 #if GAME_INTERNAL
 
@@ -281,6 +291,43 @@ internal bool32 MacOSInitOpenGL(
     return true;
 }
 
+// Dynamic code loading
+internal bool32 MacOSLoadGameCode(
+    MacOSGameCode* gameCode, const char* libName, ino_t fileId)
+{
+    if (gameCode->gameLibId != fileId) {
+        MacOSUnloadLibrary(gameCode->gameLibHandle);
+        gameCode->gameLibId = fileId;
+        gameCode->isValid = false;
+
+        gameCode->gameLibHandle = MacOSLoadLibrary(libName);
+        if (gameCode->gameLibHandle) {
+            *(void**)(&gameCode->gameUpdateAndRender) = MacOSLoadFunction(
+                gameCode->gameLibHandle, "GameUpdateAndRender");
+            if (gameCode->gameUpdateAndRender) {
+                gameCode->isValid = true;
+            }
+        }
+    }
+
+    if (!gameCode->isValid) {
+        MacOSUnloadLibrary(gameCode->gameLibHandle);
+        gameCode->gameLibId = 0;
+        gameCode->gameUpdateAndRender = 0;
+    }
+
+    return gameCode->isValid;
+}
+
+/*internal void MacOSUnloadGameCode(MacOSGameCode *gameCode)
+{
+    MacOSUnloadLibrary(gameCode->gameLibHandle);
+    gameCode->gameLibId = 0;
+    gameCode->isValid = false;
+    gameCode->gameUpdateAndRender = 0;
+}*/
+
+
 @interface KMAppDelegate : NSObject<NSApplicationDelegate, NSWindowDelegate>
 @end
 
@@ -471,24 +518,26 @@ int main(int argc, const char* argv[])
 	MacOSCreateMainMenu();
 
 	NSString* path = [[NSFileManager defaultManager] currentDirectoryPath];
+	path = [NSString stringWithFormat:@"%@/",
+		[[NSBundle mainBundle] bundlePath]];
 	const char* pathStr = [path UTF8String];
 	strncpy(pathToApp_, pathStr, [path length]);
 	DEBUG_PRINT("Path to application: %s", pathToApp_);
 
-	NSFileManager* fileManager = [NSFileManager defaultManager];
+	/*NSFileManager* fileManager = [NSFileManager defaultManager];
 	NSString* appPath = [NSString stringWithFormat:@"%@/Contents/Resources",
 		[[NSBundle mainBundle] bundlePath]];
 	if ([fileManager changeCurrentDirectoryPath:appPath] == NO) {
 		// TODO fix this, it's crashing
 		//DEBUG_PANIC("Failed to change application data path\n");
-	}
+	}*/
 
 	KMAppDelegate* appDelegate = [[KMAppDelegate alloc] init];
 	[app setDelegate:appDelegate];
     [NSApp finishLaunching];
     DEBUG_PRINT("Finished launching NSApp\n");
 
-    NSOpenGLPixelFormatAttribute openGLAttributes[] = {
+    NSOpenGLPixelFormatAttribute openGLAttributesAccel[] = {
         NSOpenGLPFAAccelerated,
         NSOpenGLPFADoubleBuffer, // Enable for vsync
 		NSOpenGLPFAColorSize, 24,
@@ -498,14 +547,30 @@ int main(int argc, const char* argv[])
         0
     };
 	NSOpenGLPixelFormat* pixelFormat = [[NSOpenGLPixelFormat alloc]
-		initWithAttributes:openGLAttributes];
+		initWithAttributes:openGLAttributesAccel];
     glContext_ = [[NSOpenGLContext alloc] initWithFormat:pixelFormat
     	shareContext:NULL];
+    if (glContext_ == NULL) {
+    	DEBUG_PRINT("No hardware-accelerated GL renderer\n");
+	    NSOpenGLPixelFormatAttribute openGLAttributesNoAccel[] = {
+	        NSOpenGLPFADoubleBuffer, // Enable for vsync
+			NSOpenGLPFAColorSize, 24,
+			NSOpenGLPFAAlphaSize, 8,
+	        NSOpenGLPFADepthSize, 24,
+	        NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
+	        0
+	    };
+		NSOpenGLPixelFormat* pixelFormat = [[NSOpenGLPixelFormat alloc]
+			initWithAttributes:openGLAttributesNoAccel];
+	    glContext_ = [[NSOpenGLContext alloc] initWithFormat:pixelFormat
+	    	shareContext:NULL];
+    	if (glContext_ == NULL) {
+    		DEBUG_PRINT("Failed to create GL context\n");
+    		return 1;
+    	}
+    }
     DEBUG_PRINT("Initialized GL context\n");
 
-	///////////////////////////////////////////////////////////////////
-	// NSWindow and NSOpenGLView
-	//
 	// Create the main window and the content view
 	NSRect screenRect = [[NSScreen mainScreen] frame];
 	float width = 1280.0f;
@@ -600,6 +665,16 @@ int main(int argc, const char* argv[])
 	GameInput* newInput = &input[0];
 	GameInput* oldInput = &input[1];
 
+	const char* gameCodeLibName = "315k_game.dylib";
+    char gameCodeLibPath[MACOS_STATE_FILE_NAME_COUNT];
+    CatStrings(StringLength(pathToApp_), pathToApp_,
+        StringLength(gameCodeLibName), gameCodeLibName,
+        MACOS_STATE_FILE_NAME_COUNT, gameCodeLibPath);
+
+    MacOSGameCode gameCode = {};
+    MacOSLoadGameCode(&gameCode,
+        gameCodeLibPath, MacOSFileId(gameCodeLibPath));
+
 	///////////////////////////////////////////////////////////////////
 	// Run loop
 	//
@@ -646,9 +721,19 @@ int main(int argc, const char* argv[])
 										MouseInWindowFlag, mousePosInView,
 										MouseButtonMask);*/
 
+		if (gameCode.gameUpdateAndRender) {
+			ThreadContext thread = {};
+			ScreenInfo screenInfo;
+			screenInfo.size.x = 1280;
+			screenInfo.size.y = 800;
+			GameAudio gameAudio = {};
+			gameCode.gameUpdateAndRender(&thread, &platformFuncs,
+				newInput, screenInfo, 0.01f,
+				&gameMemory, &gameAudio
+			);
+		}
+		
 		// flushes and forces vsync
-		glClearColor(0.0f, 0.0f, 0.1f, 0.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		[glContext_ flushBuffer];
 		//glFlush(); // no vsync
 

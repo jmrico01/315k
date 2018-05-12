@@ -2,6 +2,9 @@
 
 #include "km_defines.h"
 
+#if defined(GAME_MACOS) && defined(GAME_PLATFORM_CODE)
+#include <OpenGL/gl.h>
+#endif
 #if defined(GAME_LINUX) && defined(GAME_PLATFORM_CODE)
 #include <GL/gl.h>
 #endif

@@ -40,7 +40,7 @@ paths["src-shaders"]    = paths["src"] + "/shaders"
 # Main source files
 paths["main-cpp"]       = paths["src"] + "/main.cpp"
 paths["linux-main-cpp"] = paths["src"] + "/linux_main.cpp"
-paths["macos-main-mm"] = paths["src"] + "/macos_main.mm"
+paths["macos-main-mm"]  = paths["src"] + "/macos_main.mm"
 paths["win32-main-cpp"] = paths["src"] + "/win32_main.cpp"
 
 # Source hashes for if-changed compilation
@@ -51,6 +51,9 @@ paths["src-hashes-old"] = paths["build"] + "/src_hashes_old"
 # TODO think of a better way of doing this
 paths["include-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/include"
 paths["lib-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/objs/vc2010/x64"
+
+paths["include-freetype-mac"] = "/usr/local/include/freetype2"
+paths["lib-freetype-mac"] = "/usr/local/lib"
 
 #paths["include-libpng-win"] = "D:/Development/Libraries/lpng1634"
 #paths["lib-libpng-win-d"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/DebugLibrary"
@@ -255,54 +258,34 @@ def MacCompileDebug():
         "-Wall",    # enable all warnings
 
         # disable the following warnings:
-        "-Wno-missing-braces" # braces around initialization of subobject (?!)
-        #"-Wno-char-subscripts" # using char as an array subscript
+        "-Wno-missing-braces",  # braces around initialization of subobject (?)
+        "-Wno-char-subscripts"  # using char as an array subscript
     ])
     includePaths = " ".join([
-        #"-I" + paths["include-glew"],
-        #"-I" + paths["include-glfw"],
-        #"-I" + paths["include-freetype"],
-        #"-I" + paths["include-lodepng"]
+        "-I" + paths["include-freetype-mac"]
     ])
 
     frameworks = " ".join([
         "-framework Cocoa",
         "-framework OpenGL"
     ])
-    """
     linkerFlags = " ".join([
-        "-fvisibility=hidden"
+        #"-fvisibility=hidden"
     ])
     libPaths = " ".join([
-        #"-L" + paths["lib-glfw-linux"],
-        #"-L" + paths["lib-ft-linux"]
+        "-L" + paths["lib-freetype-mac"]
     ])
     libs = " ".join([
-        # main external libs
-        #"-lfreetype",
-
-        "-lm",      # math
-        "-ldl",     # dynamic linking loader
-        "-lGL",     # OpenGL
-        "-lX11",    # X11
-        "-lasound", # ALSA lib
-        "-lpthread"
-
-        # FreeType dependencies
-        #"-lz",
-        #"-lpng"
+        "-lfreetype"
     ])
-    """
 
-    #pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
-    """
     compileLibCommand = " ".join([
-        "gcc",
+        "clang",
         macros, compilerFlags, compilerWarningFlags, includePaths,
-        "-shared", "-fPIC", paths["main-cpp"],
-        "-o " + PROJECT_NAME + "_game.so"
+        "-dynamiclib", paths["main-cpp"],
+        "-o " + PROJECT_NAME + "_game.dylib",
+        linkerFlags, libPaths, libs
     ])
-    """
 
     compileCommand = " ".join([
         "clang", "-DGAME_PLATFORM_CODE",
@@ -310,12 +293,11 @@ def MacCompileDebug():
         frameworks,
         paths["macos-main-mm"],
         "-o " + PROJECT_NAME + "_macos"
-        #linkerFlags, libPaths, libs
     ])
 
     os.system("bash -c \"" + " ; ".join([
         "pushd " + paths["build"] + " > /dev/null",
-        #compileLibCommand,
+        compileLibCommand,
         compileCommand,
         "popd > /dev/null"
     ]) + "\"")

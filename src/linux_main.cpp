@@ -333,12 +333,12 @@ internal bool32 LinuxLoadGameCode(
     return gameCode->isValid;
 }
 
-internal void LinuxUnloadGameCode(LinuxGameCode *GameCode)
+internal void LinuxUnloadGameCode(LinuxGameCode *gameCode)
 {
-    LinuxUnloadLibrary(GameCode->gameLibHandle);
-    GameCode->gameLibId = 0;
-    GameCode->isValid = false;
-    GameCode->gameUpdateAndRender = 0;
+    LinuxUnloadLibrary(gameCode->gameLibHandle);
+    gameCode->gameLibId = 0;
+    gameCode->isValid = false;
+    gameCode->gameUpdateAndRender = 0;
 }
 
 internal bool32 LinuxLoadGLXExtensions()
@@ -970,10 +970,6 @@ int main(int argc, char **argv)
 	}
 	DEBUG_PRINT("Initialized game memory\n");
 
-    char gameCodeLibPath[LINUX_STATE_FILE_NAME_COUNT];
-    LinuxBuildEXEPathFileName(&linuxState, "315k_game.so",
-        sizeof(gameCodeLibPath), gameCodeLibPath);
-
 	GameInput input[2] = {};
 	GameInput *newInput = &input[0];
 	GameInput *oldInput = &input[1];
@@ -981,6 +977,10 @@ int main(int argc, char **argv)
     struct timespec lastCounter = LinuxGetWallClock();
     struct timespec flipWallClock = LinuxGetWallClock();
 
+    char gameCodeLibPath[LINUX_STATE_FILE_NAME_COUNT];
+    LinuxBuildEXEPathFileName(&linuxState, "315k_game.so",
+        sizeof(gameCodeLibPath), gameCodeLibPath);
+    
     LinuxGameCode gameCode = {};
     LinuxLoadGameCode(&gameCode,
         gameCodeLibPath, LinuxFileId(gameCodeLibPath));
