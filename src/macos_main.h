@@ -9,3 +9,14 @@ struct MacOSState
 	uint64 gameMemorySize;
 	void* gameMemoryBlock;
 };
+
+struct MacOSGameCode
+{
+    void* gameLibHandle;
+    ino_t gameLibId;
+
+    // NOTE: Callbacks can be 0!  You must check before calling
+    GameUpdateAndRenderFunc* gameUpdateAndRender;
+
+    bool32 isValid;
+};
