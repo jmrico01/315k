@@ -24,6 +24,7 @@
 global_var bool32 running_;
 global_var NSOpenGLContext* glContext_;
 global_var char pathToApp_[MACOS_STATE_FILE_NAME_COUNT];
+global_var mach_timebase_info_data_t machTimebaseInfo_;
 
 internal int StringLength(const char* string)
 {
@@ -192,57 +193,6 @@ DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFile)
 
 #endif
 
-#if 0
-
-osx_game_code OSXLoadGameCode(const char* SourceDLName)
-{
-	osx_game_code Result = {};
-
-	// TODO(casey): Need to get the proper path here!
-	// TODO(casey): Automatic determination of when updates are necessary
-
-	Result.DLLastWriteTime = OSXGetLastWriteTime(SourceDLName);
-
-	Result.GameCodeDL = dlopen(SourceDLName, RTLD_LAZY|RTLD_GLOBAL);
-	if (Result.GameCodeDL)
-	{
-		Result.UpdateAndRender = (game_update_and_render*)
-			dlsym(Result.GameCodeDL, "GameUpdateAndRender");
-
-		Result.GetSoundSamples = (game_get_sound_samples*)
-			dlsym(Result.GameCodeDL, "GameGetSoundSamples");
-
-		Result.DEBUGFrameEnd = (debug_game_frame_end*)
-			dlsym(Result.GameCodeDL, "DEBUGGameFrameEnd");
-
-		Result.IsValid = Result.UpdateAndRender && Result.GetSoundSamples;
-	}
-
-	if (!Result.IsValid)
-	{
-		Result.UpdateAndRender = 0;
-		Result.GetSoundSamples = 0;
-	}
-
-	return Result;
-}
-
-
-void OSXUnloadGameCode(osx_game_code* GameCode)
-{
-	if (GameCode->GameCodeDL)
-	{
-		dlclose(GameCode->GameCodeDL);
-		GameCode->GameCodeDL = 0;
-	}
-
-	GameCode->IsValid = false;
-	GameCode->UpdateAndRender = 0;
-	GameCode->GetSoundSamples = 0;
-}
-
-#endif
-
 #define LOAD_GL_FUNCTION(name) \
     glFuncs->name = (name##Func*)MacOSLoadFunction(glLib, #name); \
     if (!glFuncs->name) { \
@@ -407,12 +357,74 @@ void MacOSCreateMainMenu()
     [appMenuItem setSubmenu:appMenu];
 }
 
+internal KeyInputCode MacOSKeyCodeToKM(int keyCode)
+{
+    // Numbers, letters, text
+    if (keyCode >= '0' && keyCode <= '9') {
+        return (KeyInputCode)(keyCode - '0' + KM_KEY_0);
+    }
+    else if (keyCode >= 'A' && keyCode <= 'Z') {
+        return (KeyInputCode)(keyCode - 'A' + KM_KEY_A);
+    }
+    else if (keyCode >= 'a' && keyCode <= 'z') {
+        return (KeyInputCode)(keyCode - 'a' + KM_KEY_A);
+    }
+    else if (keyCode == ' ') {
+        return KM_KEY_SPACE;
+    }
+    else if (keyCode == 0x8) {
+        return KM_KEY_BACKSPACE;
+    }
+    // Arrow keys
+    /*else if (keyCode == VK_UP) {
+        return KM_KEY_ARROW_UP;
+    }
+    else if (keyCode == VK_DOWN) {
+        return KM_KEY_ARROW_DOWN;
+    }
+    else if (keyCode == VK_LEFT) {
+        return KM_KEY_ARROW_LEFT;
+    }
+    else if (keyCode == VK_RIGHT) {
+        return KM_KEY_ARROW_RIGHT;
+    }*/
+    // Special keys
+    else if (keyCode == 0x1b) {
+        return KM_KEY_ESCAPE;
+    }
+    /*else if (keyCode == VK_SHIFT) {
+        return KM_KEY_SHIFT;
+    }
+    else if (keyCode == VK_CONTROL) {
+        return KM_KEY_CTRL;
+    }
+    else if (keyCode == VK_TAB) {
+       return KM_KEY_TAB;
+    }
+    else if (keyCode == VK_RETURN) {
+        return KM_KEY_ENTER;
+    }
+    else if (keyCode >= 0x60 && keyCode <= 0x69) {
+        return keyCode - 0x60 + KM_KEY_NUMPAD_0;
+    }*/
+    else {
+        return KM_KEY_LAST;
+    }
+}
+
 void MacOSKeyProcessing(bool32 isDown, uint32 key,
 	int commandKeyFlag, int ctrlKeyFlag, int altKeyFlag,
 	GameInput* input)
 {
-	if (key == 'q' && isDown && commandKeyFlag) {
-		running_ = false;
+	KeyInputCode kmCode = MacOSKeyCodeToKM((int)key);
+	if (kmCode != KM_KEY_LAST) {
+        input->keyboard[kmCode].isDown = isDown;
+        input->keyboard[kmCode].transitions = 1;
+
+		if (kmCode == KM_KEY_ESCAPE ||
+		(kmCode == KM_KEY_Q && isDown && commandKeyFlag)) {
+			running_ = false;
+		}
 	}
 }
 
@@ -462,10 +474,7 @@ void MacOSProcessPendingMessages(GameInput* input)
 	} while (event != nil);
 }
 
-///////////////////////////////////////////////////////////////////////
 @interface KMOpenGLView : NSOpenGLView
-{
-}
 @end
 
 @implementation KMOpenGLView
@@ -488,7 +497,6 @@ void MacOSProcessPendingMessages(GameInput* input)
 	[super reshape];
 
 	NSRect bounds = [self bounds];
-	//[[self openGLContext] makeCurrentContext];
 	[glContext_ makeCurrentContext];
 	[glContext_ update];
 	glViewport(0, 0, bounds.size.width, bounds.size.height);
@@ -515,8 +523,6 @@ int main(int argc, const char* argv[])
 	NSApplication* app = [NSApplication sharedApplication];
 	[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
-	MacOSCreateMainMenu();
-
 	NSString* path = [[NSFileManager defaultManager] currentDirectoryPath];
 	path = [NSString stringWithFormat:@"%@/",
 		[[NSBundle mainBundle] bundlePath]];
@@ -531,6 +537,8 @@ int main(int argc, const char* argv[])
 		// TODO fix this, it's crashing
 		//DEBUG_PANIC("Failed to change application data path\n");
 	}*/
+
+	MacOSCreateMainMenu();
 
 	KMAppDelegate* appDelegate = [[KMAppDelegate alloc] init];
 	[app setDelegate:appDelegate];
@@ -576,13 +584,13 @@ int main(int argc, const char* argv[])
 	float width = 1280.0f;
 	float height = 800.0f;
 
-	NSRect InitialFrame = NSMakeRect(
+	NSRect initialFrame = NSMakeRect(
 		(screenRect.size.width - width) * 0.5,
 		(screenRect.size.height - height) * 0.5,
 		width, height
 	);
 
-	NSWindow* window = [[NSWindow alloc] initWithContentRect:InitialFrame
+	NSWindow* window = [[NSWindow alloc] initWithContentRect:initialFrame
 		styleMask:NSTitledWindowMask
 			| NSClosableWindowMask
 			| NSMiniaturizableWindowMask
@@ -597,15 +605,13 @@ int main(int argc, const char* argv[])
 	[cv setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
 	[cv setAutoresizesSubviews:YES];
 
-#if 1
-	KMOpenGLView* GLView = [[KMOpenGLView alloc] init];
-	[GLView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
-	[GLView setPixelFormat:pixelFormat];
-	[GLView setOpenGLContext:glContext_];
-	[GLView setFrame:[cv bounds]];
+	KMOpenGLView* glView = [[KMOpenGLView alloc] init];
+	[glView setAutoresizingMask:NSViewWidthSizable | NSViewHeightSizable];
+	[glView setPixelFormat:pixelFormat];
+	[glView setOpenGLContext:glContext_];
+	[glView setFrame:[cv bounds]];
 
-	[cv addSubview:GLView];
-#endif
+	[cv addSubview:glView];
 
     [pixelFormat release];
 
@@ -638,6 +644,8 @@ int main(int argc, const char* argv[])
 
 	[[window contentView] enterFullScreenMode:[NSScreen mainScreen] withOptions:fullScreenOptions];
 #endif
+
+    DEBUG_PRINT("Initialized MacOS CoreAudio\n");
 
 #if GAME_INTERNAL
 	void* baseAddress = (void*)TERABYTES((uint64)2);;
@@ -675,13 +683,8 @@ int main(int argc, const char* argv[])
     MacOSLoadGameCode(&gameCode,
         gameCodeLibPath, MacOSFileId(gameCodeLibPath));
 
-	///////////////////////////////////////////////////////////////////
-	// Run loop
-	//
-	//uint tickCounter = 0;
-	//uint64 currentTime = mach_absolute_time();
-	//GameData.LastCounter = currentTime;
-	//float32 frameTime = 0.0f;
+	uint64 startTime = mach_absolute_time();
+	mach_timebase_info(&machTimebaseInfo_);
 	running_ = true;
 
 	while (running_) {
@@ -690,30 +693,52 @@ int main(int argc, const char* argv[])
 		[glContext_ makeCurrentContext];
 
 		CGRect windowFrame = [window frame];
-		//CGRect contentViewFrame = [[window contentView] frame];
-
-#if 0
-		DEBUG_PRINT("WindowFrame: [%.0f, %.0f]",
-			windowFrame.size.width, windowFrame.size.height);
-		DEBUG_PRINT("    ContentFrame: [%.0f, %.0f]\n",
-			contentViewFrame.size.width, contentViewFrame.size.height);
-#endif
-
 		CGPoint mousePosInScreen = [NSEvent mouseLocation];
 		BOOL mouseInWindowFlag = NSPointInRect(mousePosInScreen, windowFrame);
-		CGPoint mousePosInView = {};
+		//CGPoint mousePosInView = {};
 
-		if (mouseInWindowFlag) {
-			// NOTE(jeff): Use this instead of convertRectFromScreen: if you want to support Snow Leopard
+        /*POINT mousePos;
+        GetCursorPos(&mousePos);
+        ScreenToClient(hWnd, &mousePos);
+        Vec2Int mousePosPrev = newInput->mousePos;
+        newInput->mousePos.x = mousePos.x;
+        newInput->mousePos.y = screenInfo_->size.y - mousePos.y;
+        newInput->mouseDelta = newInput->mousePos - mousePosPrev;
+        if (mousePos.x < 0 || mousePos.x > screenInfo_->size.x
+        || mousePos.y < 0 || mousePos.y > screenInfo_->size.y) {
+            for (int i = 0; i < 5; i++) {
+                int transitions = newInput->mouseButtons[i].isDown ? 1 : 0;
+                newInput->mouseButtons[i].isDown = false;
+                newInput->mouseButtons[i].transitions = transitions;
+            }
+        }*/
+
+		//if (mouseInWindowFlag) {
+			// NOTE Use this instead of convertRectFromScreen: if you want to support Snow Leopard
 			// NSPoint PointInWindow = [[self window] convertScreenToBase:[NSEvent mouseLocation]];
 
 			// We don't actually care what the mouse screen coordinates are,
 			// we just want the coordinates relative to the content view
 			NSRect rectInWindow = [window convertRectFromScreen:NSMakeRect(mousePosInScreen.x, mousePosInScreen.y, 1, 1)];
 			NSPoint pointInWindow = rectInWindow.origin;
-			mousePosInView = [[window contentView]
-				convertPoint:pointInWindow fromView:nil];
-		}
+			/*mousePosInView = [[window contentView]
+				convertPoint:pointInWindow fromView:nil];*/
+
+	        Vec2Int mousePosPrev = newInput->mousePos;
+	        newInput->mousePos.x = pointInWindow.x;
+	        newInput->mousePos.y = pointInWindow.y;
+	        newInput->mouseDelta = newInput->mousePos - mousePosPrev;
+	    if (!mouseInWindowFlag) {
+            for (int i = 0; i < 5; i++) {
+	            int transitions = newInput->mouseButtons[i].isDown ? 1 : 0;
+	            newInput->mouseButtons[i].isDown = false;
+	            newInput->mouseButtons[i].transitions = transitions;
+	        }
+	    }
+		/*}
+		else {
+			newInput->mouseDelta = Vec2::zero;
+		}*/
 
 		//uint32 mouseButtonMask = [NSEvent pressedMouseButtons];
 
@@ -721,14 +746,22 @@ int main(int argc, const char* argv[])
 										MouseInWindowFlag, mousePosInView,
 										MouseButtonMask);*/
 
+		uint64 endTime = mach_absolute_time();
+		uint64 elapsed = endTime - startTime;
+		startTime = endTime;
+		uint64 elapsedNanos = elapsed
+			* machTimebaseInfo_.numer / machTimebaseInfo_.denom;
+		float deltaTime = (float)elapsedNanos * 1e-9;
+
 		if (gameCode.gameUpdateAndRender) {
 			ThreadContext thread = {};
+			CGRect contentViewFrame = [[window contentView] frame];
 			ScreenInfo screenInfo;
-			screenInfo.size.x = 1280;
-			screenInfo.size.y = 800;
+			screenInfo.size.x = (int)contentViewFrame.size.width;
+			screenInfo.size.y = (int)contentViewFrame.size.height;
 			GameAudio gameAudio = {};
 			gameCode.gameUpdateAndRender(&thread, &platformFuncs,
-				newInput, screenInfo, 0.01f,
+				newInput, screenInfo, deltaTime,
 				&gameMemory, &gameAudio
 			);
 		}
@@ -737,33 +770,10 @@ int main(int argc, const char* argv[])
 		[glContext_ flushBuffer];
 		//glFlush(); // no vsync
 
-		//uint32 endCounter = mach_absolute_time();
-
-		/*float32 MeasuredSecondsPerFrame = OSXGetSecondsElapsed(GameData.LastCounter, EndCounter);
-		float32 ExactTargetFramesPerUpdate = MeasuredSecondsPerFrame * (f32)GameData.MonitorRefreshHz;
-		uint32 NewExpectedFramesPerUpdate = RoundReal32ToInt32(ExactTargetFramesPerUpdate);
-		GameData.ExpectedFramesPerUpdate = NewExpectedFramesPerUpdate;
-
-		GameData.TargetSecondsPerFrame = MeasuredSecondsPerFrame;*/
-
-		//frameTime += MeasuredSecondsPerFrame;
-		//GameData.LastCounter = EndCounter;
-
 		GameInput* temp = newInput;
 		newInput = oldInput;
 		oldInput = temp;
 		ClearInput(newInput, oldInput);
-
-#if 0
-		++tickCounter;
-		if (tickCounter == 60)
-		{
-			float avgFrameTime = frameTime / 60.0f;
-			tickCounter = 0;
-			frameTime = 0.0f;
-			//printf("frame time = %f\n", avgFrameTime);
-		}
-#endif
 	}
 
 
@@ -772,4 +782,5 @@ int main(int argc, const char* argv[])
 	} // @autoreleasepool
 }
 
+#include "macos_audio.cpp"
 #include "km_input.cpp"
