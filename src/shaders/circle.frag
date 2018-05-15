@@ -13,4 +13,7 @@ void main()
     if (distSq < 0.5 * 0.5) {
         outColor = color;
     }
+    else {
+    	outColor = vec4(0.0, 0.0, 0.0, 0.0);
+    }
 }

@@ -13,7 +13,7 @@ global_var Vec4 backgroundColor_ = Vec4 { 0.0f, 0.0f, 0.0f, 0.0f };
 global_var Vec4 lineColor_ = Vec4 { 0.8f, 0.8f, 0.8f, 1.0f };
 global_var Vec4 lineDarkColor_ = Vec4 { 0.2f, 0.2f, 0.2f, 1.0f };
 
-global_var Vec4 circleIdleColor_ = lineColor_;
+//global_var Vec4 circleIdleColor_ = lineColor_;
 global_var Vec4 circleSelectedColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 1.0f };
 
 MarkerGL InitMarkerGL(const ThreadContext* thread,

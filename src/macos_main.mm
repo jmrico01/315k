@@ -764,6 +764,7 @@ int main(int argc, const char* argv[])
 			ThreadContext thread = {};
 			CGRect contentViewFrame = [[window contentView] frame];
 			ScreenInfo screenInfo;
+            screenInfo.changed = false;
 			screenInfo.size.x = (int)contentViewFrame.size.width;
 			screenInfo.size.y = (int)contentViewFrame.size.height;
 
