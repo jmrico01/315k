@@ -41,6 +41,8 @@ typedef DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFileFunc);
 
 struct ScreenInfo
 {
+    bool32 changed;
+
     Vec2Int size;
 
 	int8 colorBits;

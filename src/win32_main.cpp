@@ -406,6 +406,7 @@ LRESULT CALLBACK WndProc(
             if (screenInfo_) {
                 screenInfo_->size.x = width;
                 screenInfo_->size.y = height;
+                screenInfo_->changed = true;
             }
         } break;
 
@@ -924,6 +925,7 @@ int CALLBACK WinMain(
     RECT clientRect;
     GetClientRect(hWnd, &clientRect);
     ScreenInfo screenInfo = {};
+    screenInfo.changed = true;
     screenInfo.size.x = clientRect.right - clientRect.left;
     screenInfo.size.y = clientRect.bottom - clientRect.top;
     // TODO is cColorBits ACTUALLY excluding alpha bits? Doesn't seem like it
@@ -1269,6 +1271,7 @@ int CALLBACK WinMain(
             gameCode.gameUpdateAndRender(&thread, &platformFuncs,
                 newInput, screenInfo, elapsed,
                 &gameMemory, &gameAudio);
+            screenInfo.changed = false;
         }
 
         LARGE_INTEGER vsyncStart;

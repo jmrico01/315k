@@ -5,6 +5,19 @@
 #include "opengl_base.h"
 #include "text.h"
 
+struct MarkerGL
+{
+    GLuint vertexArray;
+    GLuint vertexBuffer;
+    GLuint programID;
+};
+struct CircleGL
+{
+    GLuint vertexArray;
+    GLuint vertexBuffer;
+    GLuint programID;
+};
+
 struct Tiles
 {
 #define TILES_X     100
@@ -36,16 +49,22 @@ struct GameState
 {
     AudioState audioState;
 
-    Tiles tiles;
-
-    Vec3 pos;
-    float32 angle;
+    int circlePos;
+    Vec3 debugCamPos;
 
     GLuint rectShader;
     GLuint rectVAO;
 
+    RectGL rectGL;
     LineGL lineGL;
     TextGL textGL;
+
+    MarkerGL markerGL;
+    CircleGL circleGL;
+
     FT_Library ftLibrary;
     FontFace fontFace;
+
+    GLuint framebuffer;
+    GLuint colorBuffer;
 };
