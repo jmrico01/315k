@@ -267,7 +267,8 @@ def MacCompileDebug():
 
     frameworks = " ".join([
         "-framework Cocoa",
-        "-framework OpenGL"
+        "-framework OpenGL",
+        "-framework AudioToolbox"
     ])
     linkerFlags = " ".join([
         #"-fvisibility=hidden"

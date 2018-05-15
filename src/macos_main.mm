@@ -13,6 +13,7 @@
 #include <fcntl.h>          // file open/close functions
 #include <dlfcn.h>          // dynamic linking functions
 
+#include "macos_audio.h"
 #include "km_defines.h"
 #include "km_debug.h"
 
@@ -645,6 +646,15 @@ int main(int argc, const char* argv[])
 	[[window contentView] enterFullScreenMode:[NSScreen mainScreen] withOptions:fullScreenOptions];
 #endif
 
+    MacOSAudio macAudio;
+    int bufferSizeSamples = AUDIO_BUFFER_SIZE_MILLISECONDS
+    	* AUDIO_SAMPLERATE / 1000;
+    MacOSInitCoreAudio(&macAudio, AUDIO_SAMPLERATE,
+    	AUDIO_CHANNELS, bufferSizeSamples);
+    macAudio.minLatency = AUDIO_SAMPLERATE / 60 / 2;
+    macAudio.maxLatency = AUDIO_SAMPLERATE / 10;
+    DEBUG_PRINT("latency: %d - %d\n", macAudio.minLatency,
+        macAudio.maxLatency);
     DEBUG_PRINT("Initialized MacOS CoreAudio\n");
 
 #if GAME_INTERNAL
@@ -685,49 +695,31 @@ int main(int argc, const char* argv[])
 
 	uint64 startTime = mach_absolute_time();
 	mach_timebase_info(&machTimebaseInfo_);
+	int audioReadCursorPrev = macAudio.readCursor;
 	running_ = true;
 
 	while (running_) {
 		MacOSProcessPendingMessages(newInput);
-
+		
 		[glContext_ makeCurrentContext];
 
 		CGRect windowFrame = [window frame];
 		CGPoint mousePosInScreen = [NSEvent mouseLocation];
 		BOOL mouseInWindowFlag = NSPointInRect(mousePosInScreen, windowFrame);
-		//CGPoint mousePosInView = {};
+		// NOTE Use this instead of convertRectFromScreen
+		// if you want to support Snow Leopard
+		// NSPoint PointInWindow = [[self window]
+		//	convertScreenToBase:[NSEvent mouseLocation]];
 
-        /*POINT mousePos;
-        GetCursorPos(&mousePos);
-        ScreenToClient(hWnd, &mousePos);
+		// We don't actually care what the mouse screen coordinates are,
+		// we just want the coordinates relative to the content view
+		NSRect rectInWindow = [window convertRectFromScreen:NSMakeRect(mousePosInScreen.x, mousePosInScreen.y, 1, 1)];
+		NSPoint pointInWindow = rectInWindow.origin;
+
         Vec2Int mousePosPrev = newInput->mousePos;
-        newInput->mousePos.x = mousePos.x;
-        newInput->mousePos.y = screenInfo_->size.y - mousePos.y;
+        newInput->mousePos.x = (int)pointInWindow.x;
+        newInput->mousePos.y = (int)pointInWindow.y;
         newInput->mouseDelta = newInput->mousePos - mousePosPrev;
-        if (mousePos.x < 0 || mousePos.x > screenInfo_->size.x
-        || mousePos.y < 0 || mousePos.y > screenInfo_->size.y) {
-            for (int i = 0; i < 5; i++) {
-                int transitions = newInput->mouseButtons[i].isDown ? 1 : 0;
-                newInput->mouseButtons[i].isDown = false;
-                newInput->mouseButtons[i].transitions = transitions;
-            }
-        }*/
-
-		//if (mouseInWindowFlag) {
-			// NOTE Use this instead of convertRectFromScreen: if you want to support Snow Leopard
-			// NSPoint PointInWindow = [[self window] convertScreenToBase:[NSEvent mouseLocation]];
-
-			// We don't actually care what the mouse screen coordinates are,
-			// we just want the coordinates relative to the content view
-			NSRect rectInWindow = [window convertRectFromScreen:NSMakeRect(mousePosInScreen.x, mousePosInScreen.y, 1, 1)];
-			NSPoint pointInWindow = rectInWindow.origin;
-			/*mousePosInView = [[window contentView]
-				convertPoint:pointInWindow fromView:nil];*/
-
-	        Vec2Int mousePosPrev = newInput->mousePos;
-	        newInput->mousePos.x = pointInWindow.x;
-	        newInput->mousePos.y = pointInWindow.y;
-	        newInput->mouseDelta = newInput->mousePos - mousePosPrev;
 	    if (!mouseInWindowFlag) {
             for (int i = 0; i < 5; i++) {
 	            int transitions = newInput->mouseButtons[i].isDown ? 1 : 0;
@@ -735,16 +727,31 @@ int main(int argc, const char* argv[])
 	            newInput->mouseButtons[i].transitions = transitions;
 	        }
 	    }
-		/*}
-		else {
-			newInput->mouseDelta = Vec2::zero;
-		}*/
 
-		//uint32 mouseButtonMask = [NSEvent pressedMouseButtons];
+		uint32 mouseButtonMask = [NSEvent pressedMouseButtons];
+		for (int buttonIndex = 0; buttonIndex < 3; buttonIndex++) {
+			bool32 isDown = (mouseButtonMask >> buttonIndex) & 0x0001;
+			bool32 wasDown = oldInput->mouseButtons[buttonIndex].isDown;
+			int transitions = wasDown == isDown ? 0 : 1;
+			newInput->mouseButtons[buttonIndex].isDown = isDown;
+			newInput->mouseButtons[buttonIndex].transitions = transitions;
+		}
 
+		// Old from Jeff's code
 		/*OSXProcessFrameAndRunGameLogic(&GameData, ContentViewFrame,
 										MouseInWindowFlag, mousePosInView,
 										MouseButtonMask);*/
+
+        GameAudio gameAudio = {};
+        gameAudio.sampleRate = macAudio.sampleRate;
+        gameAudio.channels = macAudio.channels;
+        gameAudio.bufferSizeSamples = macAudio.bufferSizeSamples;
+        gameAudio.buffer = macAudio.buffer;
+        gameAudio.fillStart = (macAudio.readCursor + macAudio.minLatency)
+            % macAudio.bufferSizeSamples;
+        gameAudio.fillLength = macAudio.maxLatency * 2 - macAudio.minLatency;
+        gameAudio.fillStartDelta = macAudio.readCursor - audioReadCursorPrev;
+        audioReadCursorPrev = macAudio.readCursor;
 
 		uint64 endTime = mach_absolute_time();
 		uint64 elapsed = endTime - startTime;
@@ -759,13 +766,14 @@ int main(int argc, const char* argv[])
 			ScreenInfo screenInfo;
 			screenInfo.size.x = (int)contentViewFrame.size.width;
 			screenInfo.size.y = (int)contentViewFrame.size.height;
-			GameAudio gameAudio = {};
+
 			gameCode.gameUpdateAndRender(&thread, &platformFuncs,
 				newInput, screenInfo, deltaTime,
 				&gameMemory, &gameAudio
 			);
+			macAudio.writeCursor += gameAudio.fillLength;
 		}
-		
+
 		// flushes and forces vsync
 		[glContext_ flushBuffer];
 		//glFlush(); // no vsync
@@ -777,7 +785,7 @@ int main(int argc, const char* argv[])
 	}
 
 
-	//OSXStopCoreAudio(&GameData.SoundOutput);
+	MacOSStopCoreAudio(&macAudio);
 
 	} // @autoreleasepool
 }

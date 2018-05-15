@@ -177,6 +177,16 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     float32 tone2Hz = baseTone
         * (1.0f + 0.5f * input->controllers[0].rightEnd.x)
         * (1.0f + 0.1f * input->controllers[0].rightEnd.y);
+    //if (!input->controllers[0].isConnected) {
+        float32 screenHalfWidth = screenInfo.size.x / 2.0f;
+        float32 screenHalfHeight = screenInfo.size.y / 2.0f;
+        float32 mouseOffsetX = (input->mousePos.x - screenHalfWidth)
+            / screenHalfWidth;
+        float32 mouseOffsetY = (input->mousePos.y - screenHalfHeight)
+            / screenHalfHeight;
+        tone1Hz = baseTone * (1.0f + 0.5f * mouseOffsetX);
+        tone2Hz = baseTone * (1.0f + 0.5f * mouseOffsetY);
+    //}
 
     AudioState* audioState = &gameState->audioState;
     if (input->controllers[0].x.isDown) {

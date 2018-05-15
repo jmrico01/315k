@@ -6,54 +6,56 @@ OSStatus MacOSAudioUnitCallback(void* inRefCon,
 	UInt32 inBusNumber, UInt32 inNumberFrames,
 	AudioBufferList* ioData)
 {
-	// NOTE(jeff): Don't do anything too time consuming in this function.
-	//             It is a high-priority "real-time" thread.
-	//             Even too many printf calls can throw off the timing.
 	#pragma unused(ioActionFlags)
 	#pragma unused(inTimeStamp)
 	#pragma unused(inBusNumber)
 
-	//double currentPhase = *((double*)inRefCon);
-
 	MacOSAudio* audio = ((MacOSAudio*)inRefCon);
 
-	if (audio->readCursor == audio->writeCursor) {
-		//audio->soundBuffer.SampleCount = 0;
-		//printf("AudioCallback: No Samples Yet!\n");
-	}
-
-	//printf("AudioCallback: SampleCount = %d\n", SoundOutput->SoundBuffer.SampleCount);
-
 	int sampleCount = inNumberFrames;
-	/*if (soundOutput->SoundBuffer.SampleCount < inNumberFrames)
-	{
-		SampleCount = SoundOutput->SoundBuffer.SampleCount;
-	}*/
+	// TODO handle write cursor before read cursor wrap
+	int newSamples = audio->writeCursor - audio->readCursor;
+	if (audio->writeCursor < audio->readCursor) {
+		newSamples = audio->bufferSizeSamples - audio->readCursor
+			+ audio->writeCursor;
+	}
+	if (newSamples < inNumberFrames) {
+		sampleCount = newSamples;
+	}
+	//DEBUG_PRINT("new samples: %d\n", sampleCount);
 
-	int16* outputBufferL = (int16*)ioData->mBuffers[0].mData;
-	int16* outputBufferR = (int16*)ioData->mBuffers[1].mData;
-
-	for (uint32 i = 0; i < sampleCount; i++) {
-		outputBufferL[i] = *audio->readCursor++;
-		outputBufferR[i] = *audio->readCursor++;
-
-		/*if ((char*)SoundOutput->ReadCursor >= (char*)((char*)audio->CoreAudioBuffer + SoundOutput->SoundBufferSize))
-		{
-			//printf("Callback: Read cursor wrapped!\n");
-			SoundOutput->ReadCursor = SoundOutput->CoreAudioBuffer;
-		}*/
+	int16* outBufferL = (int16*)ioData->mBuffers[0].mData;
+	int16* outBufferR = (int16*)ioData->mBuffers[1].mData;
+	for (int i = 0; i < sampleCount; i++) {
+		int sample = (audio->readCursor + i) % audio->bufferSizeSamples;
+		outBufferL[i] = audio->buffer[sample * audio->channels];
+		outBufferR[i] = audio->buffer[sample * audio->channels + 1];
 	}
 
-	for (uint32 i = sampleCount; i < inNumberFrames; i++) {
-		outputBufferL[i] = 0.0;
-		outputBufferR[i] = 0.0;
+	audio->readCursor = (audio->readCursor + sampleCount)
+		% audio->bufferSizeSamples;
+
+	for (int i = sampleCount; i < inNumberFrames; i++) {
+		outBufferL[i] = 0;
+		outBufferR[i] = 0;
 	}
 
 	return noErr;
 }
 
-void OSXInitCoreAudio(MacOSAudio* macOSAudio)
+void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
+    int sampleRate, int channels, int bufferSizeSamples)
 {
+	macOSAudio->sampleRate = sampleRate;
+	macOSAudio->channels = channels;
+	macOSAudio->bufferSizeSamples = bufferSizeSamples;
+	macOSAudio->buffer = (int16*)mmap(0,
+		bufferSizeSamples * channels * sizeof(int16),
+		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+	macOSAudio->readCursor = 0;
+	macOSAudio->writeCursor = 0;
+
 	AudioComponentDescription acd;
 	acd.componentType         = kAudioUnitType_Output;
 	acd.componentSubType      = kAudioUnitSubType_DefaultOutput;
@@ -64,16 +66,21 @@ void OSXInitCoreAudio(MacOSAudio* macOSAudio)
 	AudioComponentInstanceNew(outputComponent, &macOSAudio->audioUnit);
 	AudioUnitInitialize(macOSAudio->audioUnit);
 
-#if 1 // uint16
+#if 1 // int16
 	//AudioStreamBasicDescription asbd;
-	/*macOSAudio->audioDescriptor.mSampleRate       = macOSAudio->SoundBuffer.SamplesPerSecond;*/
+	macOSAudio->audioDescriptor.mSampleRate       = sampleRate;
 	macOSAudio->audioDescriptor.mFormatID         = kAudioFormatLinearPCM;
-	macOSAudio->audioDescriptor.mFormatFlags      = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsNonInterleaved | kAudioFormatFlagIsPacked;
+	macOSAudio->audioDescriptor.mFormatFlags      =
+		kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsNonInterleaved
+		| kAudioFormatFlagIsPacked;
 	macOSAudio->audioDescriptor.mFramesPerPacket  = 1;
-	macOSAudio->audioDescriptor.mChannelsPerFrame = 2; // Stereo
+	macOSAudio->audioDescriptor.mChannelsPerFrame = channels; // Stereo
 	macOSAudio->audioDescriptor.mBitsPerChannel   = sizeof(int16) * 8;
-	macOSAudio->audioDescriptor.mBytesPerFrame    = sizeof(int16); // don't multiply by channel count with non-interleaved!
-	macOSAudio->audioDescriptor.mBytesPerPacket   = macOSAudio->audioDescriptor.mFramesPerPacket * macOSAudio->audioDescriptor.mBytesPerFrame;
+	// don't multiply by channel count with non-interleaved!
+	macOSAudio->audioDescriptor.mBytesPerFrame    = sizeof(int16);
+	macOSAudio->audioDescriptor.mBytesPerPacket   =
+		macOSAudio->audioDescriptor.mFramesPerPacket
+		* macOSAudio->audioDescriptor.mBytesPerFrame;
 #else // floating point - this is the "native" format on the Mac
 	AudioStreamBasicDescription asbd;
 	SoundOutput->AudioDescriptor.mSampleRate       = SoundOutput->SamplesPerSecond;
@@ -87,13 +94,15 @@ void OSXInitCoreAudio(MacOSAudio* macOSAudio)
 #endif
 
 
-	// TODO(jeff): Add some error checking...
+	// TODO Add some error checking...
+	// But this is a mess. OSStatus is what? what is success? sigh
 	AudioUnitSetProperty(macOSAudio->audioUnit,
 		kAudioUnitProperty_StreamFormat,
 		kAudioUnitScope_Input,
 		0,
 		&macOSAudio->audioDescriptor,
-		sizeof(macOSAudio->audioDescriptor));
+		sizeof(macOSAudio->audioDescriptor)
+	);
 
 	AURenderCallbackStruct cb;
 	cb.inputProc = MacOSAudioUnitCallback;
@@ -104,7 +113,8 @@ void OSXInitCoreAudio(MacOSAudio* macOSAudio)
 		kAudioUnitScope_Global,
 		0,
 		&cb,
-		sizeof(cb));
+		sizeof(cb)
+	);
 
 	AudioOutputUnitStart(macOSAudio->audioUnit);
 }

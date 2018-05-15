@@ -2,19 +2,27 @@
 
 #include <AudioUnit/AudioUnit.h>
 
+#define AUDIO_SAMPLERATE 48000
+#define AUDIO_CHANNELS 2
+#define AUDIO_BUFFER_SIZE_MILLISECONDS 1000
+
 struct MacOSAudio
 {
-	uint32 bufferSize;
-	int16* buffer;
-	int16* readCursor;
-	int16* writeCursor;
-
 	AudioStreamBasicDescription audioDescriptor;
 	AudioUnit audioUnit;
 
-#if 0
-	AudioQueueRef AudioQueue;
-	AudioQueueBufferRef AudioBuffers[2];
-	bool32 RanAFrame;
-#endif
+    int sampleRate;
+    int channels;
+    int bufferSizeSamples;
+	int16* buffer;
+
+	int readCursor;
+	int writeCursor;
+
+	int minLatency;
+	int maxLatency;
 };
+
+void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
+    int sampleRate, int channels, int bufferSizeSamples);
+void MacOSStopCoreAudio(MacOSAudio* macOSAudio);
