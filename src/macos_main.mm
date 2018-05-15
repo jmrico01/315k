@@ -771,7 +771,8 @@ int main(int argc, const char* argv[])
 				newInput, screenInfo, deltaTime,
 				&gameMemory, &gameAudio
 			);
-			macAudio.writeCursor += gameAudio.fillLength;
+			macAudio.writeCursor = (gameAudio.fillStart + gameAudio.fillLength)
+                % macAudio.bufferSizeSamples;
 		}
 
 		// flushes and forces vsync
