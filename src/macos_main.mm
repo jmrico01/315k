@@ -374,21 +374,22 @@ internal KeyInputCode MacOSKeyCodeToKM(int keyCode)
         return KM_KEY_SPACE;
     }
     else if (keyCode == 0x8) {
+        // TODO this isn't right
         return KM_KEY_BACKSPACE;
     }
     // Arrow keys
-    /*else if (keyCode == VK_UP) {
+    else if (keyCode == 63232) {
         return KM_KEY_ARROW_UP;
     }
-    else if (keyCode == VK_DOWN) {
+    else if (keyCode == 63233) {
         return KM_KEY_ARROW_DOWN;
     }
-    else if (keyCode == VK_LEFT) {
+    else if (keyCode == 63234) {
         return KM_KEY_ARROW_LEFT;
     }
-    else if (keyCode == VK_RIGHT) {
+    else if (keyCode == 63235) {
         return KM_KEY_ARROW_RIGHT;
-    }*/
+    }
     // Special keys
     else if (keyCode == 0x1b) {
         return KM_KEY_ESCAPE;
@@ -409,6 +410,7 @@ internal KeyInputCode MacOSKeyCodeToKM(int keyCode)
         return keyCode - 0x60 + KM_KEY_NUMPAD_0;
     }*/
     else {
+        //DEBUG_PRINT("Unrecognized key: %d\n", keyCode);
         return KM_KEY_LAST;
     }
 }
