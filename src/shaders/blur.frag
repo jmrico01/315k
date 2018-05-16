@@ -5,7 +5,6 @@ in vec2 fragUV;
 out vec4 outColor;
 
 uniform sampler2D framebufferTexture;
-uniform vec2 screenSize;
 uniform int isHorizontal;
 
 #define KERNEL_HALFSIZE 3
@@ -17,15 +16,15 @@ const float GAUSSIAN_KERNEL[KERNEL_SIZE] = float[KERNEL_SIZE](
 
 void main()
 {
-    ivec2 step = ivec2(1, 0);
+    vec2 texOffset = 1.0 / textureSize(framebufferTexture, 0);
+    vec2 step = vec2(texOffset.x, 0.0);
     if (isHorizontal == 0) {
-        step = ivec2(0, 1);
+        step = vec2(0.0, texOffset.y);
     }
 
     vec3 color = vec3(0.0, 0.0, 0.0);
     for (int i = -KERNEL_HALFSIZE; i <= KERNEL_HALFSIZE; i++) {
-        vec3 c = textureOffset(framebufferTexture, fragUV,
-            step * i).rgb;
+        vec3 c = texture(framebufferTexture, fragUV + step * i).rgb;
         color += c * GAUSSIAN_KERNEL[i + KERNEL_HALFSIZE];
     }
 
