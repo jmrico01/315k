@@ -1,5 +1,9 @@
 #include "main.h"
 
+#undef internal
+#include <random>
+#define internal static
+
 #include "main_platform.h"
 #include "km_debug.h"
 #include "km_defines.h"
@@ -8,15 +12,24 @@
 #include "opengl.h"
 #include "opengl_funcs.h"
 #include "opengl_base.h"
+#include "load_png.h"
+#include "particles.h"
 
-global_var Vec4 backgroundColor_ = Vec4 { 0.0f, 0.0f, 0.0f, 0.0f };
+// These must match the sizes in blur.frag
+#define KERNEL_HALFSIZE 4
+#define KERNEL_SIZE (KERNEL_HALFSIZE * 2 + 1)
+
+global_var Vec4 backgroundColor_ = Vec4 { 0.05f, 0.05f, 0.05f, 0.0f };
+global_var Vec4 backgroundColorBeat_ = Vec4 { 0.1f, 0.1f, 0.1f, 0.0f };
 global_var Vec4 lineColor_ = Vec4 { 0.9f, 0.9f, 0.9f, 1.0f };
 global_var Vec4 lineDarkColor_ = Vec4 { 0.25f, 0.25f, 0.25f, 1.0f };
 
 //global_var Vec4 circleIdleColor_ = lineColor_;
 global_var Vec4 circleSelectedColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 1.0f };
 
-MarkerGL InitMarkerGL(const ThreadContext* thread,
+global_var Vec4 snareHitColor_ = Vec4 { 1.0f, 0.7f, 0.6f, 0.5f };
+
+internal MarkerGL InitMarkerGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -56,7 +69,7 @@ MarkerGL InitMarkerGL(const ThreadContext* thread,
     return markerGL;
 }
 
-CircleGL InitCircleGL(const ThreadContext* thread,
+internal CircleGL InitCircleGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -96,7 +109,7 @@ CircleGL InitCircleGL(const ThreadContext* thread,
     return circleGL;
 }
 
-void DrawMarker(MarkerGL markerGL, ScreenInfo screenInfo,
+internal void DrawMarker(MarkerGL markerGL, ScreenInfo screenInfo,
     Vec2Int pos, Vec2Int size, Vec4 color)
 {
     RectCoordsNDC ndc = ToRectCoordsNDC(pos, size, screenInfo);
@@ -115,7 +128,7 @@ void DrawMarker(MarkerGL markerGL, ScreenInfo screenInfo,
     glBindVertexArray(0);
 }
 
-void DrawCircle(CircleGL circleGL, ScreenInfo screenInfo,
+internal void DrawCircle(CircleGL circleGL, ScreenInfo screenInfo,
     Vec2Int pos, Vec2Int size, Vec4 color)
 {
     RectCoordsNDC ndc = ToRectCoordsNDC(pos, size, screenInfo);
@@ -132,6 +145,214 @@ void DrawCircle(CircleGL circleGL, ScreenInfo screenInfo,
     glBindVertexArray(circleGL.vertexArray);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     glBindVertexArray(0);
+}
+
+internal inline float32 RandFloat()
+{
+    return (float32)rand() / RAND_MAX;
+}
+internal inline float32 RandFloat(float32 min, float32 max)
+{
+    DEBUG_ASSERT(max > min);
+    return RandFloat() * (max - min) + min;
+}
+
+struct ParticleDeathData {
+    GameState* gameState;
+    int circleDiameter;
+    ScreenInfo screenInfo;
+};
+
+internal void InitParticleDeath(ParticleSystem* ps, Particle* particle,
+    void* data)
+{
+    ParticleDeathData* pdd = (ParticleDeathData*)data;
+    GameState* gameState = pdd->gameState;
+    float32 slotWidthPix = pdd->screenInfo.size.x / 12.0f;
+    Vec3 origin = {
+        slotWidthPix * gameState->circlePos + slotWidthPix / 2.0f,
+        pdd->screenInfo.size.y / 2.0f,
+        0.0f
+    };
+    float32 radius = pdd->circleDiameter / 2.0f;
+
+    particle->life = 0.0f;
+    Vec3 circlePos;
+    do {
+        circlePos.x = RandFloat(-1.0f, 1.0f);
+        circlePos.y = RandFloat(-1.0f, 1.0f);
+        circlePos.z = 0.0f;
+    } while (Mag(circlePos) > 1.0f);
+    circlePos *= radius;
+    particle->pos = origin + circlePos;
+
+    //float32 speedX = RandFloat(-20.0f, 20.0f);
+    //float32 speedY = RandFloat(-400.0f, 400.0f);
+    std::random_device rd;
+    // Mersenne twister PRNG, initialized with seed from previous random device instance
+    std::mt19937 gen(rd());
+    std::normal_distribution<float32> distX(0.0f, 20.0f);
+    std::normal_distribution<float32> distY(0.0f, 400.0f);
+    float32 speedX = distX(gen);
+    float32 speedY = distY(gen);
+    particle->vel = speedX * Vec3::unitX + speedY * Vec3::unitY;
+    float32 colorOffsetR = RandFloat(-0.1f, 0.1f);
+    float32 colorOffsetG = RandFloat(-0.1f, 0.1f);
+    float32 colorOffsetB = RandFloat(-0.1f, 0.1f);
+    Vec4 color = circleSelectedColor_;
+    particle->color = circleSelectedColor_;
+    particle->color.r += colorOffsetR;
+    particle->color.g += colorOffsetG;
+    particle->color.b += colorOffsetB;
+    float32 baseSize = pdd->circleDiameter / 35.0f;
+    baseSize = MaxFloat32(baseSize, 2.0f);
+    float32 randSize = baseSize + RandFloat() * baseSize / 2.0f;
+    particle->size = { randSize, randSize };
+    particle->bounceMult = 1.0f;
+    particle->frictionMult = 1.0f;
+}
+
+internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
+{
+    float32 beatDuration = 60.0f / (float32)gameState->bpm;
+    gameState->halfBeatCount++;
+    if (gameState->halfBeatCount >= gameState->levelLength) {
+        gameState->halfBeatCount = 0;
+    }
+    if (gameState->halfBeatCount % 2 == 0) {
+        gameState->lastBeat -= beatDuration;
+    }
+    if (!gameState->dead) {
+        for (int i = 0; i < 12; i++) {
+            if (gameState->circlePos == i &&
+            gameState->snareHits[gameState->halfBeatCount][i]) {
+                gameState->dead = true;
+                gameState->deadTime = 0.0f;
+                gameState->deadHalfBeats = 0;
+                ParticleDeathData pdd;
+                float32 slotWidthPix = screenInfo.size.x / 12.0f;
+                int circleDiameter = (int)(slotWidthPix * 0.6f);
+                pdd.gameState = gameState;
+                pdd.circleDiameter = circleDiameter;
+                pdd.screenInfo = screenInfo;
+                ParticleBurst(&gameState->ps, 4000, &pdd);
+            }
+        }
+    }
+    else {
+        gameState->deadHalfBeats++;
+        if (gameState->deadHalfBeats >= DEATH_DURATION_HALFBEATS) {
+            gameState->dead = false;
+            gameState->halfBeatCount = 0;
+            gameState->lastBeat = 0.0f;
+            gameState->circlePos = gameState->respawn;
+        }
+    }
+}
+
+internal inline bool32 IsWhitespace(char c)
+{
+    return c == ' ' || c == '\t'
+        || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
+internal void LoadLevel(const ThreadContext* thread, const char* filePath,
+    GameState* gameState,
+    DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+    DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+{
+    // Read shader code from files.
+    DEBUG_PRINT("Reading level file: %s\n", filePath);
+    DEBUGReadFileResult levelFile = DEBUGPlatformReadFile(thread, filePath);
+    if (levelFile.size == 0) {
+        DEBUG_PRINT("Failed to read level file\n");
+        return;
+    }
+
+    // TODO file reading here is obviously very sloppy.
+    // Check for unexpected end of file, etc.
+    char* fileData = (char*)levelFile.data;
+    char* c = fileData;
+    char buf[128];
+
+    int i = 0;
+    while (!IsWhitespace(*c)) {
+        buf[i++] = *c++;
+    }
+    while (IsWhitespace(*c)) {
+        c++;
+    }
+    buf[i] = '\0';
+    int bpm = (int)strtol(buf, nullptr, 10);
+
+    i = 0;
+    while (!IsWhitespace(*c)) {
+        buf[i++] = *c++;
+    }
+    while (IsWhitespace(*c)) {
+        c++;
+    }
+    buf[i] = '\0';
+    int respawn = (int)strtol(buf, nullptr, 10);
+
+    i = 0;
+    while (!IsWhitespace(*c)) {
+        buf[i++] = *c++;
+    }
+    while (IsWhitespace(*c)) {
+        c++;
+    }
+    buf[i] = '\0';
+    int levelLength = (int)strtol(buf, nullptr, 10);
+
+    for (int hb = 0; hb < levelLength; hb++) {
+        if (*c == 'n') {
+            for (int n = 0; n < 12; n++) {
+                gameState->snareHits[hb][n] = false;
+            }
+            c++;
+            while (IsWhitespace(*c)) {
+                c++;
+            }
+            continue;
+        }
+
+        i = 0;
+        char* bufStart = buf;
+        int noteNum = 0;
+        while (*c != '\n') {
+            if (*c == ',') {
+                buf[i++] = '\0';
+                c++;
+                gameState->snareHits[hb][noteNum++] =
+                    (int)strtol(bufStart, nullptr, 10) == 1;
+                bufStart = &buf[i];
+            }
+            else {
+                buf[i++] = *c++;
+            }
+        }
+        if (hb != levelLength - 1) {
+            while (IsWhitespace(*c)) {
+                c++;
+            }
+        }
+    }
+
+    gameState->bpm = bpm;
+    gameState->respawn = respawn;
+    gameState->levelLength = levelLength;
+
+    gameState->halfBeatCount = 0;
+    gameState->circlePos = respawn;
+
+    DEBUGPlatformFreeFileMemory(thread, &levelFile);
+}
+
+internal float32 SquareWave(float32 t)
+{
+    float32 tMod = fmod(t, 2.0f * PI_F);
+    return tMod < PI_F ? 1.0f : -1.0f;
 }
 
 extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
@@ -178,16 +399,37 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
         // Initialize audio state
         gameState->audioState.runningSampleIndex = 0;
-        gameState->audioState.amplitude = 0.1f;
+        //gameState->audioState.amplitude = 0.1f;
         gameState->audioState.tSine1 = 0.0f;
         gameState->audioState.tSine2 = 0.0f;
+        gameState->audioState.tSnare = 0.0f;
+        gameState->audioState.tDead = 0.0f;
 #if GAME_INTERNAL
         gameState->audioState.debugView = false;
 #endif
 
+        // Game data
+        gameState->bpm = 120;
+        gameState->lastHalfBeat = 0.0f;
+        gameState->lastBeat = 0.0f;
+        gameState->halfBeatCount = 0;
+
+        gameState->levelLength = 8;
+        for (int i = 0; i < gameState->levelLength; i++) {
+            for (int j = 0; j < 12; j++) {
+                gameState->snareHits[i][j] = false;
+            }
+        }
+        gameState->respawn = 0;
+
         gameState->circlePos = 0;
+
+        gameState->dead = false;
+
+        // Debug
 		gameState->debugCamPos = Vec3::zero;
 
+        // Rendering stuff
         gameState->rectGL = InitRectGL(thread,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
@@ -198,6 +440,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
         gameState->textGL = InitTextGL(thread,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->psGL = InitParticleSystemGL(thread,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
 
@@ -296,6 +541,18 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
 
+        gameState->pTexBase = LoadPNGOpenGL(thread,
+            "data/textures/base.png",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+
+        CreateParticleSystem(&gameState->ps, 10000, 0, 1.5f,
+            Vec3::zero,
+            0.05f, 0.02f,
+            nullptr, 0, nullptr, 0, nullptr, 0, nullptr, 0,
+            InitParticleDeath, gameState->pTexBase
+        );
+
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
 	}
@@ -325,6 +582,17 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         DEBUG_PRINT("Updated screen-size dependent info\n");
     }
 
+    // Level loading
+    for (int i = 0; i < 10; i++) {
+        if (WasKeyPressed(input, (KeyInputCode)(KM_KEY_0 + i))) {
+            char buf[128];
+            sprintf(buf, "data/levels/level%d", i);
+            LoadLevel(thread, buf, gameState,
+                platformFuncs->DEBUGPlatformReadFile,
+                platformFuncs->DEBUGPlatformFreeFileMemory);
+        }
+    }
+
     if (WasKeyPressed(input, KM_KEY_A)
     || WasKeyPressed(input, KM_KEY_ARROW_LEFT)) {
         gameState->circlePos--;
@@ -339,6 +607,24 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     if (gameState->circlePos > 11) {
         gameState->circlePos = 11;
     }
+
+    if (deltaTime < 1.0f) {
+        // TODO very janky, but hey
+        gameState->lastBeat += deltaTime;
+        gameState->lastHalfBeat += deltaTime;
+        if (gameState->dead) {
+            gameState->deadTime += deltaTime;
+        }
+    }
+    float32 beatDuration = 60.0f / (float32)gameState->bpm;
+    float32 halfBeatDuration = 60.0f / (float32)gameState->bpm / 2.0f;
+    if (gameState->lastHalfBeat >= halfBeatDuration) {
+        //DEBUG_PRINT("half beat\n");
+        gameState->lastHalfBeat -= halfBeatDuration;
+        HalfBeat(gameState, screenInfo);
+    }
+    float32 beatProgress = gameState->lastBeat / beatDuration;
+    float32 halfBeatProgress = gameState->lastHalfBeat / halfBeatDuration;
 
     // Debug camera position control
 	const GameControllerInput* input0 = &input->controllers[0];
@@ -364,16 +650,26 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	}
 	gameState->debugCamPos += vel;
 
-    // ------------------------- Begin Rendering -------------------------
-    glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[0]);
-    //glDisable(GL_DEPTH_TEST);
-    glClearColor(backgroundColor_.r, backgroundColor_.g,
-        backgroundColor_.b, backgroundColor_.a);
-	glClear(GL_COLOR_BUFFER_BIT);
-
     int lineWidth = screenInfo.size.y / 140;
     float32 slotWidthPix = screenInfo.size.x / 12.0f;
     int circleDiameter = (int)(slotWidthPix * 0.6f);
+    ParticleDeathData pdd;
+    pdd.gameState = gameState;
+    pdd.circleDiameter = circleDiameter;
+    pdd.screenInfo = screenInfo;
+    UpdateParticleSystem(&gameState->ps, deltaTime, &pdd);
+
+    // ------------------------- Begin Rendering -------------------------
+    glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[0]);
+    //glDisable(GL_DEPTH_TEST);
+    Vec4 clearColor = Lerp(backgroundColorBeat_, backgroundColor_,
+        beatProgress);
+    glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+    if (gameState->dead) {
+        circleDiameter = 0;
+    }
 
     for (int i = 0; i < 12; i++) {
         Vec2Int slotLinePos = {
@@ -414,19 +710,50 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         circleSelectedColor_
     );
 
+    if (!gameState->dead || gameState->deadHalfBeats == 0) {
+        Vec4 snareHitColor = snareHitColor_;
+        snareHitColor.a *= 1.0f - halfBeatProgress;
+        for (int i = 0; i < 12; i++) {
+            Vec2Int snareHitPos = {
+                (int)(slotWidthPix * i + slotWidthPix / 2.0f),
+                screenInfo.size.y / 2
+            };
+            if (gameState->snareHits[gameState->halfBeatCount][i]) {
+                DrawRect(gameState->rectGL, screenInfo,
+                    snareHitPos,
+                    Vec2 { 0.5f, 0.5f },
+                    Vec2Int { (int)(slotWidthPix * 1.01f), screenInfo.size.y },
+                    snareHitColor
+                );
+            }
+        }
+    }
+
+    DEBUG_ASSERT(sizeof(ParticleSystemDataGL) <= memory->transientStorageSize);
+    ParticleSystemDataGL* dataGL = (ParticleSystemDataGL*)
+        memory->transientStorage;
+    Vec3 scale = {
+        2.0f / screenInfo.size.x,
+        2.0f / screenInfo.size.y,
+        1.0f
+    };
+    Mat4 psView = Translate(-Vec3::one) * Scale(scale);
+    DrawParticleSystem(gameState->psGL, &gameState->ps,
+        Vec3::unitX, Vec3::unitY, Vec3::unitZ, Mat4::one, psView, dataGL);
+
     // Post processing passes
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     GLint loc;
-
-    /*Vec2 invScreenSize = {
-        1.0f / screenInfo.size.x,
-        1.0f / screenInfo.size.y
-    };
-    loc = glGetUniformLocation(gameState->bloomExtractShader,
-        "invScreenSize");
-    glUniform2fv(loc, 1, &invScreenSize.e[0]);*/
-
     // -------------------- BLOOM --------------------
+    float32 bloomThreshold = 0.5f;
+    int bloomBlurPasses = 10;
+    float bloomMag = 0.3f;
+    if (gameState->dead) {
+        float32 deathProgress = gameState->deadTime
+            / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
+        bloomBlurPasses += (int)((1.0f - deathProgress) * 5);
+        bloomMag += (1.0f - deathProgress) * (1.0f - bloomMag);
+    }
     // Extract high-luminance pixels
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[1]);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -438,12 +765,26 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     loc = glGetUniformLocation(gameState->bloomExtractShader,
         "framebufferTexture");
     glUniform1i(loc, 0);
+    loc = glGetUniformLocation(gameState->bloomExtractShader,
+        "threshold");
+    glUniform1f(loc, bloomThreshold);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     // Blur high-luminance pixels
-    const int BLUR_PASSES = 15;
-    for (int i = 0; i < BLUR_PASSES; i++) {  
+    GLfloat gaussianKernel[KERNEL_SIZE];
+    GLfloat kernSum = 0.0f;
+    float32 sigma = 2.0f;
+    for (int i = -KERNEL_HALFSIZE; i <= KERNEL_HALFSIZE; i++) {
+        float32 x = (float32)i;
+        float32 g = expf(-(x * x) / (2.0f * sigma * sigma));
+        gaussianKernel[i + KERNEL_HALFSIZE] = (GLfloat)g;
+        kernSum += (GLfloat)g;
+    }
+    for (int i = 0; i < KERNEL_SIZE; i++) {
+        gaussianKernel[i] /= kernSum;
+    }
+    for (int i = 0; i < bloomBlurPasses; i++) {  
         // Horizontal pass
         glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[2]);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -458,6 +799,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         loc = glGetUniformLocation(gameState->blurShader,
             "isHorizontal");
         glUniform1i(loc, 1);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "gaussianKernel");
+        glUniform1fv(loc, KERNEL_SIZE, gaussianKernel);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -475,11 +819,14 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         loc = glGetUniformLocation(gameState->blurShader,
             "isHorizontal");
         glUniform1i(loc, 0);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "gaussianKernel");
+        glUniform1fv(loc, KERNEL_SIZE, gaussianKernel);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
-    // Blend pass
+    // Blend scene with blurred bright pixels
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[2]);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -497,12 +844,35 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     glUniform1i(loc, 1);
     loc = glGetUniformLocation(gameState->bloomBlendShader,
         "bloomMag");
-    glUniform1f(loc, 0.4f);
+    glUniform1f(loc, bloomMag);
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     // -------------------- GRAIN --------------------
-    // nothing to see here for now
+    float32 grainMag = 0.25f;
+    if (gameState->dead) {
+        float32 deathProgress = gameState->deadTime
+            / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
+        grainMag += (1.0f - deathProgress) * (1.0f - grainMag);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[0]);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindVertexArray(gameState->screenQuadVertexArray);
+    glUseProgram(gameState->grainShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[2]);
+    loc = glGetUniformLocation(gameState->grainShader,
+        "framebufferTexture");
+    glUniform1i(loc, 0);
+    loc = glGetUniformLocation(gameState->grainShader,
+        "grainMag");
+    glUniform1f(loc, 0.25f);
+    loc = glGetUniformLocation(gameState->grainShader,
+        "time");
+    glUniform1f(loc, (GLfloat)gameState->audioState.runningSampleIndex);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 
     // --------------------RENDER TO SCREEN --------------------
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -511,7 +881,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     glBindVertexArray(gameState->screenQuadVertexArray);
     glUseProgram(gameState->screenShader);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[2]);
+    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[0]);
     loc = glGetUniformLocation(gameState->screenShader,
         "framebufferTexture");
     glUniform1i(loc, 0);
@@ -530,7 +900,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one);
 
     // Audio output
-    float32 baseTone = 261.0f;
+    float32 baseTone = 60.0f;
+#if 0
     float32 tone1Hz = baseTone
         * (1.0f + 0.5f * input->controllers[0].leftEnd.x)
         * (1.0f + 0.1f * input->controllers[0].leftEnd.y);
@@ -547,36 +918,81 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         tone1Hz = baseTone * (1.0f + 0.5f * mouseOffsetX);
         tone2Hz = baseTone * (1.0f + 0.5f * mouseOffsetY);
     //}
+#else
+    float32 tone1Hz = baseTone;
+    float32 tone2Hz = baseTone;
+#endif
+
+    float32 amplitudeBase = ClampFloat32(1.0f - beatProgress, 0.0f, 1.0f);
+
+    float32 toneSnare = baseTone * 2.0f;
+    float32 amplitudeSnare = ClampFloat32(1.0f - halfBeatProgress, 0.0f, 1.0f);
+    bool shouldPlaySnare = false;
+    for (int i = 0; i < 12; i++) {
+        if (gameState->snareHits[gameState->halfBeatCount][i]) {
+            shouldPlaySnare = true;
+            break;
+        }
+    }
+    if (gameState->dead && gameState->deadHalfBeats != 0) {
+        shouldPlaySnare = false;
+    }
+    if (!shouldPlaySnare) {
+        amplitudeSnare = 0.0f;
+    }
+
+    float32 toneDead = baseTone * 2.0f;
+    float32 deathProgress = gameState->deadTime
+        / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
+    float32 amplitudeDead = ClampFloat32((1.0f - deathProgress) * 0.25f,
+        0.0f, 1.0f);
+    if (!gameState->dead) {
+        amplitudeDead = 0.0f;
+    }
 
     AudioState* audioState = &gameState->audioState;
-    if (input->controllers[0].x.isDown) {
-        audioState->amplitude -= 0.01f;
-    }
-    if (input->controllers[0].b.isDown) {
-        audioState->amplitude += 0.01f;
-    }
-    audioState->amplitude = ClampFloat32(audioState->amplitude, 0.0f, 1.0f);
+    /*audioState->amplitude = 1.0f - beatProgress;
+    audioState->amplitude = ClampFloat32(audioState->amplitude, 0.0f, 1.0f);*/
     audioState->runningSampleIndex += audio->fillStartDelta;
     audioState->tSine1 += 2.0f * PI_F * tone1Hz
         * audio->fillStartDelta / audio->sampleRate;
     audioState->tSine2 += 2.0f * PI_F * tone2Hz
         * audio->fillStartDelta / audio->sampleRate;
+    audioState->tSnare += 2.0f * PI_F * toneSnare
+        * audio->fillStartDelta / audio->sampleRate;
+    audioState->tDead += 2.0f * PI_F * toneDead
+        * audio->fillStartDelta / audio->sampleRate;
+
+    // Basic mixing
+    amplitudeBase *= 0.33333f;
+    amplitudeSnare *= 0.33333f;
+    amplitudeDead *= 0.33333f;
 
     for (int i = 0; i < audio->fillLength; i++) {
         float32 tSine1Off = 2.0f * PI_F * tone1Hz
             * i / audio->sampleRate;
         float32 tSine2Off = 2.0f * PI_F * tone2Hz
             * i / audio->sampleRate;
+        float32 tSnareOff = 2.0f * PI_F * toneSnare
+            * i / audio->sampleRate;
+        float32 tDeadOff = 2.0f * PI_F * toneDead
+            * i / audio->sampleRate;
         uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        int16 sin1Sample = (int16)(INT16_MAXVAL * audioState->amplitude * sinf(
+        int16 sin1Sample = (int16)(INT16_MAXVAL * amplitudeBase * sinf(
             audioState->tSine1 + tSine1Off));
-        int16 sin2Sample = (int16)(INT16_MAXVAL * audioState->amplitude * sinf(
+        int16 sin2Sample = (int16)(INT16_MAXVAL * amplitudeBase * sinf(
             audioState->tSine2 + tSine2Off));
-        audio->buffer[ind * audio->channels]      = sin1Sample;
-        audio->buffer[ind * audio->channels + 1]  = sin2Sample;
+        int16 snareSample = (int16)(INT16_MAXVAL * amplitudeSnare * sinf(
+            audioState->tSnare + tSnareOff));
+        int16 deadSample = (int16)(INT16_MAXVAL * amplitudeDead * SquareWave(
+            audioState->tSnare + tSnareOff));
+        audio->buffer[ind * audio->channels]      =
+            sin1Sample + snareSample + deadSample;
+        audio->buffer[ind * audio->channels + 1]  =
+            sin2Sample + snareSample + deadSample;
 
-        audio->buffer[ind * audio->channels]      = 0;
-        audio->buffer[ind * audio->channels + 1]  = 0;
+        //audio->buffer[ind * audio->channels]      = 0;
+        //audio->buffer[ind * audio->channels + 1]  = 0;
     }
 
 #if GAME_INTERNAL
@@ -625,3 +1041,5 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #include "km_input.cpp"
 #include "opengl_base.cpp"
 #include "text.cpp"
+#include "load_png.cpp"
+#include "particles.cpp"

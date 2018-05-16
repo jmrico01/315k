@@ -5,16 +5,33 @@ in vec2 fragUV;
 out vec4 outColor;
 
 uniform sampler2D framebufferTexture;
-uniform vec2 invScreenSize;
+uniform float grainMag;
+uniform float time;
 
-float ColorToLuminance(vec3 color) {
-    // Luminance color weights source:
-    // https://stackoverflow.com/questions/596216/formula-to-determine-brightness-of-rgb-color
-    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+float rand(vec2 n) { 
+    return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float noise(vec2 p){
+    vec2 ip = floor(p);
+    vec2 u = fract(p);
+    u = u*u*(3.0-2.0*u);
+    
+    float res = mix(
+        mix(rand(ip),rand(ip+vec2(1.0,0.0)),u.x),
+        mix(rand(ip+vec2(0.0,1.0)),rand(ip+vec2(1.0,1.0)),u.x),u.y);
+    return res*res;
 }
 
 void main()
 {
+    vec2 randVec = vec2(
+        mod(time * fragUV.x, 701.0),
+        mod(time * fragUV.y, 373.0)
+    );
     vec3 color = texture(framebufferTexture, fragUV).rgb;
-    outColor = vec4(color, 1.0);
+    vec3 noiseColor = color;
+    color *= 1.0 - grainMag;
+    noiseColor *= grainMag * noise(randVec * 100.0f);
+    outColor = vec4(color + noiseColor, 1.0);
 }

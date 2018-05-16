@@ -52,18 +52,12 @@ paths["src-hashes-old"] = paths["build"] + "/src_hashes_old"
 paths["include-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/include"
 paths["lib-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/objs/vc2010/x64"
 
+paths["include-libpng-win"] = "D:/Development/Libraries/lpng1634"
+paths["lib-libpng-win-d"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/DebugLibrary"
+paths["lib-libpng-win-r"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/ReleaseLibrary"
+
 paths["include-freetype-mac"] = "/usr/local/include/freetype2"
 paths["lib-freetype-mac"] = "/usr/local/lib"
-
-#paths["include-libpng-win"] = "D:/Development/Libraries/lpng1634"
-#paths["lib-libpng-win-d"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/DebugLibrary"
-#paths["lib-libpng-win-r"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/ReleaseLibrary"
-
-#paths["include-freetype-linux"] = "/usr/local/include/freetype2"
-#paths["lib-freetype-linux"] = "/home/legionjr/Documents/Libraries"
-
-#paths["include-libpng-linux"] = "/usr/local/include/libpng16"
-#paths["lib-libpng-linux"] = "/home/legionjr/Documents/Libraries"
 
 NormalizePathSlashes(paths)
 
@@ -96,7 +90,8 @@ def WinCompileDebug():
         "/wd4505",  # unreferenced local function has been removed
     ])
     includePaths = " ".join([
-        "/I" + paths["include-freetype-win"]
+        "/I" + paths["include-freetype-win"],
+        "/I" + paths["include-libpng-win"]
     ])
 
     linkerFlags = " ".join([
@@ -112,10 +107,13 @@ def WinCompileDebug():
         "xaudio2.lib"
     ])
     libPathsGame = " ".join([
-        "/LIBPATH:" + paths["lib-freetype-win"]
+        "/LIBPATH:" + paths["lib-freetype-win"],
+        "/LIBPATH:" + paths["lib-libpng-win-d"]
     ])
     libsGame = " ".join([
-        "freetype281MTd.lib"
+        "freetype281MTd.lib",
+        "libpng16.lib",
+        "zlib.lib"
     ])
 
     # Clear old PDB files
@@ -160,7 +158,95 @@ def WinCompileDebug():
     ]))
 
 def WinCompileRelease():
-    print("UNIMPLEMENTED")
+    macros = " ".join([
+        "/DGAME_INTERNAL=1",
+        "/DGAME_SLOW=0",
+        "/DGAME_WIN32",
+        "/D_CRT_SECURE_NO_WARNINGS"
+    ])
+    compilerFlags = " ".join([
+        "/MT",     # CRT static link (debug)
+        "/nologo",  # disable the "Microsoft C/C++ Optimizing Compiler" message
+        "/Gm-",     # disable incremental build things
+        "/GR-",     # disable type information
+        "/EHa-",    # disable exception handling
+        "/EHsc",    # handle stdlib errors
+        "/Ox",      # full optimization
+        "/Z7"       # minimal "old school" debug information
+    ])
+    compilerWarningFlags = " ".join([
+        "/WX",      # treat warnings as errors
+        "/W4",      # level 4 warnings
+
+        # disable the following warnings:
+        "/wd4100",  # unused function arguments
+        "/wd4189",  # unused initialized local variable
+        "/wd4201",  # nonstandard extension used: nameless struct/union
+        "/wd4505",  # unreferenced local function has been removed
+    ])
+    includePaths = " ".join([
+        "/I" + paths["include-freetype-win"]
+    ])
+
+    linkerFlags = " ".join([
+        "/incremental:no",  # disable incremental linking
+        "/opt:ref"          # get rid of extraneous linkages
+    ])
+    libPathsPlatform = " ".join([
+    ])
+    libsPlatform = " ".join([
+        "user32.lib",
+        "gdi32.lib",
+        "opengl32.lib",
+        "xaudio2.lib"
+    ])
+    libPathsGame = " ".join([
+        "/LIBPATH:" + paths["lib-freetype-win"]
+    ])
+    libsGame = " ".join([
+        "freetype281MT.lib"
+    ])
+
+    # Clear old PDB files
+    for fileName in os.listdir(paths["build"]):
+        if ".pdb" in fileName:
+            try:
+                os.remove(os.path.join(paths["build"], fileName))
+            except:
+                print("Couldn't remove " + fileName)
+
+    pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
+    compileDLLCommand = " ".join([
+        "cl",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "/LD", "/Fe" + PROJECT_NAME + "_game.dll",
+        paths["main-cpp"],
+        "/link", linkerFlags, libPathsGame, libsGame,
+        "/EXPORT:GameUpdateAndRender", "/PDB:" + pdbName])
+
+    compileCommand = " ".join([
+        "cl", "/DGAME_PLATFORM_CODE",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "/Fe" + PROJECT_NAME + "_win32.exe",
+        "/Fm" + PROJECT_NAME + "_win32.map",
+        paths["win32-main-cpp"],
+        "/link", linkerFlags, libPathsPlatform, libsPlatform])
+    
+    devenvCommand = "rem"
+    if len(sys.argv) > 2:
+        if sys.argv[2] == "devenv":
+            devenvCommand = "devenv " + PROJECT_NAME + "_win32.exe"
+
+    loadCompiler = "call \"C:\\Program Files (x86)" + \
+        "\\Microsoft Visual Studio 14.0\\VC\\vcvarsall.bat\" x64"
+    os.system(" & ".join([
+        "pushd " + paths["build"],
+        loadCompiler,
+        compileDLLCommand,
+        compileCommand,
+        devenvCommand,
+        "popd"
+    ]))
 
 def WinRun():
     os.system(paths["build"] + os.sep + PROJECT_NAME + "_win32.exe")

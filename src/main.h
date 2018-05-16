@@ -4,8 +4,11 @@
 #include "opengl.h"
 #include "opengl_base.h"
 #include "text.h"
+#include "particles.h"
 
 #define NUM_FRAMEBUFFERS 3
+#define MAX_LEVEL_HALFBEATS 16
+#define DEATH_DURATION_HALFBEATS 4
 
 struct MarkerGL
 {
@@ -38,9 +41,12 @@ struct Tiles
 struct AudioState
 {
     int runningSampleIndex;
-    float32 amplitude;
+    //float32 amplitude;
     float32 tSine1;
     float32 tSine2;
+
+    float32 tSnare;
+    float32 tDead;
 
 #if GAME_INTERNAL
     bool32 debugView;
@@ -51,13 +57,30 @@ struct GameState
 {
     AudioState audioState;
 
+    // Game data --------------------------
+    int bpm;
+    float32 lastHalfBeat;
+    float32 lastBeat;
+    int halfBeatCount;
+
+    int levelLength;
+    bool snareHits[MAX_LEVEL_HALFBEATS][12];
+    int respawn;
+
     int circlePos;
+
+    bool32 dead;
+    float32 deadTime;
+    int deadHalfBeats;
+    // ------------------------------------
+
     Vec3 debugCamPos;
 
     RectGL rectGL;
     TexturedRectGL texturedRectGL;
     LineGL lineGL;
     TextGL textGL;
+    ParticleSystemGL psGL;
 
     MarkerGL markerGL;
     CircleGL circleGL;
@@ -76,5 +99,9 @@ struct GameState
     GLuint bloomBlendShader;
     GLuint blurShader;
     GLuint grainShader;
+    GLuint grainTexture;
     GLuint fxaaShader;
+
+    GLuint pTexBase;
+    ParticleSystem ps;
 };

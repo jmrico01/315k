@@ -586,6 +586,17 @@ inline bool operator==(const Vec4& v1, const Vec4& v2)
     return v1.x == v2.x && v1.y == v2.y && v1.z == v2.z && v1.w == v2.w;
 }
 
+inline Vec4 Lerp(Vec4 v1, Vec4 v2, float t)
+{
+    Vec4 result = {
+        Lerp(v1.x, v2.x, t),
+        Lerp(v1.y, v2.y, t),
+        Lerp(v1.z, v2.z, t),
+        Lerp(v1.w, v2.w, t)
+    };
+    return result;
+}
+
 // -------------------- Mat4 --------------------
 // TODO these functions might be better off not inlined
 // though they are used very infrequently
