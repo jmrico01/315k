@@ -519,7 +519,9 @@ int main(int argc, const char* argv[])
 	@autoreleasepool
 	{
 
+#if GAME_SLOW
 	debugPrint_ = DEBUGPlatformPrint;
+#endif
 
 	NSApplication* app = [NSApplication sharedApplication];
 	[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -582,13 +584,20 @@ int main(int argc, const char* argv[])
 
 	// Create the main window and the content view
 	NSRect screenRect = [[NSScreen mainScreen] frame];
-	float width = 1280.0f;
-	float height = 800.0f;
+    ScreenInfo screenInfo;
+    screenInfo.changed = true;
+    screenInfo.size.x = 1280;
+    screenInfo.size.y = 800;
+    // TODO set these values (they aren't used for now)
+    /*screenInfo.colorBits = 32;
+    screenInfo.alphaBits = 8;
+    screenInfo.depthBits = 24;
+    screenInfo.stencilBits = 0;*/
 
 	NSRect initialFrame = NSMakeRect(
-		(screenRect.size.width - width) * 0.5,
-		(screenRect.size.height - height) * 0.5,
-		width, height
+		(screenRect.size.width - screenInfo.size.x) * 0.5,
+		(screenRect.size.height - screenInfo.size.y) * 0.5,
+		screenInfo.size.x, screenInfo.size.y
 	);
 
 	NSWindow* window = [[NSWindow alloc] initWithContentRect:initialFrame
@@ -633,7 +642,7 @@ int main(int argc, const char* argv[])
 	platformFuncs.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
 	platformFuncs.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
     if (!MacOSInitOpenGL(&platformFuncs.glFunctions,
-    (int)width, (int)height)) {
+    screenInfo.size.x, screenInfo.size.y)) {
         return 1;
     }
     DEBUG_PRINT("Initialized MacOS OpenGL\n");
@@ -651,8 +660,8 @@ int main(int argc, const char* argv[])
     	* AUDIO_SAMPLERATE / 1000;
     MacOSInitCoreAudio(&macAudio, AUDIO_SAMPLERATE,
     	AUDIO_CHANNELS, bufferSizeSamples);
-    macAudio.minLatency = AUDIO_SAMPLERATE / 60 / 2;
-    macAudio.maxLatency = AUDIO_SAMPLERATE / 10;
+    macAudio.minLatency = AUDIO_SAMPLERATE / 30 / 2;
+    macAudio.maxLatency = AUDIO_SAMPLERATE / 8;
     DEBUG_PRINT("latency: %d - %d\n", macAudio.minLatency,
         macAudio.maxLatency);
     DEBUG_PRINT("Initialized MacOS CoreAudio\n");
@@ -763,10 +772,12 @@ int main(int argc, const char* argv[])
 		if (gameCode.gameUpdateAndRender) {
 			ThreadContext thread = {};
 			CGRect contentViewFrame = [[window contentView] frame];
-			ScreenInfo screenInfo;
-            screenInfo.changed = false;
-			screenInfo.size.x = (int)contentViewFrame.size.width;
-			screenInfo.size.y = (int)contentViewFrame.size.height;
+            if (screenInfo.size.x != (int)contentViewFrame.size.width
+            || screenInfo.size.y != (int)contentViewFrame.size.height) {
+                screenInfo.changed = true;
+                screenInfo.size.x = (int)contentViewFrame.size.width;
+                screenInfo.size.y = (int)contentViewFrame.size.height;
+            }
 
 			gameCode.gameUpdateAndRender(&thread, &platformFuncs,
 				newInput, screenInfo, deltaTime,
@@ -774,6 +785,7 @@ int main(int argc, const char* argv[])
 			);
 			macAudio.writeCursor = (gameAudio.fillStart + gameAudio.fillLength)
                 % macAudio.bufferSizeSamples;
+            screenInfo.changed = false;
 		}
 
 		// flushes and forces vsync

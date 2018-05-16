@@ -178,15 +178,17 @@ void ParticleBurst(ParticleSystem* ps, int numParticles, void* data)
     }
 }
 
+#if 0
 internal void HandleBounceCollision(Particle* p,
     Vec3 intersect, Vec3 normal, float32 deltaTime, float32 offset)
 {
     Vec3 velNormal = Dot(normal, p->vel) * normal;
     Vec3 velTangent = p->vel - velNormal;
     p->vel = velTangent * p->frictionMult - velNormal * p->bounceMult;
-    float32 off = MinFloat32(Mag(p->vel) * deltaTime, offset);
+    //float32 off = MinFloat32(Mag(p->vel) * deltaTime, offset);
     p->pos = intersect + normal * offset;
 }
+#endif
 
 internal inline bool32 IsInsideBox(Vec3 p, Vec3 boxMin, Vec3 boxMax)
 {

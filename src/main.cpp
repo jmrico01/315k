@@ -199,12 +199,11 @@ internal void InitParticleDeath(ParticleSystem* ps, Particle* particle,
     float32 colorOffsetR = RandFloat(-0.1f, 0.1f);
     float32 colorOffsetG = RandFloat(-0.1f, 0.1f);
     float32 colorOffsetB = RandFloat(-0.1f, 0.1f);
-    Vec4 color = circleSelectedColor_;
     particle->color = circleSelectedColor_;
     particle->color.r += colorOffsetR;
     particle->color.g += colorOffsetG;
     particle->color.b += colorOffsetB;
-    float32 baseSize = pdd->circleDiameter / 35.0f;
+    float32 baseSize = pdd->circleDiameter / 10.0f;
     baseSize = MaxFloat32(baseSize, 2.0f);
     float32 randSize = baseSize + RandFloat() * baseSize / 2.0f;
     particle->size = { randSize, randSize };
@@ -235,7 +234,7 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
                 pdd.gameState = gameState;
                 pdd.circleDiameter = circleDiameter;
                 pdd.screenInfo = screenInfo;
-                ParticleBurst(&gameState->ps, 4000, &pdd);
+                ParticleBurst(&gameState->ps, 1000, &pdd);
             }
         }
     }
@@ -577,6 +576,14 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[i]);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                 GL_TEXTURE_2D, gameState->colorBuffers[i], 0);
+
+#if GAME_SLOW
+            GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+            if (fbStatus != GL_FRAMEBUFFER_COMPLETE) {
+                DEBUG_PRINT("Incomplete framebuffer (%d), status %x\n",
+                    i, fbStatus);
+            }
+#endif
         }
 
         DEBUG_PRINT("Updated screen-size dependent info\n");
@@ -746,8 +753,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     GLint loc;
     // -------------------- BLOOM --------------------
     float32 bloomThreshold = 0.5f;
-    int bloomBlurPasses = 10;
-    float bloomMag = 0.3f;
+    int bloomBlurPasses = 1;
+    float bloomBlurSigma = 4.0f;
+    float bloomMag = 0.5f;
     if (gameState->dead) {
         float32 deathProgress = gameState->deadTime
             / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
@@ -774,7 +782,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     // Blur high-luminance pixels
     GLfloat gaussianKernel[KERNEL_SIZE];
     GLfloat kernSum = 0.0f;
-    float32 sigma = 2.0f;
+    float32 sigma = bloomBlurSigma;
     for (int i = -KERNEL_HALFSIZE; i <= KERNEL_HALFSIZE; i++) {
         float32 x = (float32)i;
         float32 g = expf(-(x * x) / (2.0f * sigma * sigma));
@@ -787,7 +795,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     for (int i = 0; i < bloomBlurPasses; i++) {  
         // Horizontal pass
         glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[2]);
-        glClear(GL_COLOR_BUFFER_BIT);
+        //glClear(GL_COLOR_BUFFER_BIT);
 
         glBindVertexArray(gameState->screenQuadVertexArray);
         glUseProgram(gameState->blurShader);
@@ -807,7 +815,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
         // Vertical pass
         glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[1]);
-        glClear(GL_COLOR_BUFFER_BIT);
+        //glClear(GL_COLOR_BUFFER_BIT);
 
         glBindVertexArray(gameState->screenQuadVertexArray);
         glUseProgram(gameState->blurShader);
@@ -828,7 +836,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
     // Blend scene with blurred bright pixels
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[2]);
-    glClear(GL_COLOR_BUFFER_BIT);
+    //glClear(GL_COLOR_BUFFER_BIT);
 
     glBindVertexArray(gameState->screenQuadVertexArray);
     glUseProgram(gameState->bloomBlendShader);
@@ -856,7 +864,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         grainMag += (1.0f - deathProgress) * (1.0f - grainMag);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[0]);
-    glClear(GL_COLOR_BUFFER_BIT);
+    //glClear(GL_COLOR_BUFFER_BIT);
 
     glBindVertexArray(gameState->screenQuadVertexArray);
     glUseProgram(gameState->grainShader);
@@ -944,7 +952,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     float32 toneDead = baseTone * 2.0f;
     float32 deathProgress = gameState->deadTime
         / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
-    float32 amplitudeDead = ClampFloat32((1.0f - deathProgress) * 0.25f,
+    float32 amplitudeDead = ClampFloat32((1.0f - deathProgress) * 0.2f,
         0.0f, 1.0f);
     if (!gameState->dead) {
         amplitudeDead = 0.0f;
@@ -968,6 +976,11 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     amplitudeSnare *= 0.33333f;
     amplitudeDead *= 0.33333f;
 
+    //DEBUG REMOVE
+    amplitudeBase = 0.0f;
+    //amplitudeSnare = 1.0f;
+    amplitudeDead = 0.0f;
+
     for (int i = 0; i < audio->fillLength; i++) {
         float32 tSine1Off = 2.0f * PI_F * tone1Hz
             * i / audio->sampleRate;
@@ -985,7 +998,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         int16 snareSample = (int16)(INT16_MAXVAL * amplitudeSnare * sinf(
             audioState->tSnare + tSnareOff));
         int16 deadSample = (int16)(INT16_MAXVAL * amplitudeDead * SquareWave(
-            audioState->tSnare + tSnareOff));
+            audioState->tDead + tDeadOff));
         audio->buffer[ind * audio->channels]      =
             sin1Sample + snareSample + deadSample;
         audio->buffer[ind * audio->channels + 1]  =
@@ -994,6 +1007,14 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         //audio->buffer[ind * audio->channels]      = 0;
         //audio->buffer[ind * audio->channels + 1]  = 0;
     }
+
+#if GAME_SLOW
+    // Catch-all site for OpenGL errors
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        DEBUG_PRINT("OpenGL error: %x\n", err);
+    }
+#endif
 
 #if GAME_INTERNAL
     if (WasKeyPressed(input, KM_KEY_G)) {

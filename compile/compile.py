@@ -59,6 +59,9 @@ paths["lib-libpng-win-r"] = "D:/Development/Libraries/lpng1634/projects/vstudio/
 paths["include-freetype-mac"] = "/usr/local/include/freetype2"
 paths["lib-freetype-mac"] = "/usr/local/lib"
 
+paths["include-libpng-mac"] = "/usr/local/include/libpng16"
+paths["lib-libpng-mac"] = "/usr/local/lib"
+
 NormalizePathSlashes(paths)
 
 def WinCompileDebug():
@@ -334,6 +337,7 @@ def MacCompileDebug():
     ])
     compilerFlags = " ".join([
         "-std=c++11",       # use C++11 standard
+        "-lstdc++",         # link to C++ standard library
         "-g",
         #"-ggdb3",           # generate level 3 (max) GDB debug info.
         "-fno-rtti",        # disable run-time type info
@@ -348,7 +352,8 @@ def MacCompileDebug():
         "-Wno-char-subscripts"  # using char as an array subscript
     ])
     includePaths = " ".join([
-        "-I" + paths["include-freetype-mac"]
+        "-I" + paths["include-freetype-mac"],
+        "-I" + paths["include-libpng-mac"]
     ])
 
     frameworks = " ".join([
@@ -360,10 +365,79 @@ def MacCompileDebug():
         #"-fvisibility=hidden"
     ])
     libPaths = " ".join([
-        "-L" + paths["lib-freetype-mac"]
+        "-L" + paths["lib-freetype-mac"],
+        "-L" + paths["lib-libpng-mac"]
     ])
     libs = " ".join([
-        "-lfreetype"
+        "-lfreetype",
+        "-lpng"
+    ])
+
+    compileLibCommand = " ".join([
+        "clang",
+        macros, compilerFlags, compilerWarningFlags, includePaths,
+        "-dynamiclib", paths["main-cpp"],
+        "-o " + PROJECT_NAME + "_game.dylib",
+        linkerFlags, libPaths, libs
+    ])
+
+    compileCommand = " ".join([
+        "clang", "-DGAME_PLATFORM_CODE",
+        macros, compilerFlags, compilerWarningFlags, #includePaths,
+        frameworks,
+        paths["macos-main-mm"],
+        "-o " + PROJECT_NAME + "_macos"
+    ])
+
+    os.system("bash -c \"" + " ; ".join([
+        "pushd " + paths["build"] + " > /dev/null",
+        compileLibCommand,
+        compileCommand,
+        "popd > /dev/null"
+    ]) + "\"")
+
+def MacCompileRelease():
+    macros = " ".join([
+        "-DGAME_INTERNAL=1",
+        "-DGAME_SLOW=0",
+        "-DGAME_MACOS"
+    ])
+    compilerFlags = " ".join([
+        "-std=c++11",       # use C++11 standard
+        "-lstdc++",         # link to C++ standard library
+        "-O3",              # full optimiation
+        "-fno-rtti",        # disable run-time type info
+        "-fno-exceptions"   # disable C++ exceptions (ew)
+    ])
+    compilerWarningFlags = " ".join([
+        "-Werror",  # treat warnings as errors
+        "-Wall",    # enable all warnings
+
+        # disable the following warnings:
+        "-Wno-missing-braces",  # braces around initialization of subobject (?)
+        "-Wno-char-subscripts", # using char as an array subscript
+        "-Wno-unused-variable"  # unused variables when macros are removed
+    ])
+    includePaths = " ".join([
+        "-I" + paths["include-freetype-mac"],
+        "-I" + paths["include-libpng-mac"]
+    ])
+
+    frameworks = " ".join([
+        "-framework Cocoa",
+        "-framework OpenGL",
+        "-framework AudioToolbox"
+    ])
+    linkerFlags = " ".join([
+        #"-fvisibility=hidden"
+    ])
+    libPaths = " ".join([
+        "-L" + paths["lib-freetype-mac"],
+        "-L" + paths["lib-libpng-mac"]
+    ])
+    libs = " ".join([
+        "-lfreetype",
+        "-lpng"
     ])
 
     compileLibCommand = " ".join([
@@ -470,6 +544,8 @@ def Release():
         WinCompileRelease()
     elif platformName == "Linux":
         print("Release: UNIMPLEMENTED")
+    elif platformName == "Darwin":
+        MacCompileRelease()
     else:
         print("Release: UNIMPLEMENTED")
 

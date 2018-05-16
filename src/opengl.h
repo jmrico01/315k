@@ -179,6 +179,9 @@
 #define GL_COLOR_ATTACHMENT30       0x8CFE
 #define GL_COLOR_ATTACHMENT31       0x8CFF
 
+#define GL_NO_ERROR                 0
+#define GL_FRAMEBUFFER_COMPLETE     0x8CD5
+
 typedef void    GLvoid;
 
 typedef bool    GLboolean;
@@ -294,7 +297,10 @@ typedef ptrdiff_t   GLintptr;
 \
     FUNC(void,  glGenFramebuffers, GLsizei n, GLuint* ids) \
     FUNC(void,  glBindFramebuffer, GLenum target, GLuint framebuffer) \
-    FUNC(void,  glFramebufferTexture2D, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level)
+    FUNC(void,  glFramebufferTexture2D, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) \
+\
+    FUNC(GLenum, glGetError) \
+    FUNC(GLenum, glCheckFramebufferStatus, GLenum target)
 
 // Generate function declarations
 #define FUNC(returntype, name, ...) \
