@@ -72,6 +72,7 @@ struct GameState
     bool32 dead;
     float32 deadTime;
     int deadHalfBeats;
+    int killerHalfBeat;
     // ------------------------------------
 
     Vec3 debugCamPos;

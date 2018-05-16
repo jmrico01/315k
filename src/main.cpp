@@ -219,7 +219,7 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
         gameState->halfBeatCount = 0;
     }
     if (gameState->halfBeatCount % 2 == 0) {
-        gameState->lastBeat -= beatDuration;
+        gameState->lastBeat = 0.0f;
     }
     if (!gameState->dead) {
         for (int i = 0; i < 12; i++) {
@@ -228,6 +228,7 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
                 gameState->dead = true;
                 gameState->deadTime = 0.0f;
                 gameState->deadHalfBeats = 0;
+                gameState->killerHalfBeat = gameState->halfBeatCount;
                 ParticleDeathData pdd;
                 float32 slotWidthPix = screenInfo.size.x / 12.0f;
                 int circleDiameter = (int)(slotWidthPix * 0.6f);
@@ -724,7 +725,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         circleSelectedColor_
     );
 
-    if (!gameState->dead || gameState->deadHalfBeats == 0) {
+    if (!gameState->dead) {
         Vec4 snareHitColor = snareHitColor_;
         snareHitColor.a *= 1.0f - halfBeatProgress;
         for (int i = 0; i < 12; i++) {
@@ -733,6 +734,25 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
                 screenInfo.size.y / 2
             };
             if (gameState->snareHits[gameState->halfBeatCount][i]) {
+                DrawRect(gameState->rectGL, screenInfo,
+                    snareHitPos,
+                    Vec2 { 0.5f, 0.5f },
+                    Vec2Int { (int)(slotWidthPix * 1.01f), screenInfo.size.y },
+                    snareHitColor
+                );
+            }
+        }
+    }
+    else {
+        Vec4 snareHitColor = snareHitColor_;
+        snareHitColor.a *= 1.0f - gameState->deadTime
+            / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
+        for (int i = 0; i < 12; i++) {
+            Vec2Int snareHitPos = {
+                (int)(slotWidthPix * i + slotWidthPix / 2.0f),
+                screenInfo.size.y / 2
+            };
+            if (gameState->snareHits[gameState->killerHalfBeat][i]) {
                 DrawRect(gameState->rectGL, screenInfo,
                     snareHitPos,
                     Vec2 { 0.5f, 0.5f },
