@@ -417,7 +417,7 @@ internal KeyInputCode MacOSKeyCodeToKM(int keyCode)
 
 void MacOSKeyProcessing(bool32 isDown, uint32 key,
 	int commandKeyFlag, int ctrlKeyFlag, int altKeyFlag,
-	GameInput* input)
+	GameInput* input, NSWindow* window)
 {
 	KeyInputCode kmCode = MacOSKeyCodeToKM((int)key);
 	if (kmCode != KM_KEY_LAST) {
@@ -428,10 +428,14 @@ void MacOSKeyProcessing(bool32 isDown, uint32 key,
 		(kmCode == KM_KEY_Q && isDown && commandKeyFlag)) {
 			running_ = false;
 		}
+        if (kmCode == KM_KEY_F && isDown && commandKeyFlag) {
+            [window toggleFullScreen:0];
+            /*[self performSelector:@selector(toggleFullScreen:) withObject:myString];*/
+        }
 	}
 }
 
-void MacOSProcessPendingMessages(GameInput* input)
+void MacOSProcessPendingMessages(GameInput* input, NSWindow* window)
 {
 	NSEvent* event;
 
@@ -453,7 +457,7 @@ void MacOSProcessPendingMessages(GameInput* input)
 
 				MacOSKeyProcessing(keyDownFlag, ch,
 					commandKeyFlag, ctrlKeyFlag, altKeyFlag,
-					input);
+					input, window);
 			} break;
 
 			case NSKeyUp: {
@@ -467,7 +471,7 @@ void MacOSProcessPendingMessages(GameInput* input)
 
 				MacOSKeyProcessing(keyDownFlag, ch,
 					commandKeyFlag, ctrlKeyFlag, altKeyFlag,
-					input);
+					input, window);
 			} break;
 
 			default: {
@@ -710,7 +714,7 @@ int main(int argc, const char* argv[])
 	running_ = true;
 
 	while (running_) {
-		MacOSProcessPendingMessages(newInput);
+		MacOSProcessPendingMessages(newInput, window);
 		
 		[glContext_ makeCurrentContext];
 

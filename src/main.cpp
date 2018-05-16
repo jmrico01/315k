@@ -15,9 +15,9 @@
 #include "load_png.h"
 #include "particles.h"
 
-// These must match the sizes in blur.frag
-#define KERNEL_HALFSIZE 4
-#define KERNEL_SIZE (KERNEL_HALFSIZE * 2 + 1)
+// These must match the max sizes in blur.frag
+#define KERNEL_HALFSIZE_MAX 10
+#define KERNEL_SIZE_MAX (KERNEL_HALFSIZE_MAX * 2 + 1)
 
 global_var Vec4 backgroundColor_ = Vec4 { 0.05f, 0.05f, 0.05f, 0.0f };
 global_var Vec4 backgroundColorBeat_ = Vec4 { 0.1f, 0.1f, 0.1f, 0.0f };
@@ -213,7 +213,6 @@ internal void InitParticleDeath(ParticleSystem* ps, Particle* particle,
 
 internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
 {
-    float32 beatDuration = 60.0f / (float32)gameState->bpm;
     gameState->halfBeatCount++;
     if (gameState->halfBeatCount >= gameState->levelLength) {
         gameState->halfBeatCount = 0;
@@ -780,13 +779,15 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     GLint loc;
     // -------------------- BLOOM --------------------
     float32 bloomThreshold = 0.5f;
+    int bloomKernelHalfSize = 4;
+    int bloomKernelSize = bloomKernelHalfSize * 2 + 1;
     int bloomBlurPasses = 1;
     float bloomBlurSigma = 4.0f;
     float bloomMag = 0.5f;
     if (gameState->dead) {
         float32 deathProgress = gameState->deadTime
             / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
-        bloomBlurPasses += (int)((1.0f - deathProgress) * 5);
+        //bloomBlurPasses += (int)((1.0f - deathProgress) * 5);
         bloomMag += (1.0f - deathProgress) * (1.0f - bloomMag);
     }
     // Extract high-luminance pixels
@@ -807,16 +808,16 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     // Blur high-luminance pixels
-    GLfloat gaussianKernel[KERNEL_SIZE];
+    GLfloat gaussianKernel[KERNEL_SIZE_MAX];
     GLfloat kernSum = 0.0f;
     float32 sigma = bloomBlurSigma;
-    for (int i = -KERNEL_HALFSIZE; i <= KERNEL_HALFSIZE; i++) {
+    for (int i = -bloomKernelHalfSize; i <= bloomKernelHalfSize; i++) {
         float32 x = (float32)i;
         float32 g = expf(-(x * x) / (2.0f * sigma * sigma));
-        gaussianKernel[i + KERNEL_HALFSIZE] = (GLfloat)g;
+        gaussianKernel[i + bloomKernelHalfSize] = (GLfloat)g;
         kernSum += (GLfloat)g;
     }
-    for (int i = 0; i < KERNEL_SIZE; i++) {
+    for (int i = 0; i < bloomKernelSize; i++) {
         gaussianKernel[i] /= kernSum;
     }
     for (int i = 0; i < bloomBlurPasses; i++) {  
@@ -836,7 +837,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         glUniform1i(loc, 1);
         loc = glGetUniformLocation(gameState->blurShader,
             "gaussianKernel");
-        glUniform1fv(loc, KERNEL_SIZE, gaussianKernel);
+        glUniform1fv(loc, bloomKernelSize, gaussianKernel);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "kernelHalfSize");
+        glUniform1i(loc, bloomKernelHalfSize);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -856,7 +860,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         glUniform1i(loc, 0);
         loc = glGetUniformLocation(gameState->blurShader,
             "gaussianKernel");
-        glUniform1fv(loc, KERNEL_SIZE, gaussianKernel);
+        glUniform1fv(loc, bloomKernelSize, gaussianKernel);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "kernelHalfSize");
+        glUniform1i(loc, bloomKernelHalfSize);
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
