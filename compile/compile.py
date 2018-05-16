@@ -194,7 +194,8 @@ def WinCompileRelease():
         "/wd4505",  # unreferenced local function has been removed
     ])
     includePaths = " ".join([
-        "/I" + paths["include-freetype-win"]
+        "/I" + paths["include-freetype-win"],
+        "/I" + paths["include-libpng-win"]
     ])
 
     linkerFlags = " ".join([
@@ -210,10 +211,13 @@ def WinCompileRelease():
         "xaudio2.lib"
     ])
     libPathsGame = " ".join([
-        "/LIBPATH:" + paths["lib-freetype-win"]
+        "/LIBPATH:" + paths["lib-freetype-win"],
+        "/LIBPATH:" + paths["lib-libpng-win-r"]
     ])
     libsGame = " ".join([
-        "freetype281MT.lib"
+        "freetype281MT.lib",
+        "libpng16.lib",
+        "zlib.lib"
     ])
 
     # Clear old PDB files
