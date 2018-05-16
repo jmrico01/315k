@@ -62,6 +62,12 @@ paths["lib-freetype-mac"] = "/usr/local/lib"
 paths["include-libpng-mac"] = "/usr/local/include/libpng16"
 paths["lib-libpng-mac"] = "/usr/local/lib"
 
+paths["include-freetype-linux"] = "/usr/local/include/freetype2"
+paths["lib-freetype-linux"] = "/usr/local/lib"
+
+paths["include-libpng-linux"] = "/usr/local/include/libpng16"
+paths["lib-libpng-linux"] = "/usr/local/lib"
+
 NormalizePathSlashes(paths)
 
 def WinCompileDebug():
@@ -274,33 +280,32 @@ def LinuxCompileDebug():
         "-Wno-char-subscripts" # using char as an array subscript
     ])
     includePaths = " ".join([
-        #"-I" + paths["include-glew"],
-        #"-I" + paths["include-glfw"],
-        #"-I" + paths["include-freetype"],
-        #"-I" + paths["include-lodepng"]
+        "-I" + paths["include-freetype-linux"],
+        "-I" + paths["include-libpng-linux"]
     ])
 
     linkerFlags = " ".join([
         "-fvisibility=hidden"
     ])
-    libPaths = " ".join([
-        #"-L" + paths["lib-glfw-linux"],
-        #"-L" + paths["lib-ft-linux"]
+    libPathsPlatform = " ".join([
     ])
-    libs = " ".join([
-        # main external libs
-        #"-lfreetype",
-
+    libsPlatform = " ".join([
         "-lm",      # math
         "-ldl",     # dynamic linking loader
         "-lGL",     # OpenGL
         "-lX11",    # X11
         "-lasound", # ALSA lib
         "-lpthread"
+    ])
+    libPathsGame = " ".join([
+        "-L" + paths["lib-freetype-linux"],
+        "-L" + paths["lib-libpng-linux"]
+    ])
+    libsGame = " ".join([
+        "-lfreetype",
+        "-lpng",
 
-        # FreeType dependencies
-        #"-lz",
-        #"-lpng"
+        #"-lm",      # math
     ])
 
     #pdbName = PROJECT_NAME + "_game" + str(random.randrange(99999)) + ".pdb"
@@ -308,7 +313,8 @@ def LinuxCompileDebug():
         "gcc",
         macros, compilerFlags, compilerWarningFlags, includePaths,
         "-shared", "-fPIC", paths["main-cpp"],
-        "-o " + PROJECT_NAME + "_game.so"
+        "-o " + PROJECT_NAME + "_game.so",
+        linkerFlags, "-static", libPathsGame, libsGame
     ])
 
     compileCommand = " ".join([
@@ -316,7 +322,7 @@ def LinuxCompileDebug():
         macros, compilerFlags, compilerWarningFlags, includePaths,
         paths["linux-main-cpp"],
         "-o " + PROJECT_NAME + "_linux",
-        linkerFlags, libPaths, libs
+        linkerFlags, libPathsPlatform, libsPlatform
     ])
 
     os.system("bash -c \"" + " ; ".join([

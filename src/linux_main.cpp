@@ -975,7 +975,6 @@ int main(int argc, char **argv)
 	GameInput *oldInput = &input[1];
 
     struct timespec lastCounter = LinuxGetWallClock();
-    struct timespec flipWallClock = LinuxGetWallClock();
 
     char gameCodeLibPath[LINUX_STATE_FILE_NAME_COUNT];
     LinuxBuildEXEPathFileName(&linuxState, "315k_game.so",
@@ -1009,10 +1008,15 @@ int main(int argc, char **argv)
             glWindow, wmDeleteWindow,
             newInput, &mousePos, &screenInfo);
 
+        struct timespec endCounter = LinuxGetWallClock();
+        float32 deltaTime = LinuxGetSecondsElapsed(
+            lastCounter, endCounter);
+        lastCounter = endCounter;
+
         if (gameCode.gameUpdateAndRender) {
 			ThreadContext thread = {};
             gameCode.gameUpdateAndRender(&thread, &platformFuncs,
-                newInput, screenInfo,
+                newInput, screenInfo, deltaTime,
                 &gameMemory, &gameAudio_);
         }
 
@@ -1108,14 +1112,6 @@ int main(int argc, char **argv)
         pthread_mutex_unlock(&globalAudioMutex);
         
         glXSwapBuffers(display, glWindow);
-
-        flipWallClock = LinuxGetWallClock();
-
-        struct timespec endCounter = LinuxGetWallClock();
-        //float32 measuredSecondsPerFrame = LinuxGetSecondsElapsed(
-        //    lastCounter, endCounter);
-        //DEBUG_PRINT("secs per frame: %f\n", measuredSecondsPerFrame);
-        lastCounter = endCounter;
 
 		GameInput *temp = newInput;
 		newInput = oldInput;
