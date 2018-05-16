@@ -427,6 +427,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
         // Debug
 		gameState->debugCamPos = Vec3::zero;
+        gameState->debugZoom = 0.0f;
 
         // Rendering stuff
         gameState->rectGL = InitRectGL(thread,
@@ -656,6 +657,12 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		vel -= playerForward * speed;
 	}
 	gameState->debugCamPos += vel;
+    if (input->keyboard[KM_KEY_E].isDown) {
+        gameState->debugZoom += speed;
+    }
+    if (input->keyboard[KM_KEY_Q].isDown) {
+        gameState->debugZoom -= speed;
+    }
 
     int lineWidth = screenInfo.size.y / 140;
     float32 slotWidthPix = screenInfo.size.x / 12.0f;
@@ -908,33 +915,20 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one);
 
     // Audio output
-    float32 baseTone = 60.0f;
-#if 0
-    float32 tone1Hz = baseTone
-        * (1.0f + 0.5f * input->controllers[0].leftEnd.x)
-        * (1.0f + 0.1f * input->controllers[0].leftEnd.y);
-    float32 tone2Hz = baseTone
-        * (1.0f + 0.5f * input->controllers[0].rightEnd.x)
-        * (1.0f + 0.1f * input->controllers[0].rightEnd.y);
-    //if (!input->controllers[0].isConnected) {
-        float32 screenHalfWidth = screenInfo.size.x / 2.0f;
-        float32 screenHalfHeight = screenInfo.size.y / 2.0f;
-        float32 mouseOffsetX = (input->mousePos.x - screenHalfWidth)
-            / screenHalfWidth;
-        float32 mouseOffsetY = (input->mousePos.y - screenHalfHeight)
-            / screenHalfHeight;
-        tone1Hz = baseTone * (1.0f + 0.5f * mouseOffsetX);
-        tone2Hz = baseTone * (1.0f + 0.5f * mouseOffsetY);
-    //}
-#else
-    float32 tone1Hz = baseTone;
-    float32 tone2Hz = baseTone;
-#endif
+    float32 soundRequestLength = (float32)audio->fillLength
+        / audio->sampleRate;
 
-    float32 amplitudeBase = ClampFloat32(1.0f - beatProgress, 0.0f, 1.0f);
+    float32 toneBass = 60.0f;
+    float32 ampBassStart = ClampFloat32(1.0f - beatProgress, 0.0f, 1.0f);
+    float32 ampBassEnd = ClampFloat32(1.0f - 
+        (gameState->lastBeat + soundRequestLength) / beatDuration,
+        0.0f, 1.0f);
 
-    float32 toneSnare = baseTone * 2.0f;
-    float32 amplitudeSnare = ClampFloat32(1.0f - halfBeatProgress, 0.0f, 1.0f);
+    float32 toneSnare = toneBass * 2.0f;
+    float32 ampSnareStart = ClampFloat32(1.0f - halfBeatProgress, 0.0f, 1.0f);
+    float32 ampSnareEnd = ClampFloat32(1.0f -
+        (gameState->lastHalfBeat + soundRequestLength) / halfBeatDuration,
+        0.0f, 1.0f);
     bool shouldPlaySnare = false;
     for (int i = 0; i < 12; i++) {
         if (gameState->snareHits[gameState->halfBeatCount][i]) {
@@ -946,58 +940,70 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         shouldPlaySnare = false;
     }
     if (!shouldPlaySnare) {
-        amplitudeSnare = 0.0f;
+        ampSnareStart = 0.0f;
+        ampSnareEnd = 0.0f;
     }
 
-    float32 toneDead = baseTone * 2.0f;
-    float32 deathProgress = gameState->deadTime
-        / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
-    float32 amplitudeDead = ClampFloat32((1.0f - deathProgress) * 0.2f,
+    float32 toneDead = toneBass * 2.0f;
+    float32 deathTotalTime = (DEATH_DURATION_HALFBEATS * halfBeatDuration);
+    float32 ampDeadMult = 0.2f;
+    float32 ampDeadStart = ClampFloat32((1.0f
+        - gameState->deadTime / deathTotalTime) * ampDeadMult,
+        0.0f, 1.0f);
+    float32 ampDeadEnd = ClampFloat32((1.0f
+        - (gameState->deadTime + soundRequestLength) / deathTotalTime)
+        * ampDeadMult,
         0.0f, 1.0f);
     if (!gameState->dead) {
-        amplitudeDead = 0.0f;
+        ampDeadStart = 0.0f;
+        ampDeadEnd = 0.0f;
     }
 
     AudioState* audioState = &gameState->audioState;
     /*audioState->amplitude = 1.0f - beatProgress;
     audioState->amplitude = ClampFloat32(audioState->amplitude, 0.0f, 1.0f);*/
     audioState->runningSampleIndex += audio->fillStartDelta;
-    audioState->tSine1 += 2.0f * PI_F * tone1Hz
+    audioState->tSine1 += 2.0f * PI_F * toneBass
         * audio->fillStartDelta / audio->sampleRate;
-    audioState->tSine2 += 2.0f * PI_F * tone2Hz
+    audioState->tSine2 += 2.0f * PI_F * toneBass
         * audio->fillStartDelta / audio->sampleRate;
     audioState->tSnare += 2.0f * PI_F * toneSnare
         * audio->fillStartDelta / audio->sampleRate;
     audioState->tDead += 2.0f * PI_F * toneDead
         * audio->fillStartDelta / audio->sampleRate;
 
-    // Basic mixing
-    amplitudeBase *= 0.33333f;
-    amplitudeSnare *= 0.33333f;
-    amplitudeDead *= 0.33333f;
-
-    //DEBUG REMOVE
-    amplitudeBase = 0.0f;
-    //amplitudeSnare = 1.0f;
-    amplitudeDead = 0.0f;
+    // Very basic mixing
+    ampBassStart *= 0.33333f;
+    ampBassEnd *= 0.33333f;
+    ampSnareStart *= 0.33333f;
+    ampSnareEnd *= 0.33333f;
+    ampDeadStart *= 0.33333f;
+    ampDeadEnd *= 0.33333f;
 
     for (int i = 0; i < audio->fillLength; i++) {
-        float32 tSine1Off = 2.0f * PI_F * tone1Hz
+        float t = (float32)i / audio->sampleRate;
+        float32 tSine1Off = 2.0f * PI_F * toneBass
             * i / audio->sampleRate;
-        float32 tSine2Off = 2.0f * PI_F * tone2Hz
+        float32 tSine2Off = 2.0f * PI_F * toneBass
             * i / audio->sampleRate;
         float32 tSnareOff = 2.0f * PI_F * toneSnare
             * i / audio->sampleRate;
         float32 tDeadOff = 2.0f * PI_F * toneDead
             * i / audio->sampleRate;
         uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        int16 sin1Sample = (int16)(INT16_MAXVAL * amplitudeBase * sinf(
+        float32 ampBass = Lerp(ampBassStart, ampBassEnd,
+            t / soundRequestLength);
+        int16 sin1Sample = (int16)(INT16_MAXVAL * ampBass * sinf(
             audioState->tSine1 + tSine1Off));
-        int16 sin2Sample = (int16)(INT16_MAXVAL * amplitudeBase * sinf(
+        int16 sin2Sample = (int16)(INT16_MAXVAL * ampBass * sinf(
             audioState->tSine2 + tSine2Off));
-        int16 snareSample = (int16)(INT16_MAXVAL * amplitudeSnare * sinf(
+        float32 ampSnare = Lerp(ampSnareStart, ampSnareEnd,
+            t / soundRequestLength);
+        int16 snareSample = (int16)(INT16_MAXVAL * ampSnare * sinf(
             audioState->tSnare + tSnareOff));
-        int16 deadSample = (int16)(INT16_MAXVAL * amplitudeDead * SquareWave(
+        float32 ampDead = Lerp(ampDeadStart, ampDeadEnd,
+            t / soundRequestLength);
+        int16 deadSample = (int16)(INT16_MAXVAL * ampDead * SquareWave(
             audioState->tDead + tDeadOff));
         audio->buffer[ind * audio->channels]      =
             sin1Sample + snareSample + deadSample;
@@ -1024,7 +1030,12 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         DEBUG_ASSERT(memory->transientStorageSize >= sizeof(LineGLData));
         DEBUG_ASSERT(audio->bufferSizeSamples <= MAX_LINE_POINTS);
         Mat4 proj = Mat4::one;
-        Mat4 view = Translate(-gameState->debugCamPos);
+        Vec3 zoomScale = {
+            1.0f + gameState->debugZoom,
+            1.0f + gameState->debugZoom,
+            1.0f
+        };
+        Mat4 view = Translate(-gameState->debugCamPos) * Scale(zoomScale);
 
         LineGLData* lineData = (LineGLData*)memory->transientStorage;
         lineData->count = audio->bufferSizeSamples;

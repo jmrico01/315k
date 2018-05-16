@@ -75,6 +75,7 @@ struct GameState
     // ------------------------------------
 
     Vec3 debugCamPos;
+    float32 debugZoom;
 
     RectGL rectGL;
     TexturedRectGL texturedRectGL;
