@@ -5,6 +5,8 @@
 #include "opengl_base.h"
 #include "text.h"
 
+#define NUM_FRAMEBUFFERS 3
+
 struct MarkerGL
 {
     GLuint vertexArray;
@@ -52,10 +54,8 @@ struct GameState
     int circlePos;
     Vec3 debugCamPos;
 
-    GLuint rectShader;
-    GLuint rectVAO;
-
     RectGL rectGL;
+    TexturedRectGL texturedRectGL;
     LineGL lineGL;
     TextGL textGL;
 
@@ -65,6 +65,16 @@ struct GameState
     FT_Library ftLibrary;
     FontFace fontFace;
 
-    GLuint framebuffer;
-    GLuint colorBuffer;
+    GLuint framebuffers[NUM_FRAMEBUFFERS];
+    GLuint colorBuffers[NUM_FRAMEBUFFERS];
+    GLuint screenQuadVertexArray;
+    GLuint screenQuadVertexBuffer;
+    GLuint screenQuadUVBuffer;
+
+    GLuint screenShader;
+    GLuint bloomExtractShader;
+    GLuint bloomBlendShader;
+    GLuint blurShader;
+    GLuint grainShader;
+    GLuint fxaaShader;
 };

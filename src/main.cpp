@@ -10,8 +10,8 @@
 #include "opengl_base.h"
 
 global_var Vec4 backgroundColor_ = Vec4 { 0.0f, 0.0f, 0.0f, 0.0f };
-global_var Vec4 lineColor_ = Vec4 { 0.8f, 0.8f, 0.8f, 1.0f };
-global_var Vec4 lineDarkColor_ = Vec4 { 0.2f, 0.2f, 0.2f, 1.0f };
+global_var Vec4 lineColor_ = Vec4 { 0.9f, 0.9f, 0.9f, 1.0f };
+global_var Vec4 lineDarkColor_ = Vec4 { 0.25f, 0.25f, 0.25f, 1.0f };
 
 //global_var Vec4 circleIdleColor_ = lineColor_;
 global_var Vec4 circleSelectedColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 1.0f };
@@ -161,8 +161,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         memory->DEBUGShouldInitGlobalFuncs = false;
     }
 	if (!memory->isInitialized) {
-        glClearColor(backgroundColor_.r, backgroundColor_.g,
-            backgroundColor_.b, backgroundColor_.a);
         // Very explicit depth testing setup (DEFAULT VALUES)
         // NDC is left-handed with this setup
         // (very subtle left-handedness definition:
@@ -193,6 +191,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         gameState->rectGL = InitRectGL(thread,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->texturedRectGL = InitTexturedRectGL(thread,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
         gameState->lineGL = InitLineGL(thread,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
@@ -216,33 +217,110 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
 
-        glGenFramebuffers(1, &gameState->framebuffer);
-        gameState->colorBuffer = 0;
+        glGenFramebuffers(NUM_FRAMEBUFFERS, gameState->framebuffers);
+        for (int i = 0; i < NUM_FRAMEBUFFERS; i++) {
+            gameState->colorBuffers[i] = 0;
+        }
+
+        const GLfloat vertices[] = {
+            -1.0f, -1.0f,
+            1.0f, -1.0f,
+            1.0f, 1.0f,
+            1.0f, 1.0f,
+            -1.0f, 1.0f,
+            -1.0f, -1.0f
+        };
+        const GLfloat uvs[] = {
+            0.0f, 0.0f,
+            1.0f, 0.0f,
+            1.0f, 1.0f,
+            1.0f, 1.0f,
+            0.0f, 1.0f,
+            0.0f, 0.0f
+        };
+
+        glGenVertexArrays(1, &gameState->screenQuadVertexArray);
+        glBindVertexArray(gameState->screenQuadVertexArray);
+
+        glGenBuffers(1, &gameState->screenQuadVertexBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, gameState->screenQuadVertexBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
+            GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(
+            0, // match shader layout location
+            2, // size (vec2)
+            GL_FLOAT, // type
+            GL_FALSE, // normalized?
+            0, // stride
+            (void*)0 // array buffer offset
+        );
+
+        glGenBuffers(1, &gameState->screenQuadUVBuffer);
+        glBindBuffer(GL_ARRAY_BUFFER, gameState->screenQuadUVBuffer);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(uvs), uvs, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(
+            1, // match shader layout location
+            2, // size (vec2)
+            GL_FLOAT, // type
+            GL_FALSE, // normalized?
+            0, // stride
+            (void*)0 // array buffer offset
+        );
+
+        glBindVertexArray(0);
+
+        gameState->screenShader = LoadShaders(thread,
+            "shaders/screen.vert", "shaders/screen.frag",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->bloomExtractShader = LoadShaders(thread,
+            "shaders/screen.vert", "shaders/bloomExtract.frag",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->bloomBlendShader = LoadShaders(thread,
+            "shaders/screen.vert", "shaders/bloomBlend.frag",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->blurShader = LoadShaders(thread,
+            "shaders/screen.vert", "shaders/blur.frag",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->grainShader = LoadShaders(thread,
+            "shaders/screen.vert", "shaders/grain.frag",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->fxaaShader = LoadShaders(thread,
+            "shaders/screen.vert", "shaders/fxaa.frag",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
 
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
 	}
     if (screenInfo.changed) {
-        glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffer);
-
-        if (gameState->colorBuffer != 0) {
-            glDeleteTextures(1, &gameState->colorBuffer);
+        if (gameState->colorBuffers[0] != 0) {
+            glDeleteTextures(NUM_FRAMEBUFFERS, gameState->colorBuffers);
         }
-        glGenTextures(1, &gameState->colorBuffer);
-        glBindTexture(GL_TEXTURE_2D, gameState->colorBuffer);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-            screenInfo.size.x, screenInfo.size.y,
-            0,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            NULL
-        );
+        glGenTextures(NUM_FRAMEBUFFERS, gameState->colorBuffers);
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        for (int i = 0; i < NUM_FRAMEBUFFERS; i++) {
+            glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[i]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+                screenInfo.size.x, screenInfo.size.y,
+                0,
+                GL_RGB,
+                GL_UNSIGNED_BYTE,
+                NULL
+            );
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-            GL_TEXTURE_2D, gameState->colorBuffer, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                GL_TEXTURE_2D, gameState->colorBuffers[i], 0);
+        }
 
         DEBUG_PRINT("Updated screen-size dependent info\n");
     }
@@ -287,9 +365,11 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	gameState->debugCamPos += vel;
 
     // ------------------------- Begin Rendering -------------------------
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    //glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[0]);
+    //glDisable(GL_DEPTH_TEST);
+    glClearColor(backgroundColor_.r, backgroundColor_.g,
+        backgroundColor_.b, backgroundColor_.a);
+	glClear(GL_COLOR_BUFFER_BIT);
 
     int lineWidth = screenInfo.size.y / 140;
     float32 slotWidthPix = screenInfo.size.x / 12.0f;
@@ -333,9 +413,112 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         Vec2Int { circleDiameter, circleDiameter },
         circleSelectedColor_
     );
-    // -------------------------- End Rendering --------------------------
 
+    // Post processing passes
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    GLint loc;
+
+    /*Vec2 invScreenSize = {
+        1.0f / screenInfo.size.x,
+        1.0f / screenInfo.size.y
+    };
+    loc = glGetUniformLocation(gameState->bloomExtractShader,
+        "invScreenSize");
+    glUniform2fv(loc, 1, &invScreenSize.e[0]);*/
+
+    // -------------------- BLOOM --------------------
+    // Extract high-luminance pixels
+    glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[1]);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindVertexArray(gameState->screenQuadVertexArray);
+    glUseProgram(gameState->bloomExtractShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[0]);
+    loc = glGetUniformLocation(gameState->bloomExtractShader,
+        "framebufferTexture");
+    glUniform1i(loc, 0);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // Blur high-luminance pixels
+    const int BLUR_PASSES = 15;
+    for (int i = 0; i < BLUR_PASSES; i++) {  
+        // Horizontal pass
+        glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[2]);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glBindVertexArray(gameState->screenQuadVertexArray);
+        glUseProgram(gameState->blurShader);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[1]);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "framebufferTexture");
+        glUniform1i(loc, 0);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "isHorizontal");
+        glUniform1i(loc, 1);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        // Vertical pass
+        glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[1]);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        glBindVertexArray(gameState->screenQuadVertexArray);
+        glUseProgram(gameState->blurShader);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[2]);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "framebufferTexture");
+        glUniform1i(loc, 0);
+        loc = glGetUniformLocation(gameState->blurShader,
+            "isHorizontal");
+        glUniform1i(loc, 0);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+
+    // Blend pass
+    glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[2]);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindVertexArray(gameState->screenQuadVertexArray);
+    glUseProgram(gameState->bloomBlendShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[0]);
+    loc = glGetUniformLocation(gameState->bloomBlendShader,
+        "scene");
+    glUniform1i(loc, 0);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[1]);
+    loc = glGetUniformLocation(gameState->bloomBlendShader,
+        "bloomBlur");
+    glUniform1i(loc, 1);
+    loc = glGetUniformLocation(gameState->bloomBlendShader,
+        "bloomMag");
+    glUniform1f(loc, 0.4f);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // -------------------- GRAIN --------------------
+    // nothing to see here for now
+
+    // --------------------RENDER TO SCREEN --------------------
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glBindVertexArray(gameState->screenQuadVertexArray);
+    glUseProgram(gameState->screenShader);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[2]);
+    loc = glGetUniformLocation(gameState->screenShader,
+        "framebufferTexture");
+    glUniform1i(loc, 0);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    // -------------------------- End Rendering --------------------------
 
     char fpsStr[128];
     sprintf(fpsStr, "FPS: %f", 1.0f / deltaTime);
