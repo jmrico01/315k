@@ -5,7 +5,7 @@
 #include "opengl_base.h"
 #include "text.h"
 #include "particles.h"
-#include "load_wav.h"
+#include "audio.h"
 
 #define NUM_FRAMEBUFFERS 3
 #define MAX_LEVEL_HALFBEATS 16
@@ -37,21 +37,6 @@ struct Tiles
     GLuint lineIndBuffer;
 
     GLuint shader;
-};
-
-struct AudioState
-{
-    int runningSampleIndex;
-    //float32 amplitude;
-    float32 tSine1;
-    float32 tSine2;
-
-    float32 tSnare;
-    float32 tDead;
-
-#if GAME_INTERNAL
-    bool32 debugView;
-#endif
 };
 
 struct GameState
@@ -107,6 +92,4 @@ struct GameState
 
     GLuint pTexBase;
     ParticleSystem ps;
-
-    AudioBuffer soundKick;
 };

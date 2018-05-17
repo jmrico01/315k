@@ -1,15 +1,17 @@
 #include "load_wav.h"
 
+#define WAV_AUDIO_FORMAT_PCM_16 1
+
 struct ChunkRIFF
 {
-	int32 chunkID; // big endian, boo
+    char r, i, f1, f2;
 	int32 chunkSize;
-	int32 format; // big endian, boo
+    char w, a, v, e;
 };
 
 struct ChunkFmt
 {
-	int32 chunkID; // big endian, boo
+    char f, m, t, z;
 	int32 chunkSize;
 	int16 audioFormat;
 	int16 channels;
@@ -19,35 +21,69 @@ struct ChunkFmt
 	int16 bitsPerSample;
 };
 
-AudioBuffer LoadWAV(const ThreadContext* thread,
-    const char* filePath,
+bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
+    const GameAudio* gameAudio, AudioBuffer* audioBuffer,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-	AudioBuffer result;
-	result.bufferSizeSamples = 0;
-
     DEBUGReadFileResult wavFile = DEBUGPlatformReadFile(thread, filePath);
     if (!wavFile.data) {
         DEBUG_PRINT("Failed to open WAV file at: %s\n", filePath);
-        return result;
+        return false;
     }
 
     ChunkRIFF* riff = (ChunkRIFF*)wavFile.data;
-    DEBUG_PRINT("chunk ID: %d, size: %d, format: %d\n",
-    	riff->chunkID, riff->chunkSize, riff->format);
+    if (riff->r != 'R' || riff->i != 'I'
+    || riff->f1 != 'F' || riff->f2 != 'F') {
+        DEBUG_PRINT("Invalid RIFF header on file %s\n", filePath);
+        return false;
+    }
+    if (riff->w != 'W' || riff->a != 'A'
+    || riff->v != 'V' || riff->e != 'E') {
+        DEBUG_PRINT("Not a WAVE file: %s\n", filePath);
+        return false;
+    }
 
     ChunkFmt* fmt = (ChunkFmt*)((char*)wavFile.data + sizeof(ChunkRIFF));
-    DEBUG_PRINT("channels: %d, sampleRate: %d, byteRate: %d, align: %d, bitsPerSample: %d\n",
-    	fmt->channels, fmt->sampleRate, fmt->byteRate, fmt->blockAlign, fmt->bitsPerSample);
+    if (fmt->f != 'f' || fmt->m != 'm' || fmt->t != 't') {
+        DEBUG_PRINT("Invalid FMT header on file: %s\n", filePath);
+        return false;
+    }
+    if (fmt->audioFormat != WAV_AUDIO_FORMAT_PCM_16) {
+        DEBUG_PRINT("WAV format isn't PCM 16-bit for %s", filePath);
+        return false;
+    }
+    if (fmt->sampleRate != gameAudio->sampleRate) {
+        DEBUG_PRINT("WAV file sample rate mismatch: %d vs %d, for %s\n",
+            fmt->sampleRate, gameAudio->sampleRate, filePath);
+        return false;
+    }
+    if (fmt->channels != gameAudio->channels) {
+        DEBUG_PRINT("WAV file channels mismatch: %d vs %d, for %s\n",
+            fmt->channels, gameAudio->channels, filePath);
+        return false;
+    }
 
     int32 dataChunkSize = *(int32*)((char*)wavFile.data
     	+ sizeof(ChunkRIFF) + sizeof(ChunkFmt) + sizeof(int32));
-    /*void* data = (void*)((char*)wavFile.data
-    	+ sizeof(ChunkRIFF) + sizeof(ChunkFmt) + 2 * sizeof(int32));*/
-    DEBUG_PRINT("data chunk size: %d\n", dataChunkSize);
+    int16* data = (int16*)((char*)wavFile.data
+    	+ sizeof(ChunkRIFF) + sizeof(ChunkFmt) + 2 * sizeof(int32));
+    int bytesPerSample = fmt->bitsPerSample * fmt->channels / 8;
+    int samples = dataChunkSize / bytesPerSample;
+    if (samples > AUDIO_BUFFER_MAX_SAMPLES) {
+        DEBUG_PRINT("WAV file too long: %s\n", filePath);
+        return false;
+    }
+    for (int i = 0; i < samples; i++) {
+        audioBuffer->buffer[i * 2] = data[i * 2];
+        audioBuffer->buffer[i * 2 + 1] = data[i * 2 + 1];
+    }
+
+    audioBuffer->sampleRate = fmt->sampleRate;
+    audioBuffer->channels = fmt->channels;
+    audioBuffer->bufferSizeSamples = samples;
 
     DEBUGPlatformFreeFileMemory(thread, &wavFile);
 
-    return result;
+    return true;
 }

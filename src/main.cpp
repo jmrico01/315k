@@ -215,24 +215,25 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
     if (gameState->halfBeatCount >= gameState->levelLength) {
         gameState->halfBeatCount = 0;
     }
-    if (gameState->halfBeatCount % 2 == 0) {
-        gameState->lastBeat = 0.0f;
-    }
     if (!gameState->dead) {
         for (int i = 0; i < 12; i++) {
-            if (gameState->circlePos == i &&
-            gameState->snareHits[gameState->halfBeatCount][i]) {
-                gameState->dead = true;
-                gameState->deadTime = 0.0f;
-                gameState->deadHalfBeats = 0;
-                gameState->killerHalfBeat = gameState->halfBeatCount;
-                ParticleDeathData pdd;
-                float32 slotWidthPix = screenInfo.size.x / 12.0f;
-                int circleDiameter = (int)(slotWidthPix * 0.6f);
-                pdd.gameState = gameState;
-                pdd.circleDiameter = circleDiameter;
-                pdd.screenInfo = screenInfo;
-                ParticleBurst(&gameState->ps, 1000, &pdd);
+            if (gameState->snareHits[gameState->halfBeatCount][i]) {
+                gameState->audioState.soundSnare.play = true;
+                if (gameState->circlePos == i) {
+                    gameState->dead = true;
+                    gameState->deadTime = 0.0f;
+                    gameState->deadHalfBeats = 0;
+                    gameState->killerHalfBeat = gameState->halfBeatCount;
+
+                    ParticleDeathData pdd;
+                    float32 slotWidthPix = screenInfo.size.x / 12.0f;
+                    int circleDiameter = (int)(slotWidthPix * 0.6f);
+                    pdd.gameState = gameState;
+                    pdd.circleDiameter = circleDiameter;
+                    pdd.screenInfo = screenInfo;
+                    ParticleBurst(&gameState->ps, 1000, &pdd);
+                    gameState->audioState.soundDeath.play = true;
+                }
             }
         }
     }
@@ -241,9 +242,13 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
         if (gameState->deadHalfBeats >= DEATH_DURATION_HALFBEATS) {
             gameState->dead = false;
             gameState->halfBeatCount = 0;
-            gameState->lastBeat = 0.0f;
             gameState->circlePos = gameState->respawn;
         }
+    }
+    if (gameState->halfBeatCount % 2 == 0) {
+        gameState->lastBeat = 0.0f;
+
+        gameState->audioState.soundKick.play = true;
     }
 }
 
@@ -346,12 +351,6 @@ internal void LoadLevel(const ThreadContext* thread, const char* filePath,
     DEBUGPlatformFreeFileMemory(thread, &levelFile);
 }
 
-internal float32 SquareWave(float32 t)
-{
-    float32 tMod = fmod(t, 2.0f * PI_F);
-    return tMod < PI_F ? 1.0f : -1.0f;
-}
-
 extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 {
     // NOTE: for clarity
@@ -394,16 +393,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // Initialize audio state
-        gameState->audioState.runningSampleIndex = 0;
-        //gameState->audioState.amplitude = 0.1f;
-        gameState->audioState.tSine1 = 0.0f;
-        gameState->audioState.tSine2 = 0.0f;
-        gameState->audioState.tSnare = 0.0f;
-        gameState->audioState.tDead = 0.0f;
-#if GAME_INTERNAL
-        gameState->audioState.debugView = false;
-#endif
+        InitAudioState(thread, &gameState->audioState, audio,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
 
         // Game data
         gameState->bpm = 120;
@@ -551,10 +543,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             InitParticleDeath, gameState->pTexBase
         );
 
-        gameState->soundKick = LoadWAV(thread, "data/audio/kick.wav",
-            platformFuncs->DEBUGPlatformReadFile,
-            platformFuncs->DEBUGPlatformFreeFileMemory);
-
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
 	}
@@ -638,32 +626,26 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
     // Debug camera position control
 	const GameControllerInput* input0 = &input->controllers[0];
-	float32 speed = 0.01f;
-	Vec3 playerRight = Normalize(Vec3{ 1.0f, 1.0f, 0.0f });
-	Vec3 playerForward = Normalize(Vec3{ -1.0f, 1.0f, 0.0f });
+	float32 speed = 1.0f;
 	Vec3 vel = Vec3::zero;
-	if (input0->isConnected) {
-		vel = (input0->leftEnd.x * playerRight
-        + input0->leftEnd.y * playerForward) * speed;
+	if (input->keyboard[KM_KEY_I].isDown) {
+		vel += Vec3::unitY * speed;
 	}
-	if (input->keyboard[KM_KEY_D].isDown) {
-		vel += playerRight * speed;
+	if (input->keyboard[KM_KEY_K].isDown) {
+		vel -= Vec3::unitY * speed;
 	}
-	if (input->keyboard[KM_KEY_A].isDown) {
-		vel -= playerRight * speed;
-	}
-	if (input->keyboard[KM_KEY_W].isDown) {
-		vel += playerForward * speed;
-	}
-	if (input->keyboard[KM_KEY_S].isDown) {
-		vel -= playerForward * speed;
-	}
-	gameState->debugCamPos += vel;
-    if (input->keyboard[KM_KEY_E].isDown) {
-        gameState->debugZoom += speed;
+    if (input->keyboard[KM_KEY_J].isDown) {
+        vel -= Vec3::unitX * speed;
     }
-    if (input->keyboard[KM_KEY_Q].isDown) {
-        gameState->debugZoom -= speed;
+    if (input->keyboard[KM_KEY_L].isDown) {
+        vel += Vec3::unitX * speed;
+    }
+	gameState->debugCamPos += vel * deltaTime;
+    if (input->keyboard[KM_KEY_O].isDown) {
+        gameState->debugZoom += speed * deltaTime;
+    }
+    if (input->keyboard[KM_KEY_U].isDown) {
+        gameState->debugZoom -= speed * deltaTime;
     }
 
     int lineWidth = screenInfo.size.y / 140;
@@ -746,8 +728,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     }
     else {
         Vec4 snareHitColor = snareHitColor_;
-        snareHitColor.a *= 1.0f - gameState->deadTime
+        float32 deathProgress = gameState->deadTime
             / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
+        snareHitColor.a *= MaxFloat32(1.0f - deathProgress, 0.0f);
         for (int i = 0; i < 12; i++) {
             Vec2Int snareHitPos = {
                 (int)(slotWidthPix * i + slotWidthPix / 2.0f),
@@ -948,158 +931,13 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     DrawText(gameState->textGL, gameState->fontFace, screenInfo,
         fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one);
 
-    // Audio output
-    float32 soundRequestLength = (float32)audio->fillLength
-        / audio->sampleRate;
-
-    float32 toneBass = 60.0f;
-    float32 ampBassStart = ClampFloat32(1.0f - beatProgress, 0.0f, 1.0f);
-    float32 ampBassEnd = ClampFloat32(1.0f - 
-        (gameState->lastBeat + soundRequestLength) / beatDuration,
-        0.0f, 1.0f);
-
-    float32 toneSnare = toneBass * 2.0f;
-    float32 ampSnareStart = ClampFloat32(1.0f - halfBeatProgress, 0.0f, 1.0f);
-    float32 ampSnareEnd = ClampFloat32(1.0f -
-        (gameState->lastHalfBeat + soundRequestLength) / halfBeatDuration,
-        0.0f, 1.0f);
-    bool shouldPlaySnare = false;
-    for (int i = 0; i < 12; i++) {
-        if (gameState->snareHits[gameState->halfBeatCount][i]) {
-            shouldPlaySnare = true;
-            break;
-        }
-    }
-    if (gameState->dead && gameState->deadHalfBeats != 0) {
-        shouldPlaySnare = false;
-    }
-    if (!shouldPlaySnare) {
-        ampSnareStart = 0.0f;
-        ampSnareEnd = 0.0f;
-    }
-
-    float32 toneDead = toneBass * 2.0f;
-    float32 deathTotalTime = (DEATH_DURATION_HALFBEATS * halfBeatDuration);
-    float32 ampDeadMult = 0.2f;
-    float32 ampDeadStart = ClampFloat32((1.0f
-        - gameState->deadTime / deathTotalTime) * ampDeadMult,
-        0.0f, 1.0f);
-    float32 ampDeadEnd = ClampFloat32((1.0f
-        - (gameState->deadTime + soundRequestLength) / deathTotalTime)
-        * ampDeadMult,
-        0.0f, 1.0f);
-    if (!gameState->dead) {
-        ampDeadStart = 0.0f;
-        ampDeadEnd = 0.0f;
-    }
-
-    AudioState* audioState = &gameState->audioState;
-    /*audioState->amplitude = 1.0f - beatProgress;
-    audioState->amplitude = ClampFloat32(audioState->amplitude, 0.0f, 1.0f);*/
-    audioState->runningSampleIndex += audio->fillStartDelta;
-    audioState->tSine1 += 2.0f * PI_F * toneBass
-        * audio->fillStartDelta / audio->sampleRate;
-    audioState->tSine2 += 2.0f * PI_F * toneBass
-        * audio->fillStartDelta / audio->sampleRate;
-    audioState->tSnare += 2.0f * PI_F * toneSnare
-        * audio->fillStartDelta / audio->sampleRate;
-    audioState->tDead += 2.0f * PI_F * toneDead
-        * audio->fillStartDelta / audio->sampleRate;
-
-    // Very basic mixing
-    ampBassStart *= 0.33333f;
-    ampBassEnd *= 0.33333f;
-    ampSnareStart *= 0.33333f;
-    ampSnareEnd *= 0.33333f;
-    ampDeadStart *= 0.33333f;
-    ampDeadEnd *= 0.33333f;
-
-    for (int i = 0; i < audio->fillLength; i++) {
-        float t = (float32)i / audio->sampleRate;
-        float32 tSine1Off = 2.0f * PI_F * toneBass
-            * i / audio->sampleRate;
-        float32 tSine2Off = 2.0f * PI_F * toneBass
-            * i / audio->sampleRate;
-        float32 tSnareOff = 2.0f * PI_F * toneSnare
-            * i / audio->sampleRate;
-        float32 tDeadOff = 2.0f * PI_F * toneDead
-            * i / audio->sampleRate;
-        uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        float32 ampBass = Lerp(ampBassStart, ampBassEnd,
-            t / soundRequestLength);
-        int16 sin1Sample = (int16)(INT16_MAXVAL * ampBass * sinf(
-            audioState->tSine1 + tSine1Off));
-        int16 sin2Sample = (int16)(INT16_MAXVAL * ampBass * sinf(
-            audioState->tSine2 + tSine2Off));
-        float32 ampSnare = Lerp(ampSnareStart, ampSnareEnd,
-            t / soundRequestLength);
-        int16 snareSample = (int16)(INT16_MAXVAL * ampSnare * sinf(
-            audioState->tSnare + tSnareOff));
-        float32 ampDead = Lerp(ampDeadStart, ampDeadEnd,
-            t / soundRequestLength);
-        int16 deadSample = (int16)(INT16_MAXVAL * ampDead * SquareWave(
-            audioState->tDead + tDeadOff));
-        audio->buffer[ind * audio->channels]      =
-            sin1Sample + snareSample + deadSample;
-        audio->buffer[ind * audio->channels + 1]  =
-            sin2Sample + snareSample + deadSample;
-
-        //audio->buffer[ind * audio->channels]      = 0;
-        //audio->buffer[ind * audio->channels + 1]  = 0;
-    }
+    OutputAudio(audio, gameState, input, memory);
 
 #if GAME_SLOW
     // Catch-all site for OpenGL errors
     GLenum err;
     while ((err = glGetError()) != GL_NO_ERROR) {
         DEBUG_PRINT("OpenGL error: %x\n", err);
-    }
-#endif
-
-#if GAME_INTERNAL
-    if (WasKeyPressed(input, KM_KEY_G)) {
-        audioState->debugView = !audioState->debugView;
-    }
-    if (audioState->debugView) {
-        DEBUG_ASSERT(memory->transientStorageSize >= sizeof(LineGLData));
-        DEBUG_ASSERT(audio->bufferSizeSamples <= MAX_LINE_POINTS);
-        Mat4 proj = Mat4::one;
-        Vec3 zoomScale = {
-            1.0f + gameState->debugZoom,
-            1.0f + gameState->debugZoom,
-            1.0f
-        };
-        Mat4 view = Translate(-gameState->debugCamPos) * Scale(zoomScale);
-
-        LineGLData* lineData = (LineGLData*)memory->transientStorage;
-        lineData->count = audio->bufferSizeSamples;
-        float32 length = 1.0f;
-        float32 height = 1.0f;
-        float32 offset = 1.0f;
-        for (int i = 0; i < audio->bufferSizeSamples; i++) {
-            int16 val = audio->buffer[i * audio->channels];
-            float32 normVal = (float32)val / INT16_MAXVAL;
-            float32 t = (float32)i / (audio->bufferSizeSamples - 1);
-            lineData->pos[i] = {
-                t * length - length / 2.0f,
-                height * normVal + offset,
-                0.0f
-            };
-        }
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::one);
-        for (int i = 0; i < audio->bufferSizeSamples; i++) {
-            int16 val = audio->buffer[i * audio->channels + 1];
-            float32 normVal = (float32)val / INT16_MAXVAL;
-            float32 t = (float32)i / (audio->bufferSizeSamples - 1);
-            lineData->pos[i] = {
-                t * length - length / 2.0f,
-                height * normVal - offset,
-                0.0f
-            };
-        }
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::one);
     }
 #endif
 }
@@ -1110,3 +948,4 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #include "load_png.cpp"
 #include "particles.cpp"
 #include "load_wav.cpp"
+#include "audio.cpp"
