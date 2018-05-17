@@ -1,6 +1,7 @@
 #include "audio.h"
 
 #include "main.h"
+#include "km_debug.h"
 
 /*internal float32 SquareWave(float32 t)
 {
@@ -45,21 +46,27 @@ internal void SoundUpdate(const GameAudio* audio, Sound* sound)
     }
 }
 
-internal void SoundWriteSamples(const Sound* sound,
-    int i, float32 amplitude,
+internal void SoundWriteSamples(const Sound* sound, float32 amplitude,
     GameAudio* audio)
 {
-    int sampleInd = sound->sampleIndex + i;
+    if (!sound->playing) {
+        return;
+    }
+
     const AudioBuffer* activeBuffer = &sound->buffers[sound->activeVariation];
-    if (sound->playing && sampleInd < activeBuffer->bufferSizeSamples) {
+    for (int i = 0; i < audio->fillLength; i++) {
+        int sampleInd = sound->sampleIndex + i;
+        if (sampleInd >= activeBuffer->bufferSizeSamples) {
+            break;
+        }
         int16 sample1 = (int16)(amplitude
             * activeBuffer->buffer[sampleInd * audio->channels]);
         int16 sample2 = (int16)(amplitude
             * activeBuffer->buffer[sampleInd * audio->channels + 1]);
 
         int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        audio->buffer[ind * audio->channels]        += sample1;
-        audio->buffer[ind * audio->channels + 1]    += sample2;
+        audio->buffer[ind * audio->channels] += sample1;
+        audio->buffer[ind * audio->channels + 1] += sample2;
     }
 }
 
@@ -104,6 +111,7 @@ void InitAudioState(const ThreadContext* thread,
 void OutputAudio(GameAudio* audio, GameState* gameState,
     const GameInput* input, GameMemory* memory)
 {
+    DEBUG_ASSERT(audio->fillStartDelta >= 0);
     AudioState* audioState = &gameState->audioState;
     audioState->runningSampleIndex += audio->fillStartDelta;
 
@@ -113,16 +121,13 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 
     for (int i = 0; i < audio->fillLength; i++) {
         uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        audio->buffer[ind * audio->channels]        = 0;
-        audio->buffer[ind * audio->channels + 1]    = 0;
-
-        SoundWriteSamples(&audioState->soundKick, i, 1.0f, audio);
-        SoundWriteSamples(&audioState->soundSnare, i, 0.7f, audio);
-        SoundWriteSamples(&audioState->soundDeath, i, 0.5f, audio);
-
-        //audio->buffer[ind * audio->channels]      = 0;
-        //audio->buffer[ind * audio->channels + 1]  = 0;
+        audio->buffer[ind * audio->channels] = 0;
+        audio->buffer[ind * audio->channels + 1] = 0;
     }
+
+    SoundWriteSamples(&audioState->soundKick, 1.0f, audio);
+    SoundWriteSamples(&audioState->soundSnare, 0.7f, audio);
+    SoundWriteSamples(&audioState->soundDeath, 0.5f, audio);
 
 #if GAME_INTERNAL
     if (WasKeyPressed(input, KM_KEY_G)) {
@@ -137,7 +142,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
             1.0f + gameState->debugZoom,
             1.0f
         };
-        Mat4 view = Translate(-gameState->debugCamPos) * Scale(zoomScale);
+        Mat4 view = Scale(zoomScale) * Translate(-gameState->debugCamPos);
 
         LineGLData* lineData = (LineGLData*)memory->transientStorage;
         lineData->count = audio->bufferSizeSamples;

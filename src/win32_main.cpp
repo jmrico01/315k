@@ -1249,6 +1249,7 @@ int CALLBACK WinMain(
         gameAudio.fillStart = (playMark + winAudio.minLatency)
             % winAudio.bufferSizeSamples;
         gameAudio.fillLength = winAudio.maxLatency * 2 - winAudio.minLatency;
+        // TODO can this ever fail? AKA can SamplesPlayed loop back / reset?
         gameAudio.fillStartDelta = (int)(
             voiceState.SamplesPlayed - samplesPlayedPrev);
         samplesPlayedPrev = voiceState.SamplesPlayed;
