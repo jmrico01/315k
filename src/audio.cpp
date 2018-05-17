@@ -2,11 +2,11 @@
 
 #include "main.h"
 
-internal float32 SquareWave(float32 t)
+/*internal float32 SquareWave(float32 t)
 {
     float32 tMod = fmod(t, 2.0f * PI_F);
     return tMod < PI_F ? 1.0f : -1.0f;
-}
+}*/
 
 internal void SoundInit(const ThreadContext* thread,
     const GameAudio* audio, Sound* sound,

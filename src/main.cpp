@@ -625,7 +625,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     float32 halfBeatProgress = gameState->lastHalfBeat / halfBeatDuration;
 
     // Debug camera position control
-	const GameControllerInput* input0 = &input->controllers[0];
 	float32 speed = 1.0f;
 	Vec3 vel = Vec3::zero;
 	if (input->keyboard[KM_KEY_I].isDown) {
