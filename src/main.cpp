@@ -765,8 +765,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     float32 bloomThreshold = 0.25f;
     int bloomKernelHalfSize = 4;
     int bloomKernelSize = bloomKernelHalfSize * 2 + 1;
-    int bloomBlurPasses = 2;
-    int bloomBlurPassesDeath = 2;
+    int bloomBlurPasses = 1;
+    int bloomBlurPassesDeath = 1;
     float32 bloomBlurSigma = 4.0f;
     float32 bloomBlurSigmaDeathMult = 4.0f;
     float32 bloomMag = 0.5f;
