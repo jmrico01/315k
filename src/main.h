@@ -50,8 +50,9 @@ struct GameState
     int halfBeatCount;
 
     int levelLength;
-    bool snareHits[MAX_LEVEL_HALFBEATS][12];
     int respawn;
+    bool snareHits[MAX_LEVEL_HALFBEATS][12];
+    bool notes[MAX_LEVEL_HALFBEATS][12];
 
     int circlePos;
 

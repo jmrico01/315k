@@ -10,7 +10,7 @@ struct Sound
     bool32 play;
     bool32 playing;
     int sampleIndex;
-    
+
     int variations;
     AudioBuffer buffers[SOUND_MAX_VARIATIONS];
     int activeVariation;
@@ -23,6 +23,8 @@ struct AudioState
     Sound soundKick;
     Sound soundSnare;
     Sound soundDeath;
+
+    Sound soundNotes[12];
 
 #if GAME_INTERNAL
     bool32 debugView;

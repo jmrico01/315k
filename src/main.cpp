@@ -29,6 +29,10 @@ global_var Vec4 lineDarkColor_ = Vec4 { 0.25f, 0.25f, 0.25f, 1.0f };
 global_var Vec4 circleSelectedColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 1.0f };
 
 global_var Vec4 snareHitColor_ = Vec4 { 1.0f, 0.7f, 0.6f, 0.5f };
+global_var Vec4 noteColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 0.5f };
+
+// Cool color, but out of place for notes
+//global_var Vec4 noteColor_ = Vec4 { 0.6f, 0.7f, 1.0f, 0.5f };
 
 internal MarkerGL InitMarkerGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
@@ -245,6 +249,15 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
             gameState->circlePos = gameState->respawn;
         }
     }
+    if (!gameState->dead) {
+        // Play note sounds after death check to avoid playing
+        // note sound without rendering note rect
+        for (int i = 0; i < 12; i++) {
+            if (gameState->notes[gameState->halfBeatCount][i]) {
+                gameState->audioState.soundNotes[i].play = true;
+            }
+        }
+    }
     if (gameState->halfBeatCount % 2 == 0) {
         gameState->lastBeat = 0.0f;
 
@@ -256,6 +269,45 @@ internal inline bool32 IsWhitespace(char c)
 {
     return c == ' ' || c == '\t'
         || c == '\n' || c == '\v' || c == '\f' || c == '\r';
+}
+
+internal char* LoadLevelIntList(char* c, int outList[12], int* listSize)
+{
+    *listSize = 0;
+    if (*c == 'n') {
+        c++;
+        while (IsWhitespace(*c)) {
+            c++;
+        }
+        return c;
+    }
+
+    char buf[128];
+    char* bufStart = buf;
+    int i = 0;
+    while (*c != '\n') {
+        if (*c == ',') {
+            buf[i++] = '\0';
+            c++;
+            outList[*listSize] = (int)strtol(bufStart, nullptr, 10);
+            *listSize += 1;
+            bufStart = &buf[i];
+            while (IsWhitespace(*c)) {
+                if (*c == '\n') {
+                    break;
+                }
+                c++;
+            }
+        }
+        else {
+            buf[i++] = *c++;
+        }
+    }
+    while (IsWhitespace(*c)) {
+        c++;
+    }
+
+    return c;
 }
 
 internal void LoadLevel(const ThreadContext* thread, const char* filePath,
@@ -307,37 +359,30 @@ internal void LoadLevel(const ThreadContext* thread, const char* filePath,
     buf[i] = '\0';
     int levelLength = (int)strtol(buf, nullptr, 10);
 
+    // Load snare hits
     for (int hb = 0; hb < levelLength; hb++) {
-        if (*c == 'n') {
-            for (int n = 0; n < 12; n++) {
-                gameState->snareHits[hb][n] = false;
-            }
-            c++;
-            while (IsWhitespace(*c)) {
-                c++;
-            }
-            continue;
-        }
+        int snareHits[12];
+        int snareHitCount;
+        c = LoadLevelIntList(c, snareHits, &snareHitCount);
 
-        i = 0;
-        char* bufStart = buf;
-        int noteNum = 0;
-        while (*c != '\n') {
-            if (*c == ',') {
-                buf[i++] = '\0';
-                c++;
-                gameState->snareHits[hb][noteNum++] =
-                    (int)strtol(bufStart, nullptr, 10) == 1;
-                bufStart = &buf[i];
-            }
-            else {
-                buf[i++] = *c++;
-            }
+        for (int j = 0; j < 12; j++) {
+            gameState->snareHits[hb][j] = false;
         }
-        if (hb != levelLength - 1) {
-            while (IsWhitespace(*c)) {
-                c++;
-            }
+        for (int j = 0; j < snareHitCount; j++) {
+            gameState->snareHits[hb][snareHits[j]] = true;
+        }
+    }
+    // Load notes
+    for (int hb = 0; hb < levelLength; hb++) {
+        int notes[12];
+        int noteCount;
+        c = LoadLevelIntList(c, notes, &noteCount);
+
+        for (int j = 0; j < 12; j++) {
+            gameState->notes[hb][j] = false;
+        }
+        for (int j = 0; j < noteCount; j++) {
+            gameState->notes[hb][notes[j]] = true;
         }
     }
 
@@ -412,6 +457,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         gameState->respawn = 0;
 
         gameState->circlePos = 0;
+
+        LoadLevel(thread, "data/levels/level0", gameState,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
 
         gameState->dead = false;
 
@@ -707,6 +756,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         circleSelectedColor_
     );
 
+    // Draw snare hits
     if (!gameState->dead) {
         Vec4 snareHitColor = snareHitColor_;
         snareHitColor.a *= 1.0f - halfBeatProgress;
@@ -741,6 +791,26 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
                     Vec2 { 0.5f, 0.5f },
                     Vec2Int { (int)(slotWidthPix * 1.01f), screenInfo.size.y },
                     snareHitColor
+                );
+            }
+        }
+    }
+
+    // Draw notes
+    if (!gameState->dead) {
+        Vec4 noteColor = noteColor_;
+        noteColor.a *= 1.0f - halfBeatProgress;
+        for (int i = 0; i < 12; i++) {
+            Vec2Int notePos = {
+                (int)(slotWidthPix * i + slotWidthPix / 2.0f),
+                screenInfo.size.y / 2
+            };
+            if (gameState->notes[gameState->halfBeatCount][i]) {
+                DrawRect(gameState->rectGL, screenInfo,
+                    notePos,
+                    Vec2 { 0.5f, 0.5f },
+                    Vec2Int { (int)(slotWidthPix * 1.01f), screenInfo.size.y },
+                    noteColor
                 );
             }
         }

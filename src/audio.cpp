@@ -103,6 +103,18 @@ void InitAudioState(const ThreadContext* thread,
         DEATH_VARIATIONS, deathSoundFiles,
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
 
+    for (int i = 0; i < 12; i++) {
+        char buf[128];
+        sprintf(buf, "data/audio/note%d.wav", i);
+        const char* noteSoundFiles[1] = {
+            buf
+        };
+        SoundInit(thread, audio,
+            &audioState->soundNotes[i],
+            1, noteSoundFiles,
+            DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+    }
+
 #if GAME_INTERNAL
     audioState->debugView = false;
 #endif
@@ -118,6 +130,9 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     SoundUpdate(audio, &audioState->soundKick);
     SoundUpdate(audio, &audioState->soundSnare);
     SoundUpdate(audio, &audioState->soundDeath);
+    for (int i = 0; i < 12; i++) {
+        SoundUpdate(audio, &audioState->soundNotes[i]);
+    }
 
     for (int i = 0; i < audio->fillLength; i++) {
         uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
@@ -128,6 +143,9 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     SoundWriteSamples(&audioState->soundKick, 1.0f, audio);
     SoundWriteSamples(&audioState->soundSnare, 0.7f, audio);
     SoundWriteSamples(&audioState->soundDeath, 0.5f, audio);
+    for (int i = 0; i < 12; i++) {
+        SoundWriteSamples(&audioState->soundNotes[i], 0.2f, audio);
+    }
 
 #if GAME_INTERNAL
     if (WasKeyPressed(input, KM_KEY_G)) {
