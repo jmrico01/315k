@@ -68,19 +68,19 @@ void LoadPNGReadData(png_structp pngPtr,
 
 // TODO pass a custom allocator to libPNG
 GLuint LoadPNGOpenGL(const ThreadContext* thread,
-    const char* fileName,
+    const char* filePath,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-    DEBUGReadFileResult pngFile = DEBUGPlatformReadFile(thread, fileName);
+    DEBUGReadFileResult pngFile = DEBUGPlatformReadFile(thread, filePath);
     if (!pngFile.data) {
-        DEBUG_PRINT("Failed to open PNG file at: %s\n", fileName);
+        DEBUG_PRINT("Failed to open PNG file at: %s\n", filePath);
         return 0;
     }
 
     const int headerSize = 8;
     if (png_sig_cmp((png_const_bytep)pngFile.data, 0, headerSize)) {
-        DEBUG_PRINT("Invalid PNG file: %s\n", fileName);
+        DEBUG_PRINT("Invalid PNG file: %s\n", filePath);
         DEBUGPlatformFreeFileMemory(thread, &pngFile);
         return 0;
     }

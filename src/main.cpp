@@ -14,6 +14,7 @@
 #include "opengl_base.h"
 #include "load_png.h"
 #include "particles.h"
+#include "load_wav.h"
 
 // These must match the max sizes in blur.frag
 #define KERNEL_HALFSIZE_MAX 10
@@ -549,6 +550,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             nullptr, 0, nullptr, 0, nullptr, 0, nullptr, 0,
             InitParticleDeath, gameState->pTexBase
         );
+
+        gameState->soundKick = LoadWAV(thread, "data/audio/kick.wav",
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
 
 		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
@@ -1104,3 +1109,4 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #include "text.cpp"
 #include "load_png.cpp"
 #include "particles.cpp"
+#include "load_wav.cpp"

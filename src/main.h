@@ -5,6 +5,7 @@
 #include "opengl_base.h"
 #include "text.h"
 #include "particles.h"
+#include "load_wav.h"
 
 #define NUM_FRAMEBUFFERS 3
 #define MAX_LEVEL_HALFBEATS 16
@@ -106,4 +107,6 @@ struct GameState
 
     GLuint pTexBase;
     ParticleSystem ps;
+
+    AudioBuffer soundKick;
 };
