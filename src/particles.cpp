@@ -225,6 +225,7 @@ void UpdateParticleSystem(ParticleSystem* ps, float32 deltaTime, void* data)
 
         // Color update
         float32 alpha = 1.0f - ps->particles[i].life / ps->maxLife;
+        alpha = alpha * alpha;
         //alpha = sqrtf(alpha);
         ps->particles[i].color.a = alpha;
     }

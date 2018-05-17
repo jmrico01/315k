@@ -188,24 +188,21 @@ internal void InitParticleDeath(ParticleSystem* ps, Particle* particle,
 
     //float32 speedX = RandFloat(-20.0f, 20.0f);
     //float32 speedY = RandFloat(-400.0f, 400.0f);
+    float32 speedXVar = slotWidthPix / 8.0f;
+    float32 speedYVar = slotWidthPix;
     std::random_device rd;
     // Mersenne twister PRNG, initialized with seed from previous random device instance
     std::mt19937 gen(rd());
-    std::normal_distribution<float32> distX(0.0f, 20.0f);
-    std::normal_distribution<float32> distY(0.0f, 400.0f);
+    std::normal_distribution<float32> distX(0.0f, speedXVar);
+    std::normal_distribution<float32> distY(0.0f, speedYVar);
     float32 speedX = distX(gen);
     float32 speedY = distY(gen);
     particle->vel = speedX * Vec3::unitX + speedY * Vec3::unitY;
-    float32 colorOffsetR = RandFloat(-0.1f, 0.1f);
-    float32 colorOffsetG = RandFloat(-0.1f, 0.1f);
-    float32 colorOffsetB = RandFloat(-0.1f, 0.1f);
-    particle->color = circleSelectedColor_;
-    particle->color.r += colorOffsetR;
-    particle->color.g += colorOffsetG;
-    particle->color.b += colorOffsetB;
+    float32 colorRandT = RandFloat();
+    particle->color = Lerp(circleSelectedColor_, snareHitColor_, colorRandT);
     float32 baseSize = pdd->circleDiameter / 10.0f;
     baseSize = MaxFloat32(baseSize, 2.0f);
-    float32 randSize = baseSize + RandFloat() * baseSize / 2.0f;
+    float32 randSize = baseSize * RandFloat(0.5f, 1.5f);
     particle->size = { randSize, randSize };
     particle->bounceMult = 1.0f;
     particle->frictionMult = 1.0f;
@@ -458,7 +455,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             DEBUG_PRINT("FreeType init error: %d\n", error);
         }
         gameState->fontFace = LoadFontFace(thread, gameState->ftLibrary,
-            "data/fonts/source-code-pro/regular.ttf", 24,
+            "data/fonts/ibm-plex-mono/regular.ttf", 24,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
 
@@ -675,7 +672,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
     // ------------------------- Begin Rendering -------------------------
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[0]);
-    //glDisable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
     Vec4 clearColor = Lerp(backgroundColorBeat_, backgroundColor_,
         beatProgress);
     glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
@@ -775,24 +772,29 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         Vec3::unitX, Vec3::unitY, Vec3::unitZ, Mat4::one, psView, dataGL);
 
     // Post processing passes
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glDisable(GL_DEPTH_TEST);
     GLint loc;
     // -------------------- BLOOM --------------------
-    float32 bloomThreshold = 0.5f;
+    float32 bloomThreshold = 0.25f;
     int bloomKernelHalfSize = 4;
     int bloomKernelSize = bloomKernelHalfSize * 2 + 1;
-    int bloomBlurPasses = 1;
-    float bloomBlurSigma = 4.0f;
-    float bloomMag = 0.5f;
+    int bloomBlurPasses = 2;
+    int bloomBlurPassesDeath = 2;
+    float32 bloomBlurSigma = 4.0f;
+    float32 bloomBlurSigmaDeathMult = 4.0f;
+    float32 bloomMag = 0.5f;
+    float32 bloomMagDeathMultMax = 1.0f;
     if (gameState->dead) {
         float32 deathProgress = gameState->deadTime
             / (DEATH_DURATION_HALFBEATS * halfBeatDuration);
-        //bloomBlurPasses += (int)((1.0f - deathProgress) * 5);
-        bloomMag += (1.0f - deathProgress) * (1.0f - bloomMag);
+        bloomBlurPasses += (int)((1.0f - deathProgress)
+            * bloomBlurPassesDeath);
+        bloomBlurSigma += (1.0f - deathProgress) * bloomBlurSigmaDeathMult;
+        bloomMag += (1.0f - deathProgress) * bloomMagDeathMultMax;
     }
     // Extract high-luminance pixels
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->framebuffers[1]);
-    glClear(GL_COLOR_BUFFER_BIT);
+    //glClear(GL_COLOR_BUFFER_BIT);
 
     glBindVertexArray(gameState->screenQuadVertexArray);
     glUseProgram(gameState->bloomExtractShader);
@@ -905,7 +907,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, gameState->colorBuffers[2]);
     loc = glGetUniformLocation(gameState->grainShader,
-        "framebufferTexture");
+        "scene");
     glUniform1i(loc, 0);
     loc = glGetUniformLocation(gameState->grainShader,
         "grainMag");
@@ -918,7 +920,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
     // --------------------RENDER TO SCREEN --------------------
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glBindVertexArray(gameState->screenQuadVertexArray);
     glUseProgram(gameState->screenShader);

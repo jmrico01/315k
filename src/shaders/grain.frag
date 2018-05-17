@@ -4,7 +4,8 @@ in vec2 fragUV;
 
 out vec4 outColor;
 
-uniform sampler2D framebufferTexture;
+uniform sampler2D scene;
+uniform sampler2D noiseTex;
 uniform float grainMag;
 uniform float time;
 
@@ -29,7 +30,7 @@ void main()
         mod(time * fragUV.x, 701.0),
         mod(time * fragUV.y, 373.0)
     );
-    vec3 color = texture(framebufferTexture, fragUV).rgb;
+    vec3 color = texture(scene, fragUV).rgb;
     vec3 noiseColor = color;
     color *= 1.0 - grainMag;
     noiseColor *= grainMag * noise(randVec * 100.0f);

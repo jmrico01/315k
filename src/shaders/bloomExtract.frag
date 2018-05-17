@@ -19,6 +19,9 @@ void main()
         outColor = vec4(color, 1.0);
     }
     else {
-        outColor = vec4(0.0, 0.0, 0.0, 0.0);
+        // NOTE unexpected cool effect:
+        //  set alpha value here to 0.0, and the bloom values
+        //  get preserved through frames
+        outColor = vec4(0.0, 0.0, 0.0, 1.0);
     }
 }
