@@ -766,6 +766,11 @@ int main(int argc, const char* argv[])
             % macAudio.bufferSizeSamples;
         gameAudio.fillLength = macAudio.maxLatency * 2 - macAudio.minLatency;
         gameAudio.fillStartDelta = macAudio.readCursor - audioReadCursorPrev;
+        if (macAudio.readCursor < audioReadCursorPrev) {
+            gameAudio.fillStartDelta =
+                macAudio.bufferSizeSamples - audioReadCursorPrev
+                + macAudio.readCursor;
+        }
         audioReadCursorPrev = macAudio.readCursor;
 
 		uint64 endTime = mach_absolute_time();
