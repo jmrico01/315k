@@ -50,14 +50,12 @@ internal void SoundWriteSamples(const Sound* sound,
     GameAudio* audio)
 {
     int sampleInd = sound->sampleIndex + i;
-    if (sound->playing
-    && sampleInd < sound->buffers[sound->activeVariation].bufferSizeSamples) {
+    const AudioBuffer* activeBuffer = &sound->buffers[sound->activeVariation];
+    if (sound->playing && sampleInd < activeBuffer->bufferSizeSamples) {
         int16 sample1 = (int16)(amplitude
-            * sound->buffers[sound->activeVariation].buffer[
-                sampleInd * audio->channels]);
+            * activeBuffer->buffer[sampleInd * audio->channels]);
         int16 sample2 = (int16)(amplitude
-            * sound->buffers[sound->activeVariation].buffer[
-                sampleInd * audio->channels + 1]);
+            * activeBuffer->buffer[sampleInd * audio->channels + 1]);
 
         int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
         audio->buffer[ind * audio->channels]        += sample1;

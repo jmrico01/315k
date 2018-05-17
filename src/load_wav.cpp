@@ -83,6 +83,9 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     audioBuffer->channels = fmt->channels;
     audioBuffer->bufferSizeSamples = samples;
 
+    DEBUG_PRINT("Loaded WAV file: %s\n", filePath);
+    DEBUG_PRINT("Samples: %d\n", audioBuffer->bufferSizeSamples);
+
     DEBUGPlatformFreeFileMemory(thread, &wavFile);
 
     return true;

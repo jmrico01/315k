@@ -5,15 +5,14 @@
 
 #define AUDIO_SAMPLERATE_MAX 48000
 #define AUDIO_CHANNELS_MAX 2
-#define AUDIO_BUFFER_MAX_SAMPLES (2 * \
-    AUDIO_SAMPLERATE_MAX * AUDIO_CHANNELS_MAX)
+#define AUDIO_BUFFER_MAX_SAMPLES (AUDIO_SAMPLERATE_MAX * 2)
 
 struct AudioBuffer
 {
     int sampleRate;
     int channels;
     int bufferSizeSamples;
-    int16 buffer[AUDIO_BUFFER_MAX_SAMPLES];
+    int16 buffer[AUDIO_BUFFER_MAX_SAMPLES * AUDIO_CHANNELS_MAX];
 };
 
 bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
