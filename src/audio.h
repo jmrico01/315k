@@ -26,6 +26,8 @@ struct AudioState
 
     Sound soundNotes[12];
 
+    float32 tWave;
+
 #if GAME_INTERNAL
     bool32 debugView;
 #endif

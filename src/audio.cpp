@@ -3,11 +3,24 @@
 #include "main.h"
 #include "km_debug.h"
 
-/*internal float32 SquareWave(float32 t)
+internal float32 SquareWave(float32 t)
 {
     float32 tMod = fmod(t, 2.0f * PI_F);
     return tMod < PI_F ? 1.0f : -1.0f;
-}*/
+}
+internal float32 TriangleWave(float32 t)
+{
+    float32 tMod = fmod(t, 2.0f * PI_F);
+    if (tMod < PI_F / 2.0f) {
+        return tMod / (PI_F / 2.0f);
+    }
+    else if (tMod < PI_F * 3.0f / 2.0f) {
+        return (tMod - PI_F / 2.0f) / PI_F * -2.0f + 1.0f;
+    }
+    else {
+        return (tMod - PI_F * 3.0f / 2.0f) / (PI_F / 2.0f) - 1.0f;
+    }
+}
 
 internal void SoundInit(const ThreadContext* thread,
     const GameAudio* audio, Sound* sound,
@@ -115,6 +128,8 @@ void InitAudioState(const ThreadContext* thread,
             DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     }
 
+    audioState->tWave = 0.0f;
+
 #if GAME_INTERNAL
     audioState->debugView = false;
 #endif
@@ -123,9 +138,22 @@ void InitAudioState(const ThreadContext* thread,
 void OutputAudio(GameAudio* audio, GameState* gameState,
     const GameInput* input, GameMemory* memory)
 {
+    float32 ampWave = 0.15f;
+    float32 toneWave = 261.0f;
+
+    // Modify wave tone based on mouse position
+    float32 toneMin = toneWave * 1.0f;
+    float32 toneMax = toneWave * 2.0f;
+    float32 tonePixelRange = 600.0f;
+    float32 tonePixelOffset = 200.0f;
+    float32 toneT = (input->mousePos.x - tonePixelOffset) / tonePixelRange;
+    toneWave = Lerp(toneMin, toneMax, toneT);
+
     DEBUG_ASSERT(audio->fillStartDelta >= 0);
     AudioState* audioState = &gameState->audioState;
     audioState->runningSampleIndex += audio->fillStartDelta;
+    audioState->tWave += 2.0f * PI_F * toneWave
+        * audio->fillStartDelta / audio->sampleRate;
 
     SoundUpdate(audio, &audioState->soundKick);
     SoundUpdate(audio, &audioState->soundSnare);
@@ -138,6 +166,29 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
         audio->buffer[ind * audio->channels] = 0;
         audio->buffer[ind * audio->channels + 1] = 0;
+
+        float32 t = (float32)i / audio->sampleRate;
+        float32 tWaveOff = 2.0f * PI_F * toneWave
+            * i / audio->sampleRate;
+        /*float32 ampBass = Lerp(ampBassStart, ampBassEnd,
+            t / soundRequestLength);*/
+        int16 waveSample = 0;
+        if (input->keyboard[KM_KEY_Z].isDown) {
+            waveSample = (int16)(INT16_MAXVAL * ampWave * sinf(
+                audioState->tWave + tWaveOff));
+        }
+        else if (input->keyboard[KM_KEY_X].isDown) {
+            float32 ampDamp = ampWave * 0.9f;
+            waveSample = (int16)(INT16_MAXVAL * ampDamp * TriangleWave(
+                audioState->tWave + tWaveOff));
+        }
+        else if (input->keyboard[KM_KEY_C].isDown) {
+            float32 ampDamp = ampWave * 0.3f;
+            waveSample = (int16)(INT16_MAXVAL * ampDamp * SquareWave(
+                audioState->tWave + tWaveOff));
+        }
+        audio->buffer[ind * audio->channels]      += waveSample;
+        audio->buffer[ind * audio->channels + 1]  += waveSample;
     }
 
     SoundWriteSamples(&audioState->soundKick, 1.0f, audio);
