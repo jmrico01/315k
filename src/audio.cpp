@@ -167,7 +167,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         audio->buffer[ind * audio->channels] = 0;
         audio->buffer[ind * audio->channels + 1] = 0;
 
-        float32 t = (float32)i / audio->sampleRate;
         float32 tWaveOff = 2.0f * PI_F * toneWave
             * i / audio->sampleRate;
         /*float32 ampBass = Lerp(ampBassStart, ampBassEnd,
@@ -211,7 +210,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
             1.0f + gameState->debugZoom,
             1.0f
         };
-        Mat4 view = Scale(zoomScale) * Translate(-gameState->debugCamPos);
+        Mat4 view = Scale(zoomScale) * Translate(gameState->debugCamPos);
 
         LineGLData* lineData = (LineGLData*)memory->transientStorage;
         lineData->count = audio->bufferSizeSamples;
