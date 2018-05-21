@@ -28,6 +28,8 @@ struct AudioState
 
     float32 tWave;
 
+    bool32 globalMute;
+
 #if GAME_INTERNAL
     bool32 debugView;
 #endif
@@ -39,4 +41,4 @@ void InitAudioState(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 void OutputAudio(GameAudio* audio, GameState* gameState,
-    const GameInput* input, GameMemory* memory);
+    const GameInput* input, MemoryBlock transient);

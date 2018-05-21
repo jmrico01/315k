@@ -3,15 +3,16 @@
 layout(location = 0) in vec2 position;
 layout(location = 1) in vec2 uv;
 
-layout(location = 2) in vec3 posBottomLeft;
-layout(location = 3) in vec2 size;
-layout(location = 4) in vec4 uvInfo;
-
 out vec2 fragUV;
+
+uniform vec3 posBottomLeft;
+uniform vec2 size;
+uniform vec2 uvOrigin;
+uniform vec2 uvSize;
 
 void main()
 {
-    fragUV = uvInfo.xy + uv * uvInfo.zw;
+    fragUV = uvOrigin + uv * uvSize;
     gl_Position = vec4(
         position.xy * size + posBottomLeft.xy,
         posBottomLeft.z,

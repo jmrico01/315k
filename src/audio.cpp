@@ -89,6 +89,7 @@ void InitAudioState(const ThreadContext* thread,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
     audioState->runningSampleIndex = 0;
+    audioState->globalMute = false;
 
     const int KICK_VARIATIONS = 1;
     const char* kickSoundFiles[KICK_VARIATIONS] = {
@@ -136,7 +137,7 @@ void InitAudioState(const ThreadContext* thread,
 }
 
 void OutputAudio(GameAudio* audio, GameState* gameState,
-    const GameInput* input, GameMemory* memory)
+    const GameInput* input, MemoryBlock transient)
 {
     float32 ampWave = 0.15f;
     float32 toneWave = 261.0f;
@@ -163,10 +164,17 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     }
 
     for (int i = 0; i < audio->fillLength; i++) {
-        uint32 ind = (audio->fillStart + i) % audio->bufferSizeSamples;
+        int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
         audio->buffer[ind * audio->channels] = 0;
         audio->buffer[ind * audio->channels + 1] = 0;
+    }
 
+    if (gameState->audioState.globalMute) {
+        return;
+    }
+
+    for (int i = 0; i < audio->fillLength; i++) {
+        int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
         float32 tWaveOff = 2.0f * PI_F * toneWave
             * i / audio->sampleRate;
         /*float32 ampBass = Lerp(ampBassStart, ampBassEnd,
@@ -202,7 +210,8 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         audioState->debugView = !audioState->debugView;
     }
     if (audioState->debugView) {
-        DEBUG_ASSERT(memory->transientStorageSize >= sizeof(LineGLData));
+        // TODO pass only transient block to this function in the 1st place
+        DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
         DEBUG_ASSERT(audio->bufferSizeSamples <= MAX_LINE_POINTS);
         Mat4 proj = Mat4::one;
         Vec3 zoomScale = {
@@ -212,7 +221,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         };
         Mat4 view = Scale(zoomScale) * Translate(gameState->debugCamPos);
 
-        LineGLData* lineData = (LineGLData*)memory->transientStorage;
+        LineGLData* lineData = (LineGLData*)transient.memory;
         lineData->count = audio->bufferSizeSamples;
         float32 length = 2.0f;
         float32 height = 1.0f;

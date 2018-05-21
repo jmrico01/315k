@@ -101,13 +101,6 @@ struct ParticleSystemGL
     GLuint programID;
 };
 
-struct ParticleSystemDataGL
-{
-    Vec3 pos[MAX_PARTICLES];
-    Vec4 color[MAX_PARTICLES];
-    Vec2 size[MAX_PARTICLES];
-};
-
 ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
@@ -125,4 +118,4 @@ void UpdateParticleSystem(ParticleSystem* ps, float32 deltaTime, void* data);
 void DrawParticleSystem(ParticleSystemGL psGL,
     ParticleSystem* ps,
     Vec3 camRight, Vec3 camUp, Vec3 camPos, Mat4 proj, Mat4 view,
-    ParticleSystemDataGL* dataGL);
+    MemoryBlock transient);

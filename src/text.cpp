@@ -1,12 +1,22 @@
 #include "text.h"
 
 #include "km_debug.h"
+#include "km_string.h"
 #include "main.h"
 
 #define ATLAS_DIM_MIN 128
 #define ATLAS_DIM_MAX 2048
 
-TextGL InitTextGL(const ThreadContext* thread,
+#define GLYPH_BATCH_SIZE 1024
+
+struct TextDataGL
+{
+    Vec3 posBottomLeft[GLYPH_BATCH_SIZE];
+    Vec2 size[GLYPH_BATCH_SIZE];
+    Vec4 uvInfo[GLYPH_BATCH_SIZE];
+};
+
+/*TextGL InitTextGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -57,6 +67,109 @@ TextGL InitTextGL(const ThreadContext* thread,
         0, // stride
         (void*)0 // array buffer offset
     );
+
+    glBindVertexArray(0);
+
+    textGL.programID = LoadShaders(thread,
+        "shaders/textOld.vert", "shaders/textOld.frag",
+        DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+
+    return textGL;
+}*/
+TextGL InitTextGL(const ThreadContext* thread,
+    DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+    DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+{
+    TextGL textGL;
+    // TODO probably use indexing for this
+    const GLfloat vertices[] = {
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        1.0f, 1.0f
+    };
+    const GLfloat uvs[] = {
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        1.0f, 1.0f
+    };
+
+    glGenVertexArrays(1, &textGL.vertexArray);
+    glBindVertexArray(textGL.vertexArray);
+
+    glGenBuffers(1, &textGL.vertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.vertexBuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(
+        0, // match shader layout location
+        2, // size (vec2)
+        GL_FLOAT, // type
+        GL_FALSE, // normalized?
+        0, // stride
+        (void*)0 // array buffer offset
+    );
+    glVertexAttribDivisor(0, 0);
+
+    glGenBuffers(1, &textGL.uvBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.uvBuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(uvs), uvs, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(
+        1, // match shader layout location
+        2, // size (vec2)
+        GL_FLOAT, // type
+        GL_FALSE, // normalized?
+        0, // stride
+        (void*)0 // array buffer offset
+    );
+    glVertexAttribDivisor(1, 0);
+
+    glGenBuffers(1, &textGL.posBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.posBuffer);
+    glBufferData(GL_ARRAY_BUFFER, GLYPH_BATCH_SIZE * sizeof(Vec3), NULL,
+        GL_STREAM_DRAW);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(
+        2, // match shader layout location
+        3, // size (vec3)
+        GL_FLOAT, // type
+        GL_FALSE, // normalized?
+        0, // stride
+        (void*)0 // array buffer offset
+    );
+    glVertexAttribDivisor(2, 1);
+
+    glGenBuffers(1, &textGL.sizeBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.sizeBuffer);
+    glBufferData(GL_ARRAY_BUFFER, GLYPH_BATCH_SIZE * sizeof(Vec2), NULL,
+        GL_STREAM_DRAW);
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(
+        3, // match shader layout location
+        2, // size (vec2)
+        GL_FLOAT, // type
+        GL_FALSE, // normalized?
+        0, // stride
+        (void*)0 // array buffer offset
+    );
+    glVertexAttribDivisor(3, 1);
+
+    glGenBuffers(1, &textGL.uvInfoBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.uvInfoBuffer);
+    glBufferData(GL_ARRAY_BUFFER, GLYPH_BATCH_SIZE * sizeof(Vec4), NULL,
+        GL_STREAM_DRAW);
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(
+        4, // match shader layout location
+        4, // size (vec4)
+        GL_FLOAT, // type
+        GL_FALSE, // normalized?
+        0, // stride
+        (void*)0 // array buffer offset
+    );
+    glVertexAttribDivisor(4, 1);
 
     glBindVertexArray(0);
 
@@ -241,6 +354,7 @@ int GetTextWidth(const FontFace& face, const char* text)
     return (int)x;
 }
 
+#if 0
 void DrawText(TextGL textGL, const FontFace& face, ScreenInfo screenInfo,
     const char* text,
     Vec2Int pos, Vec4 color)
@@ -285,15 +399,91 @@ void DrawText(TextGL textGL, const FontFace& face, ScreenInfo screenInfo,
 
     glBindVertexArray(0);
 }
+#endif
+
+void DrawText(TextGL textGL, const FontFace& face, ScreenInfo screenInfo,
+    const char* text,
+    Vec2Int pos, Vec4 color,
+    MemoryBlock transient)
+{
+    DEBUG_ASSERT(StringLength(text) <= GLYPH_BATCH_SIZE);
+    DEBUG_ASSERT(transient.size >= sizeof(TextDataGL));
+
+    TextDataGL* dataGL = (TextDataGL*)transient.memory;
+
+    GLint loc;
+    glUseProgram(textGL.programID);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, face.atlasTexture);
+    loc = glGetUniformLocation(textGL.programID, "textureSampler");
+    glUniform1i(loc, 0);
+
+    loc = glGetUniformLocation(textGL.programID, "color");
+    glUniform4fv(loc, 1, &color.e[0]);
+
+    glBindVertexArray(textGL.vertexArray);
+
+    int x = 0, y = 0;
+    int count = 0;
+    for (const char* p = text; *p != '\0'; p++) {
+        GlyphInfo glyphInfo = face.glyphInfo[*p];
+        Vec2Int glyphPos = pos;
+        glyphPos.x += x + glyphInfo.offsetX;
+        glyphPos.y += y + glyphInfo.offsetY;
+        Vec2Int glyphSize = { (int)glyphInfo.width, (int)glyphInfo.height };
+        RectCoordsNDC ndc = ToRectCoordsNDC(glyphPos, glyphSize, screenInfo);
+        dataGL->posBottomLeft[count] = ndc.pos;
+        dataGL->size[count] = ndc.size;
+        dataGL->uvInfo[count] = Vec4 {
+            glyphInfo.uvOrigin.x, glyphInfo.uvOrigin.y,
+            glyphInfo.uvSize.x, glyphInfo.uvSize.y
+        };
+        /*loc = glGetUniformLocation(textGL.programID, "posBottomLeft");
+        glUniform3fv(loc, 1, &ndc.pos.e[0]);
+        loc = glGetUniformLocation(textGL.programID, "size");
+        glUniform2fv(loc, 1, &ndc.size.e[0]);
+        loc = glGetUniformLocation(textGL.programID, "uvOrigin");
+        glUniform2fv(loc, 1, &glyphInfo.uvOrigin.e[0]);
+        loc = glGetUniformLocation(textGL.programID, "uvSize");
+        glUniform2fv(loc, 1, &glyphInfo.uvSize.e[0]);
+
+        glDrawArrays(GL_TRIANGLES, 0, 6);*/
+
+        x += glyphInfo.advanceX / 64;
+        y += glyphInfo.advanceY / 64;
+        count++;
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.posBuffer);
+    glBufferData(GL_ARRAY_BUFFER, GLYPH_BATCH_SIZE * sizeof(Vec3), NULL,
+        GL_STREAM_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(Vec3),
+        dataGL->posBottomLeft);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.sizeBuffer);
+    glBufferData(GL_ARRAY_BUFFER, GLYPH_BATCH_SIZE * sizeof(Vec2), NULL,
+        GL_STREAM_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(Vec2),
+        dataGL->size);
+    glBindBuffer(GL_ARRAY_BUFFER, textGL.uvInfoBuffer);
+    glBufferData(GL_ARRAY_BUFFER, GLYPH_BATCH_SIZE * sizeof(Vec4), NULL,
+        GL_STREAM_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, count * sizeof(Vec4),
+        dataGL->uvInfo);
+
+    glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, count);
+
+    glBindVertexArray(0);
+}
 
 // Anchor is in range (0-1, 0-1).
 void DrawText(TextGL textGL, const FontFace& face, ScreenInfo screenInfo,
     const char* text,
-    Vec2Int pos, Vec2 anchor, Vec4 color)
+    Vec2Int pos, Vec2 anchor, Vec4 color,
+    MemoryBlock transient)
 {
     int textWidth = GetTextWidth(face, text);
     pos.x -= (int)(anchor.x * textWidth);
     pos.y -= (int)(anchor.y * face.height);
 
-    DrawText(textGL, face, screenInfo, text, pos, color);
+    DrawText(textGL, face, screenInfo, text, pos, color, transient);
 }

@@ -1,5 +1,4 @@
 #pragma once
-#define MAX_GLYPHS 128
 
 #undef internal // Required to build FreeType
 #include <ft2build.h>
@@ -11,11 +10,16 @@
 #include "km_math.h"
 #include "main_platform.h"
 
+#define MAX_GLYPHS 128
+
 struct TextGL
 {
     GLuint vertexArray;
     GLuint vertexBuffer;
     GLuint uvBuffer;
+    GLuint posBuffer;
+    GLuint sizeBuffer;
+    GLuint uvInfoBuffer;
     GLuint programID;
 };
 struct GlyphInfo
@@ -48,7 +52,9 @@ FontFace LoadFontFace(const ThreadContext* thread,
 int GetTextWidth(const FontFace& face, const char* text);
 void DrawText(TextGL textGL, const FontFace& face, ScreenInfo screenInfo,
     const char* text,
-    Vec2Int pos, Vec4 color);
+    Vec2Int pos, Vec4 color,
+    MemoryBlock transient);
 void DrawText(TextGL textGL, const FontFace& face, ScreenInfo screenInfo,
     const char* text,
-    Vec2Int pos, Vec2 anchor, Vec4 color);
+    Vec2Int pos, Vec2 anchor, Vec4 color,
+    MemoryBlock transient);

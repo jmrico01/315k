@@ -120,17 +120,26 @@ struct PlatformFunctions
     OpenGLFunctions glFunctions;
 };
 
+struct MemoryBlock
+{
+    uint64 size;
+    // Required to be cleared to zero at startup
+    void* memory;
+};
+
 struct GameMemory
 {
 	bool32 isInitialized;
 
-	uint64 permanentStorageSize;
+	//uint64 permanentStorageSize;
 	// Required to be cleared to zero at startup
-	void* permanentStorage;
+	//void* permanentStorage;
 
-	uint64 transientStorageSize;
-	// Required to be cleared to zero at startup
-	void* transientStorage;
+    MemoryBlock permanent;
+    MemoryBlock transient;
+
+	//uint64 transientStorageSize;
+	//void* transientStorage;
 
 #if GAME_INTERNAL
     bool32 DEBUGShouldInitGlobalFuncs;

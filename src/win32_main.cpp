@@ -9,6 +9,7 @@
 #include "opengl.h"
 #include "km_debug.h"
 #include "km_input.h"
+#include "km_string.h"
 
 /*
     TODO
@@ -72,31 +73,6 @@ internal XInputSetStateFunc *xInputSetState_ = XInputSetStateStub;
 typedef BOOL WINAPI wglSwapIntervalEXTFunc(int interval);
 global_var wglSwapIntervalEXTFunc* wglSwapInterval_ = NULL;
 #define wglSwapInterval wglSwapInterval_
-
-internal int StringLength(const char* string)
-{
-    int length = 0;
-    while (*string++) {
-        length++;
-    }
-
-    return length;
-}
-internal void CatStrings(
-    size_t sourceACount, const char* sourceA,
-    size_t sourceBCount, const char* sourceB,
-    size_t destCount, char* dest)
-{
-    for (size_t i = 0; i < sourceACount; i++) {
-        *dest++ = *sourceA++;
-    }
-
-    for (size_t i = 0; i < sourceBCount; i++) {
-        *dest++ = *sourceB++;
-    }
-
-    *dest++ = '\0';
-}
 
 internal void Win32ToggleFullscreen(HWND hWnd, OpenGLFunctions* glFuncs)
 {
@@ -1002,22 +978,21 @@ int CALLBACK WinMain(
     GameMemory gameMemory = {};
     gameMemory.DEBUGShouldInitGlobalFuncs = true;
 
-    gameMemory.permanentStorageSize = MEGABYTES(64);
-    gameMemory.transientStorageSize = GIGABYTES(1);
+    gameMemory.permanent.size = MEGABYTES(64);
+    gameMemory.transient.size = GIGABYTES(1);
 
     // TODO Look into using large virtual pages for this
     // potentially big allocation
-    uint64 totalSize = gameMemory.permanentStorageSize
-        + gameMemory.transientStorageSize;
+    uint64 totalSize = gameMemory.permanent.size + gameMemory.transient.size;
     // TODO check allocation fail?
-    gameMemory.permanentStorage = VirtualAlloc(baseAddress, (size_t)totalSize,
+    gameMemory.permanent.memory = VirtualAlloc(baseAddress, (size_t)totalSize,
         MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    gameMemory.transientStorage = ((uint8*)gameMemory.permanentStorage +
-        gameMemory.permanentStorageSize);
+    gameMemory.transient.memory = ((uint8*)gameMemory.permanent.memory +
+        gameMemory.permanent.size);
 
     state.gameMemorySize = totalSize;
-    state.gameMemoryBlock = gameMemory.permanentStorage;
-    if (!gameMemory.permanentStorage || !gameMemory.transientStorage) {
+    state.gameMemoryBlock = gameMemory.permanent.memory;
+    if (!gameMemory.permanent.memory || !gameMemory.transient.memory) {
         // TODO log
         return 1;
     }
@@ -1305,5 +1280,6 @@ int CALLBACK WinMain(
 
 #include "win32_audio.cpp"
 
-// TODO temporary! this is a bad idea! already compiled in main.cppc
+// TODO temporary! this is a bad idea! already compiled in main.cpp
 #include "km_input.cpp"
+#include "km_string.cpp"

@@ -9,6 +9,13 @@
 #define PARTICLE_EPS 0.0001f
 #define BOUNCE_MARGIN 0.001f
 
+struct ParticleSystemDataGL
+{
+    Vec3 pos[MAX_PARTICLES];
+    Vec4 color[MAX_PARTICLES];
+    Vec2 size[MAX_PARTICLES];
+};
+
 ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
@@ -401,8 +408,10 @@ internal int DepthComparator(const void* p, const void* q)
 void DrawParticleSystem(ParticleSystemGL psGL,
     ParticleSystem* ps,
     Vec3 camRight, Vec3 camUp, Vec3 camPos, Mat4 proj, Mat4 view,
-    ParticleSystemDataGL* dataGL)
+    MemoryBlock transient)
 {
+    DEBUG_ASSERT(transient.size >= sizeof(ParticleSystemDataGL));
+    ParticleSystemDataGL* dataGL = (ParticleSystemDataGL*)transient.memory;
     Mat4 vp = proj * view;
 
     int active = (int)ps->active;

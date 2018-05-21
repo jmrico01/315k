@@ -9,6 +9,7 @@
 #include "km_defines.h"
 #include "km_input.h"
 #include "km_math.h"
+#include "km_string.h"
 #include "opengl.h"
 #include "opengl_funcs.h"
 #include "opengl_base.h"
@@ -253,7 +254,8 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
         // Play note sounds after death check to avoid playing
         // note sound without rendering note rect
         for (int i = 0; i < 12; i++) {
-            if (gameState->notes[gameState->halfBeatCount][i]) {
+            if (gameState->notes[gameState->halfBeatCount][i]
+            && gameState->circlePos == i) {
                 gameState->audioState.soundNotes[i].play = true;
             }
         }
@@ -263,12 +265,6 @@ internal void HalfBeat(GameState* gameState, ScreenInfo screenInfo)
 
         gameState->audioState.soundKick.play = true;
     }
-}
-
-internal inline bool32 IsWhitespace(char c)
-{
-    return c == ' ' || c == '\t'
-        || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 }
 
 internal char* LoadLevelIntList(char* c, int outList[12], int* listSize)
@@ -406,9 +402,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     // This function is expected to update the state of the game
     // and draw the frame that will be displayed, ideally, some constant
     // amount of time in the future.
-	DEBUG_ASSERT(sizeof(GameState) <= memory->permanentStorageSize);
+	DEBUG_ASSERT(sizeof(GameState) <= memory->permanent.size);
 
-	GameState *gameState = (GameState*)memory->permanentStorage;
+	GameState *gameState = (GameState*)memory->permanent.memory;
     if (memory->DEBUGShouldInitGlobalFuncs) {
 	    // Initialize global function names
 #if GAME_SLOW
@@ -639,6 +635,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
                 platformFuncs->DEBUGPlatformFreeFileMemory);
         }
     }
+    // Toggle global mute
+    if (WasKeyReleased(input, KM_KEY_M)) {
+        gameState->audioState.globalMute = !gameState->audioState.globalMute;
+    }
 
     if (WasKeyPressed(input, KM_KEY_A)
     || WasKeyPressed(input, KM_KEY_ARROW_LEFT)) {
@@ -816,9 +816,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         }
     }
 
-    DEBUG_ASSERT(sizeof(ParticleSystemDataGL) <= memory->transientStorageSize);
-    ParticleSystemDataGL* dataGL = (ParticleSystemDataGL*)
-        memory->transientStorage;
     Vec3 scale = {
         2.0f / screenInfo.size.x,
         2.0f / screenInfo.size.y,
@@ -826,7 +823,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     };
     Mat4 psView = Translate(-Vec3::one) * Scale(scale);
     DrawParticleSystem(gameState->psGL, &gameState->ps,
-        Vec3::unitX, Vec3::unitY, Vec3::unitZ, Mat4::one, psView, dataGL);
+        Vec3::unitX, Vec3::unitY, Vec3::unitZ, Mat4::one, psView,
+        memory->transient);
 
     // Post processing passes
     glDisable(GL_DEPTH_TEST);
@@ -998,9 +996,9 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         screenInfo.size.y - 10,
     };
     DrawText(gameState->textGL, gameState->fontFace, screenInfo,
-        fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one);
+        fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one, memory->transient);
 
-    OutputAudio(audio, gameState, input, memory);
+    OutputAudio(audio, gameState, input, memory->transient);
 
 #if GAME_SLOW
     // Catch-all site for OpenGL errors
@@ -1012,6 +1010,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 }
 
 #include "km_input.cpp"
+#include "km_string.cpp"
 #include "opengl_base.cpp"
 #include "text.cpp"
 #include "load_png.cpp"
