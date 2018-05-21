@@ -948,7 +948,7 @@ int CALLBACK WinMain(
     AUDIO_SAMPLERATE, AUDIO_CHANNELS, bufferSizeSamples)) {
         return 1;
     }
-    winAudio.minLatency = AUDIO_SAMPLERATE / monitorRefreshHz / 2;
+    winAudio.minLatency = AUDIO_SAMPLERATE / monitorRefreshHz;
     winAudio.maxLatency = AUDIO_SAMPLERATE / 10;
     DEBUG_PRINT("latency: %d - %d\n", winAudio.minLatency,
         winAudio.maxLatency);
@@ -1228,6 +1228,9 @@ int CALLBACK WinMain(
         gameAudio.fillStartDelta = (int)(
             voiceState.SamplesPlayed - samplesPlayedPrev);
         samplesPlayedPrev = voiceState.SamplesPlayed;
+#if GAME_INTERNAL
+        gameAudio.playMarker = playMark;
+#endif
 
         LARGE_INTEGER timerEnd;
         QueryPerformanceCounter(&timerEnd);

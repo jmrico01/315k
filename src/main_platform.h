@@ -106,6 +106,10 @@ struct GameAudio
     int fillStart;
     int fillLength;
     int fillStartDelta;
+
+#if GAME_INTERNAL
+    int playMarker;
+#endif
 };
 
 struct PlatformFunctions

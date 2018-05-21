@@ -32,9 +32,6 @@ global_var Vec4 circleSelectedColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 1.0f };
 global_var Vec4 snareHitColor_ = Vec4 { 1.0f, 0.7f, 0.6f, 0.5f };
 global_var Vec4 noteColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 0.5f };
 
-// Cool color, but out of place for notes
-//global_var Vec4 noteColor_ = Vec4 { 0.6f, 0.7f, 1.0f, 0.5f };
-
 internal MarkerGL InitMarkerGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)

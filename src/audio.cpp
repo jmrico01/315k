@@ -146,7 +146,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     float32 toneMin = toneWave * 1.0f;
     float32 toneMax = toneWave * 2.0f;
     float32 tonePixelRange = 600.0f;
-    float32 tonePixelOffset = 200.0f;
+    float32 tonePixelOffset = 600.0f;
     float32 toneT = (input->mousePos.x - tonePixelOffset) / tonePixelRange;
     toneWave = Lerp(toneMin, toneMax, toneT);
 
@@ -222,17 +222,18 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         Mat4 view = Scale(zoomScale) * Translate(gameState->debugCamPos);
 
         LineGLData* lineData = (LineGLData*)transient.memory;
-        lineData->count = audio->bufferSizeSamples;
         float32 length = 2.0f;
-        float32 height = 1.0f;
+        float32 amplitude = 1.0f;
         float32 offset = 1.0f;
+        
+        lineData->count = audio->bufferSizeSamples;
         for (int i = 0; i < audio->bufferSizeSamples; i++) {
             int16 val = audio->buffer[i * audio->channels];
             float32 normVal = (float32)val / INT16_MAXVAL;
             float32 t = (float32)i / (audio->bufferSizeSamples - 1);
             lineData->pos[i] = {
                 t * length - length / 2.0f,
-                height * normVal + offset,
+                amplitude * normVal + offset,
                 0.0f
             };
         }
@@ -244,12 +245,73 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
             float32 t = (float32)i / (audio->bufferSizeSamples - 1);
             lineData->pos[i] = {
                 t * length - length / 2.0f,
-                height * normVal - offset,
+                amplitude * normVal - offset,
                 0.0f
             };
         }
         DrawLine(gameState->lineGL, proj, view,
             lineData, Vec4::one);
+
+        lineData->count = 2;
+        int prevPlayMark = (audio->playMarker - audio->fillStartDelta)
+            % audio->bufferSizeSamples;
+        float32 tPrevPlayMark = (float32)prevPlayMark
+            / (audio->bufferSizeSamples - 1);
+        lineData->pos[0] = Vec3 {
+            tPrevPlayMark * length - length / 2.0f,
+            amplitude + offset,
+            0.0f
+        };
+        lineData->pos[1] = Vec3 {
+            tPrevPlayMark * length - length / 2.0f,
+            -(amplitude + offset),
+            0.0f
+        };
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, Vec4 { 1.0f, 0.5f, 0.5f, 1.0f });
+        float32 tPlayMark = (float32)audio->playMarker
+            / (audio->bufferSizeSamples - 1);
+        lineData->pos[0] = Vec3 {
+            tPlayMark * length - length / 2.0f,
+            amplitude + offset,
+            0.0f
+        };
+        lineData->pos[1] = Vec3 {
+            tPlayMark * length - length / 2.0f,
+            -(amplitude + offset),
+            0.0f
+        };
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, Vec4::red);
+        float32 tFillStart = (float32)audio->fillStart
+            / (audio->bufferSizeSamples - 1);
+        lineData->pos[0] = Vec3 {
+            tFillStart * length - length / 2.0f,
+            amplitude + offset,
+            0.0f
+        };
+        lineData->pos[1] = Vec3 {
+            tFillStart * length - length / 2.0f,
+            -(amplitude + offset),
+            0.0f
+        };
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, Vec4::green);
+        int fillEnd = (audio->fillStart + audio->fillLength)
+            % audio->bufferSizeSamples;
+        float32 tFillEnd = (float32)fillEnd / (audio->bufferSizeSamples - 1);
+        lineData->pos[0] = Vec3 {
+            tFillEnd * length - length / 2.0f,
+            amplitude + offset,
+            0.0f
+        };
+        lineData->pos[1] = Vec3 {
+            tFillEnd * length - length / 2.0f,
+            -(amplitude + offset),
+            0.0f
+        };
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, Vec4::blue);
 
         /*length = 1.0f;
         lineData->count = audioState->soundDeath.buffer.bufferSizeSamples;
