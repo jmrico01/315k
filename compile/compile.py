@@ -207,7 +207,8 @@ def WinCompileRelease():
     libsPlatform = " ".join([
         "user32.lib",
         "gdi32.lib",
-        "opengl32.lib"
+        "opengl32.lib",
+        "Ole32.lib"
     ])
     libPathsGame = " ".join([
         "/LIBPATH:" + paths["lib-freetype-win"],
