@@ -492,6 +492,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         }
         gameState->fontFace = LoadFontFace(thread, gameState->ftLibrary,
             "data/fonts/ibm-plex-mono/regular.ttf", 24,
+            memory->transient,
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
 
@@ -586,7 +587,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             InitParticleDeath, gameState->pTexBase
         );
 
-		// TODO this may be more appropriate to do in the platform layer
 		memory->isInitialized = true;
 	}
     if (screenInfo.changed) {

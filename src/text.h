@@ -46,6 +46,7 @@ TextGL InitTextGL(const ThreadContext* thread,
 FontFace LoadFontFace(const ThreadContext* thread,
     FT_Library library,
     const char* path, uint32 height,
+    MemoryBlock transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 

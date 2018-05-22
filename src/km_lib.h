@@ -33,6 +33,7 @@ struct DynamicArray
 };
 
 void MemCopy(void* dst, const void* src, uint64 numBytes);
+void MemMove(void* dst, const void* src, uint64 numBytes);
 
 /*
 template <typename K, typename V>

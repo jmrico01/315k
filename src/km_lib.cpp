@@ -18,8 +18,7 @@ void DynamicArray<T>::Init(uint32 cap)
     this->capacity = cap;
     data = (T*)malloc(sizeof(T) * cap);
     if (!data) {
-        // TODO error!
-        printf("ERROR: not enough memory!\n");
+        DEBUG_PANIC("ERROR: not enough memory!\n");
     }
 }
 
@@ -47,8 +46,7 @@ void DynamicArray<T>::Append(T element)
         capacity *= 2;
         data = (T*)realloc(data, sizeof(T) * capacity);
         if (!data) {
-            // TODO error!
-            printf("ERROR: not enough memory!\n");
+            DEBUG_PANIC("ERROR: not enough memory!\n");
         }
     }
     data[size++] = element;
@@ -57,10 +55,7 @@ void DynamicArray<T>::Append(T element)
 template <typename T>
 void DynamicArray<T>::Remove(uint32 idx)
 {
-    // debug assert
-    if (idx >= size) {
-        printf("ERROR: Removed element beyond DynamicArray size\n");
-    }
+    DEBUG_ASSERT(idx < size);
 
     for (uint32 i = idx + 1; i < size; i++) {
         data[i - 1] = data[i];
@@ -84,6 +79,11 @@ void MemCopy(void* dst, const void* src, uint64 numBytes)
 {
     DEBUG_ASSERT(((const char*)dst + numBytes <= (const char*)src)
         || (dst >= (const char*)src + numBytes));
-    // TODO maybe look to reimplement this? would be informative
+    // TODO maybe see about reimplementing this? would be informative
     memcpy(dst, src, numBytes);
+}
+
+void MemMove(void* dst, const void* src, uint64 numBytes)
+{
+    memmove(dst, src, numBytes);
 }
