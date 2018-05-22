@@ -75,8 +75,10 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
         return false;
     }
     for (int i = 0; i < samples; i++) {
-        audioBuffer->buffer[i * 2] = data[i * 2];
-        audioBuffer->buffer[i * 2 + 1] = data[i * 2 + 1];
+        audioBuffer->buffer[i * 2] =
+            (float32)data[i * 2] / INT16_MAXVAL;
+        audioBuffer->buffer[i * 2 + 1] =
+            (float32)data[i * 2 + 1] / INT16_MAXVAL;
     }
 
     audioBuffer->sampleRate = fmt->sampleRate;

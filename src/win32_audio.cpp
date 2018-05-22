@@ -2,110 +2,189 @@
 
 #include "km_debug.h"
 
-internal bool Win32InitAudio(Win32Audio* winAudio,
+// REFERENCE_TIME as defined by Windows API
+#define REFERENCE_TIME_NANOSECONDS 100
+// Careful when using this value: close to int overflow
+#define REFERENCE_TIMES_PER_SECOND (1000000000 / REFERENCE_TIME_NANOSECONDS)
+
+bool32 Win32InitAudio(Win32Audio* winAudio,
     int sampleRate, int channels, int bufferSizeSamples)
 {
-    // Only support stereo for now
-    DEBUG_ASSERT(channels == 2);
-
-    // Try to load Windows 10 version
-	HMODULE xAudio2Lib = LoadLibrary("xaudio2_9.dll");
-	if (!xAudio2Lib) {
-        // Fall back to Windows 8 version
-		xAudio2Lib = LoadLibrary("xaudio2_8.dll");
-    }
-	if (!xAudio2Lib) {
-        // Fall back to Windows 7 version
-		xAudio2Lib = LoadLibrary("xaudio2_7.dll");
-	}
-    if (!xAudio2Lib) {
-        // TODO load earlier versions?
-        DEBUG_PRINT("Could not find a valid XAudio2 DLL\n");
-        return false;
-    }
-
-    XAudio2Create = (XAudio2CreateFunc*)GetProcAddress(
-        xAudio2Lib, "XAudio2Create");
-    if (!XAudio2Create) {
-        DEBUG_PRINT("Failed to load XAudio2Create function\n");
-        return false;
-    }
-
+    // TODO release/CoTaskMemFree on failure
     HRESULT hr;
-    IXAudio2* xAudio2;
-    hr = XAudio2Create(&xAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR);
+
+    IMMDeviceEnumerator* deviceEnumerator;
+    hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), NULL,
+        CLSCTX_ALL, __uuidof(IMMDeviceEnumerator),
+        (void**)&deviceEnumerator);
     if (FAILED(hr)) {
-        DEBUG_PRINT("Failed to create XAudio2 instance, HRESULT %x\n", hr);
+        DEBUG_PRINT("Failed to create device enumerator\n");
         return false;
     }
 
-    IXAudio2MasteringVoice* masterVoice;
-    hr = xAudio2->CreateMasteringVoice(&masterVoice,
-        channels,
-        sampleRate,
+    IMMDevice* device;
+    hr = deviceEnumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get default audio endpoint\n");
+        return false;
+    }
+
+    IAudioClient* audioClient;
+    hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, NULL,
+        (void**)&audioClient);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to activate audio device\n");
+        return false;
+    }
+
+    WAVEFORMATEX* format;
+    hr = audioClient->GetMixFormat(&format);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get audio device format\n");
+        return false;
+    }
+
+    // TODO do this differently: query for several formats with some priority
+    //  e.g. 1st PCM float, 2nd PCM int16 ext, 3rd PCM int16
+    DEBUG_PRINT("---------- Audio device format ----------\n");
+    DEBUG_PRINT("Sample rate: %d\n", format->nSamplesPerSec);
+    DEBUG_PRINT("Channels: %d\n", format->nChannels);
+    DEBUG_PRINT("Bits per sample: %d\n", format->wBitsPerSample);
+    DEBUG_PRINT("Block align: %d\n", format->nBlockAlign);
+    switch (format->wFormatTag) {
+        case WAVE_FORMAT_PCM: {
+            DEBUG_PRINT("Format: PCM\n");
+            winAudio->format = AUDIO_FORMAT_PCM_INT16;
+            winAudio->bitsPerSample = (int)format->wBitsPerSample;
+        } break;
+        case WAVE_FORMAT_EXTENSIBLE: {
+            if (sizeof(WAVEFORMATEX) + format->cbSize
+            < sizeof(WAVEFORMATEXTENSIBLE)) {
+                DEBUG_PRINT("Extended format, invalid structure size\n");
+                return false;
+            }
+
+            WAVEFORMATEXTENSIBLE* formatExt = (WAVEFORMATEXTENSIBLE*)format;
+            DEBUG_PRINT("Valid bits per sample: %d\n",
+                formatExt->Samples.wValidBitsPerSample);
+            DEBUG_PRINT("Channel mask: %d\n", formatExt->dwChannelMask);
+            if (formatExt->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) {
+                DEBUG_PRINT("Format: PCM ext\n");
+                winAudio->format = AUDIO_FORMAT_PCM_INT16;
+                winAudio->bitsPerSample =
+                    (int)formatExt->Samples.wValidBitsPerSample; // TODO wrong
+            }
+            else if (formatExt->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) {
+                DEBUG_PRINT("Format: IEEE float\n");
+                winAudio->format = AUDIO_FORMAT_PCM_FLOAT32;
+                winAudio->bitsPerSample =
+                    (int)formatExt->Samples.wValidBitsPerSample; // TODO wrong
+            }
+            else {
+                DEBUG_PRINT("Unrecognized audio device ext format: %d\n",
+                    formatExt->SubFormat);
+                return false;
+            }
+        } break;
+        default: {
+            DEBUG_PRINT("Unrecognized audio device format: %d\n",
+                format->wFormatTag);
+            return false;
+        } break;
+    }
+    DEBUG_PRINT("-----------------------------------------\n");
+
+    REFERENCE_TIME bufferSizeRefTimes = REFERENCE_TIMES_PER_SECOND
+        / sampleRate * bufferSizeSamples;
+    hr = audioClient->Initialize(
+        AUDCLNT_SHAREMODE_SHARED, // TODO should I use exclusive mode?
         0,
+        bufferSizeRefTimes,
+        0,
+        format,
         NULL
     );
     if (FAILED(hr)) {
-        DEBUG_PRINT("Failed to create mastering voice, HRESULT %x\n", hr);
+        DEBUG_PRINT("Failed to initialize audio client\n");
         return false;
     }
 
-    WAVEFORMATEXTENSIBLE format;
-    format.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-    format.Format.nChannels = (WORD)channels;
-    format.Format.nSamplesPerSec = (DWORD)sampleRate;
-    format.Format.nAvgBytesPerSec = (DWORD)(
-        sampleRate * channels * sizeof(int16));
-    format.Format.nBlockAlign = (WORD)(channels * sizeof(int16));
-    format.Format.wBitsPerSample = (WORD)(sizeof(int16) * 8);
-    format.Format.cbSize = (WORD)(
-        sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX));
-    format.Samples.wValidBitsPerSample =
-        format.Format.wBitsPerSample;
-    format.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-    format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
-
-    hr = xAudio2->CreateSourceVoice(&winAudio->sourceVoice,
-        (const WAVEFORMATEX*)&format);
+    UINT32 bufferSizeFrames;
+    hr = audioClient->GetBufferSize(&bufferSizeFrames);
     if (FAILED(hr)) {
-        DEBUG_PRINT("Failed to create source voice, HRESULT %x\n", hr);
+        DEBUG_PRINT("Failed to get audio buffer size\n");
         return false;
     }
 
-    winAudio->channels = channels;
-    winAudio->sampleRate = sampleRate;
-    winAudio->bufferSizeSamples = bufferSizeSamples;
-	winAudio->buffer = (int16*)VirtualAlloc(0,
-        bufferSizeSamples * channels * sizeof(int16),
-		MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    for (int i = 0; i < bufferSizeSamples; i++) {
-        winAudio->buffer[i * channels] = 0;
-        winAudio->buffer[i * channels + 1] = 0;
-    }
-
-    XAUDIO2_BUFFER buffer;
-    buffer.Flags = 0;
-    buffer.AudioBytes = bufferSizeSamples * channels * sizeof(int16);
-    buffer.pAudioData = (const BYTE*)winAudio->buffer;
-    buffer.PlayBegin = 0;
-    buffer.PlayLength = 0;
-    buffer.LoopBegin = 0;
-    buffer.LoopLength = 0;
-    buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
-    buffer.pContext = NULL;
-
-    hr = winAudio->sourceVoice->SubmitSourceBuffer(&buffer);
+    IAudioRenderClient* renderClient;
+    hr = audioClient->GetService(__uuidof(IAudioRenderClient),
+        (void**)&renderClient);
     if (FAILED(hr)) {
-        DEBUG_PRINT("Failed to submit buffer, HRESULT %x\n", hr);
+        DEBUG_PRINT("Failed to get audio render client\n");
         return false;
     }
 
-    hr = winAudio->sourceVoice->Start(0);
+    IAudioClock* audioClock;
+    hr = audioClient->GetService(__uuidof(IAudioClock),
+        (void**)&audioClock);
     if (FAILED(hr)) {
-        DEBUG_PRINT("Failed to start source voice, HRESULT %x\n", hr);
+        DEBUG_PRINT("Failed to get audio clock\n");
+        return false;
+    }
+
+    // Dummy get/release calls for setup purposes
+    BYTE* buffer;
+    hr = renderClient->GetBuffer(0, &buffer);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to get audio render client buffer\n");
+        return false;
+    }
+    hr = renderClient->ReleaseBuffer(0, 0);
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to release audio render client buffer\n");
+        return false;
+    }
+
+    winAudio->sampleRate = (int)format->nSamplesPerSec;
+    winAudio->channels = (int)format->nChannels;
+    winAudio->bufferSizeSamples = (int)bufferSizeFrames;
+
+    winAudio->audioClient = audioClient;
+    winAudio->renderClient = renderClient;
+    winAudio->audioClock = audioClock;
+
+    hr = audioClient->Start();
+    if (FAILED(hr)) {
+        DEBUG_PRINT("Failed to start audio client\n");
         return false;
     }
 
     return true;
+}
+
+void Win32StopAudio(Win32Audio* winAudio)
+{
+    winAudio->audioClient->Stop();
+}
+
+void Win32WriteAudioSamples(const Win32Audio* winAudio,
+    const GameAudio* gameAudio, int numSamples)
+{
+    DEBUG_ASSERT(numSamples <= winAudio->bufferSizeSamples);
+
+    BYTE* audioBuffer;
+    HRESULT hr = winAudio->renderClient->GetBuffer((UINT32)numSamples,
+        &audioBuffer);
+    if (SUCCEEDED(hr)) {
+        if (winAudio->format == AUDIO_FORMAT_PCM_FLOAT32) {
+            float32* buffer = (float32*)audioBuffer;
+            for (int i = 0; i < numSamples; i++) {
+                buffer[i * winAudio->channels] =
+                    gameAudio->buffer[i * gameAudio->channels];
+                buffer[i * winAudio->channels + 1] =
+                    gameAudio->buffer[i * gameAudio->channels + 1];
+            }
+        }
+        winAudio->renderClient->ReleaseBuffer((UINT32)numSamples, 0);
+    }
 }

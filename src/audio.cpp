@@ -3,6 +3,55 @@
 #include "main.h"
 #include "km_debug.h"
 
+internal void DrawAudioBuffer(
+    const GameState* gameState, const GameAudio* audio,
+    const float32* buffer, int bufferSizeSamples, int channel,
+    const int marks[], const Vec4 markColors[], int numMarks,
+    Vec3 origin, Vec2 size, Vec4 color,
+    MemoryBlock transient)
+{
+    DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
+    DEBUG_ASSERT(bufferSizeSamples <= MAX_LINE_POINTS);
+    LineGLData* lineData = (LineGLData*)transient.memory;
+    Mat4 proj = Mat4::one;
+    Vec3 zoomScale = {
+        1.0f + gameState->debugZoom,
+        1.0f + gameState->debugZoom,
+        1.0f
+    };
+    Mat4 view = Scale(zoomScale) * Translate(gameState->debugCamPos);
+    
+    lineData->count = bufferSizeSamples;
+    for (int i = 0; i < bufferSizeSamples; i++) {
+        float32 val = buffer[i * audio->channels + channel];
+        float32 t = (float32)i / (bufferSizeSamples - 1);
+        lineData->pos[i] = {
+            origin.x + t * size.x,
+            origin.y + size.y * val,
+            origin.z
+        };
+    }
+    DrawLine(gameState->lineGL, proj, view,
+        lineData, color);
+
+    lineData->count = 2;
+    for (int i = 0; i < numMarks; i++) {
+        float32 tMark = (float32)marks[i] / (bufferSizeSamples - 1);
+        lineData->pos[0] = Vec3 {
+            origin.x + tMark * size.x,
+            origin.y,
+            origin.z
+        };
+        lineData->pos[1] = Vec3 {
+            origin.x + tMark * size.x,
+            origin.y + size.y,
+            origin.z
+        };
+        DrawLine(gameState->lineGL, proj, view,
+            lineData, markColors[i]);
+    }
+}
+
 internal float32 SquareWave(float32 t)
 {
     float32 tMod = fmod(t, 2.0f * PI_F);
@@ -45,7 +94,7 @@ internal void SoundInit(const ThreadContext* thread,
 internal void SoundUpdate(const GameAudio* audio, Sound* sound)
 {
     if (sound->playing) {
-        sound->sampleIndex += audio->fillStartDelta;
+        sound->sampleIndex += audio->sampleDelta;
         if (sound->sampleIndex
         >= sound->buffers[sound->activeVariation].bufferSizeSamples) {
             sound->playing = false;
@@ -72,14 +121,13 @@ internal void SoundWriteSamples(const Sound* sound, float32 amplitude,
         if (sampleInd >= activeBuffer->bufferSizeSamples) {
             break;
         }
-        int16 sample1 = (int16)(amplitude
-            * activeBuffer->buffer[sampleInd * audio->channels]);
-        int16 sample2 = (int16)(amplitude
-            * activeBuffer->buffer[sampleInd * audio->channels + 1]);
+        float32 sample1 = amplitude
+            * activeBuffer->buffer[sampleInd * audio->channels];
+        float32 sample2 = amplitude
+            * activeBuffer->buffer[sampleInd * audio->channels + 1];
 
-        int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        audio->buffer[ind * audio->channels] += sample1;
-        audio->buffer[ind * audio->channels + 1] += sample2;
+        audio->buffer[i * audio->channels] += sample1;
+        audio->buffer[i * audio->channels + 1] += sample2;
     }
 }
 
@@ -88,7 +136,6 @@ void InitAudioState(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-    audioState->runningSampleIndex = 0;
     audioState->globalMute = false;
 
     const int KICK_VARIATIONS = 1;
@@ -150,11 +197,10 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     float32 toneT = (input->mousePos.x - tonePixelOffset) / tonePixelRange;
     toneWave = Lerp(toneMin, toneMax, toneT);
 
-    DEBUG_ASSERT(audio->fillStartDelta >= 0);
+    DEBUG_ASSERT(audio->sampleDelta >= 0);
     AudioState* audioState = &gameState->audioState;
-    audioState->runningSampleIndex += audio->fillStartDelta;
     audioState->tWave += 2.0f * PI_F * toneWave
-        * audio->fillStartDelta / audio->sampleRate;
+        * audio->sampleDelta / audio->sampleRate;
 
     SoundUpdate(audio, &audioState->soundKick);
     SoundUpdate(audio, &audioState->soundSnare);
@@ -164,9 +210,8 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     }
 
     for (int i = 0; i < audio->fillLength; i++) {
-        int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
-        audio->buffer[ind * audio->channels] = 0;
-        audio->buffer[ind * audio->channels + 1] = 0;
+        audio->buffer[i * audio->channels] = 0.0f;
+        audio->buffer[i * audio->channels + 1] = 0.0f;
     }
 
     if (gameState->audioState.globalMute) {
@@ -174,28 +219,24 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     }
 
     for (int i = 0; i < audio->fillLength; i++) {
-        int ind = (audio->fillStart + i) % audio->bufferSizeSamples;
         float32 tWaveOff = 2.0f * PI_F * toneWave
             * i / audio->sampleRate;
         /*float32 ampBass = Lerp(ampBassStart, ampBassEnd,
             t / soundRequestLength);*/
-        int16 waveSample = 0;
+        float32 waveSample = 0;
         if (input->keyboard[KM_KEY_Z].isDown) {
-            waveSample = (int16)(INT16_MAXVAL * ampWave * sinf(
-                audioState->tWave + tWaveOff));
+            waveSample += ampWave * sinf(audioState->tWave + tWaveOff);
         }
-        else if (input->keyboard[KM_KEY_X].isDown) {
-            float32 ampDamp = ampWave * 0.9f;
-            waveSample = (int16)(INT16_MAXVAL * ampDamp * TriangleWave(
-                audioState->tWave + tWaveOff));
+        if (input->keyboard[KM_KEY_X].isDown) {
+            float32 amp = ampWave * 0.9f;
+            waveSample += amp * TriangleWave(audioState->tWave + tWaveOff);
         }
-        else if (input->keyboard[KM_KEY_C].isDown) {
-            float32 ampDamp = ampWave * 0.3f;
-            waveSample = (int16)(INT16_MAXVAL * ampDamp * SquareWave(
-                audioState->tWave + tWaveOff));
+        if (input->keyboard[KM_KEY_C].isDown) {
+            float32 amp = ampWave * 0.3f;
+            waveSample += amp * SquareWave(audioState->tWave + tWaveOff);
         }
-        audio->buffer[ind * audio->channels]      += waveSample;
-        audio->buffer[ind * audio->channels + 1]  += waveSample;
+        audio->buffer[i * audio->channels]      += waveSample;
+        audio->buffer[i * audio->channels + 1]  += waveSample;
     }
 
     SoundWriteSamples(&audioState->soundKick, 1.0f, audio);
@@ -210,124 +251,30 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         audioState->debugView = !audioState->debugView;
     }
     if (audioState->debugView) {
-        // TODO pass only transient block to this function in the 1st place
-        DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
-        DEBUG_ASSERT(audio->bufferSizeSamples <= MAX_LINE_POINTS);
-        Mat4 proj = Mat4::one;
-        Vec3 zoomScale = {
-            1.0f + gameState->debugZoom,
-            1.0f + gameState->debugZoom,
-            1.0f
-        };
-        Mat4 view = Scale(zoomScale) * Translate(gameState->debugCamPos);
+        DrawAudioBuffer(gameState, audio,
+            audio->buffer, audio->fillLength, 0,
+            nullptr, nullptr, 0,
+            Vec3 { -1.0f, 0.5f, 0.0f }, Vec2 { 2.0f, 1.0f },
+            Vec4::one,
+            transient
+        );
+        DrawAudioBuffer(gameState, audio,
+            audio->buffer, audio->fillLength, 1,
+            nullptr, nullptr, 0,
+            Vec3 { -1.0f, -0.5f, 0.0f }, Vec2 { 2.0f, 1.0f },
+            Vec4::one,
+            transient
+        );
 
-        LineGLData* lineData = (LineGLData*)transient.memory;
-        float32 length = 2.0f;
-        float32 amplitude = 1.0f;
-        float32 offset = 1.0f;
-        
-        lineData->count = audio->bufferSizeSamples;
-        for (int i = 0; i < audio->bufferSizeSamples; i++) {
-            int16 val = audio->buffer[i * audio->channels];
-            float32 normVal = (float32)val / INT16_MAXVAL;
-            float32 t = (float32)i / (audio->bufferSizeSamples - 1);
-            lineData->pos[i] = {
-                t * length - length / 2.0f,
-                amplitude * normVal + offset,
-                0.0f
-            };
-        }
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::one);
-        for (int i = 0; i < audio->bufferSizeSamples; i++) {
-            int16 val = audio->buffer[i * audio->channels + 1];
-            float32 normVal = (float32)val / INT16_MAXVAL;
-            float32 t = (float32)i / (audio->bufferSizeSamples - 1);
-            lineData->pos[i] = {
-                t * length - length / 2.0f,
-                amplitude * normVal - offset,
-                0.0f
-            };
-        }
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::one);
-
-        lineData->count = 2;
-        int prevPlayMark = (audio->playMarker - audio->fillStartDelta)
-            % audio->bufferSizeSamples;
-        float32 tPrevPlayMark = (float32)prevPlayMark
-            / (audio->bufferSizeSamples - 1);
-        lineData->pos[0] = Vec3 {
-            tPrevPlayMark * length - length / 2.0f,
-            amplitude + offset,
-            0.0f
-        };
-        lineData->pos[1] = Vec3 {
-            tPrevPlayMark * length - length / 2.0f,
-            -(amplitude + offset),
-            0.0f
-        };
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4 { 1.0f, 0.5f, 0.5f, 1.0f });
-        float32 tPlayMark = (float32)audio->playMarker
-            / (audio->bufferSizeSamples - 1);
-        lineData->pos[0] = Vec3 {
-            tPlayMark * length - length / 2.0f,
-            amplitude + offset,
-            0.0f
-        };
-        lineData->pos[1] = Vec3 {
-            tPlayMark * length - length / 2.0f,
-            -(amplitude + offset),
-            0.0f
-        };
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::red);
-        float32 tFillStart = (float32)audio->fillStart
-            / (audio->bufferSizeSamples - 1);
-        lineData->pos[0] = Vec3 {
-            tFillStart * length - length / 2.0f,
-            amplitude + offset,
-            0.0f
-        };
-        lineData->pos[1] = Vec3 {
-            tFillStart * length - length / 2.0f,
-            -(amplitude + offset),
-            0.0f
-        };
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::green);
-        int fillEnd = (audio->fillStart + audio->fillLength)
-            % audio->bufferSizeSamples;
-        float32 tFillEnd = (float32)fillEnd / (audio->bufferSizeSamples - 1);
-        lineData->pos[0] = Vec3 {
-            tFillEnd * length - length / 2.0f,
-            amplitude + offset,
-            0.0f
-        };
-        lineData->pos[1] = Vec3 {
-            tFillEnd * length - length / 2.0f,
-            -(amplitude + offset),
-            0.0f
-        };
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::blue);
-
-        /*length = 1.0f;
-        lineData->count = audioState->soundDeath.buffer.bufferSizeSamples;
-        for (int i = 0; i < lineData->count; i++) {
-            int16 val = audioState->soundDeath.buffer.buffer[
-                i * audio->channels];
-            float32 normVal = (float32)val / INT16_MAXVAL;
-            float32 t = (float32)i / (lineData->count - 1);
-            lineData->pos[i] = {
-                t * length - length / 2.0f,
-                height * normVal,
-                0.0f
-            };
-        }
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, Vec4::one);*/
+        /*DrawAudioBuffer(gameState, audio,
+            audioState->soundNotes[2].buffers[0].buffer,
+            audioState->soundNotes[2].buffers[0].bufferSizeSamples,
+            0,
+            nullptr, nullptr, 0,
+            Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
+            Vec4::green,
+            transient
+        );*/
     }
 #endif
 }

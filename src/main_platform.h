@@ -101,15 +101,10 @@ struct GameAudio
     int sampleRate;
     int channels;
     int bufferSizeSamples;
-    int16* buffer;
+    float32* buffer;
 
-    int fillStart;
+    int sampleDelta; // Samples elapsed and/or final-written since last update
     int fillLength;
-    int fillStartDelta;
-
-#if GAME_INTERNAL
-    int playMarker;
-#endif
 };
 
 struct PlatformFunctions

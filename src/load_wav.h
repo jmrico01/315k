@@ -12,7 +12,7 @@ struct AudioBuffer
     int sampleRate;
     int channels;
     int bufferSizeSamples;
-    int16 buffer[AUDIO_BUFFER_MAX_SAMPLES * AUDIO_CHANNELS_MAX];
+    float32 buffer[AUDIO_BUFFER_MAX_SAMPLES * AUDIO_CHANNELS_MAX];
 };
 
 bool32 LoadWAV(const ThreadContext* thread, const char* filePath,

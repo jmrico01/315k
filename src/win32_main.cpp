@@ -942,26 +942,25 @@ int CALLBACK WinMain(
 
     // Initialize audio
     Win32Audio winAudio = {};
-    uint32 bufferSizeSamples = AUDIO_SAMPLERATE
-        * AUDIO_BUFFER_SIZE_MILLISECONDS / 1000;
+    uint32 bufferSizeSamples = AUDIO_DEFAULT_SAMPLERATE
+        * AUDIO_DEFAULT_BUFFER_SIZE_MILLISECONDS / 1000;
     if (!Win32InitAudio(&winAudio,
-    AUDIO_SAMPLERATE, AUDIO_CHANNELS, bufferSizeSamples)) {
+    AUDIO_DEFAULT_SAMPLERATE, AUDIO_DEFAULT_CHANNELS, bufferSizeSamples)) {
         return 1;
     }
-    winAudio.minLatency = AUDIO_SAMPLERATE / monitorRefreshHz;
-    winAudio.maxLatency = AUDIO_SAMPLERATE / 10;
-    DEBUG_PRINT("latency: %d - %d\n", winAudio.minLatency,
-        winAudio.maxLatency);
+    winAudio.samplesPlayedPrev = 0;
+    winAudio.frameTimeSamples = winAudio.sampleRate / monitorRefreshHz;
+    winAudio.latency = winAudio.frameTimeSamples * 2;
 
-#if GAME_INTERNAL
-    // Debug audio output recording
-    Win32AudioRecording audioRecording;
-    audioRecording.recording = false;
-    audioRecording.bufferSizeSamples = 0;
-    audioRecording.buffer = (int16*)VirtualAlloc(0,
-        AUDIO_RECORDING_MAX_SAMPLES * winAudio.channels * sizeof(int16),
+    GameAudio gameAudio = {};
+    gameAudio.sampleRate = winAudio.sampleRate;
+    gameAudio.channels = winAudio.channels;
+    gameAudio.bufferSizeSamples = winAudio.bufferSizeSamples;
+    int bufferSizeBytes = gameAudio.bufferSizeSamples
+        * gameAudio.channels * sizeof(float32);
+    gameAudio.buffer = (float32*)VirtualAlloc(0, (size_t)bufferSizeBytes,
         MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-#endif
+    gameAudio.sampleDelta = 0; // TODO revise this
     DEBUG_PRINT("Initialized Win32 audio\n");
 
     // TODO probably remove this later
@@ -1048,8 +1047,6 @@ int CALLBACK WinMain(
 
     Win32GameCode gameCode =
         Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
-
-    uint64 samplesPlayedPrev = 0;
 
     running_ = true;
     while (running_) {
@@ -1150,6 +1147,7 @@ int CALLBACK WinMain(
             }
         }
 
+#if GAME_INTERNAL
         // Recording game input
         if (newInput->controllers[0].lShoulder.isDown
         && newInput->controllers[0].lShoulder.transitions > 0
@@ -1183,67 +1181,36 @@ int CALLBACK WinMain(
             Win32PlayInput(&state, newInput);
         }
 
-#if GAME_INTERNAL
         if (newInput->controllers[0].y.isDown
         && newInput->controllers[0].y.transitions > 0) {
             gameMemory.isInitialized = false;
         }
 #endif
-        GameAudio gameAudio = {};
-        gameAudio.sampleRate = winAudio.sampleRate;
-        gameAudio.channels = winAudio.channels;
-        gameAudio.bufferSizeSamples = winAudio.bufferSizeSamples;
-        gameAudio.buffer = winAudio.buffer;
-        XAUDIO2_VOICE_STATE voiceState;
-        winAudio.sourceVoice->GetState(&voiceState);
 
-#if GAME_INTERNAL
-        if (WasKeyPressed(newInput, KM_KEY_R)) {
-            audioRecording.recording = !audioRecording.recording;
-            if (audioRecording.recording) {
-                DEBUG_PRINT("Started recording audio\n");
-            }
-            else {
-                DEBUG_PRINT("Stopped recording audio\n");
-            }
-        }
-#endif
-
-        // Audio request setup:
-        // Windows requests the game to fill up a specific section of the
-        // circular buffer which XAudio2 is playing.
-        // This section will always be
-        //  [playMark + minLatency, playMark + maxLatency * 2]
-        // This is passed with two parameters:
-        //  fillStart (playMark + minLatency)
-        //  fillLength (maxLatency * 2 - minLatency)
-        // This allows for smooth audio playback as long as frame updates
-        // take between minLatency and maxLatency to complete.
-        int playMark = (int)voiceState.SamplesPlayed
-            % winAudio.bufferSizeSamples;
-        gameAudio.fillStart = (playMark + winAudio.minLatency)
-            % winAudio.bufferSizeSamples;
-        gameAudio.fillLength = winAudio.maxLatency * 2 - winAudio.minLatency;
-        // TODO can this ever fail? AKA can SamplesPlayed loop back / reset?
-        gameAudio.fillStartDelta = (int)(
-            voiceState.SamplesPlayed - samplesPlayedPrev);
-        samplesPlayedPrev = voiceState.SamplesPlayed;
-#if GAME_INTERNAL
-        gameAudio.playMarker = playMark;
-#endif
+        /*HRESULT hr;
+        UINT64 audioClockFreq;
+        UINT64 audioClockPos;
+        // TODO check hr for errors
+        hr = winAudio.audioClock->GetFrequency(&audioClockFreq);
+        hr = winAudio.audioClock->GetPosition(&audioClockPos, NULL);
+        float64 secondsPlayed = (float64)audioClockPos / audioClockFreq;
+        uint64 samplesPlayed = (uint64)(secondsPlayed * winAudio.sampleRate);
+        int sampleDelta = (int)(samplesPlayed - winAudio.samplesPlayedPrev);
+        DEBUG_PRINT("sampleDelta: %d\n", gameAudio.sampleDelta);
+        winAudio.samplesPlayedPrev = samplesPlayed;*/
+        
+        gameAudio.fillLength = winAudio.latency;
 
         LARGE_INTEGER timerEnd;
         QueryPerformanceCounter(&timerEnd);
         uint64 cyclesEnd = __rdtsc();
-        int64 cyclesElapsed = cyclesEnd - cyclesLast;
         int64 timerElapsed = timerEnd.QuadPart - timerLast.QuadPart;
+        // NOTE this is an estimate for next frame, based on last frame time
         float32 elapsed = (float32)timerElapsed / timerFreq;
-        float32 fps = (float32)timerFreq / timerElapsed;
-        int mCyclesPerFrame = (int)(cyclesElapsed / (1000 * 1000));
+        //int64 cyclesElapsed = cyclesEnd - cyclesLast;
+        //int mCyclesPerFrame = (int)(cyclesElapsed / (1000 * 1000));
         timerLast = timerEnd;
         cyclesLast = cyclesEnd;
-        /*DEBUG_PRINT("%fms/f, %ff/s, %dMc/f\n",
-            elapsed, fps, mCyclesPerFrame);*/
 
         if (gameCode.gameUpdateAndRender) {
             ThreadContext thread = {};
@@ -1253,8 +1220,33 @@ int CALLBACK WinMain(
             screenInfo.changed = false;
         }
 
-        LARGE_INTEGER vsyncStart;
-        QueryPerformanceCounter(&vsyncStart);
+        UINT32 audioPadding;
+        HRESULT hr = winAudio.audioClient->GetCurrentPadding(&audioPadding);
+        // TODO check for invalid device and stuff
+        if (SUCCEEDED(hr)) {
+            int samplesQueued = (int)audioPadding;
+            DEBUG_PRINT("samplesQueued b4: %d\n", samplesQueued);
+            if (samplesQueued < winAudio.latency) {
+                // Write enough samples so that the number of queued samples
+                // is enough for one latency interval
+                int samplesToWrite = winAudio.latency - samplesQueued;
+                /*if (samplesToWrite < gameAudio.fillStartDelta) {
+                    // Write at least as much as the game audio state
+                    // was advanced by
+                    samplesToWrite = gameAudio.fillStartDelta;
+                }*/
+                if (samplesToWrite > gameAudio.fillLength) {
+                    // Don't write more samples than the game generated
+                    samplesToWrite = gameAudio.fillLength;
+                }
+                DEBUG_PRINT("writing samples: %d\n", samplesToWrite);
+
+                Win32WriteAudioSamples(&winAudio, &gameAudio,
+                    samplesToWrite);
+                gameAudio.sampleDelta = samplesToWrite;
+            }
+        }
+
         // NOTE
         // SwapBuffers seems to effectively stall for vsync target time
         // It's probably more complicated than that under the hood,
@@ -1263,12 +1255,6 @@ int CALLBACK WinMain(
         HDC hDC = GetDC(hWnd);
         SwapBuffers(hDC);
         ReleaseDC(hWnd, hDC);
-        LARGE_INTEGER vsyncEnd;
-        QueryPerformanceCounter(&vsyncEnd);
-
-        int64 vsyncElapsed = vsyncEnd.QuadPart - vsyncStart.QuadPart;
-        float32 vsyncElapsedMS = 1000.0f * vsyncElapsed / timerFreq;
-        //DEBUG_PRINT("SwapBuffers took %f ms\n", vsyncElapsedMS);
 
         GameInput *temp = newInput;
         newInput = oldInput;
@@ -1276,7 +1262,7 @@ int CALLBACK WinMain(
         ClearInput(newInput, oldInput);
     }
 
-    winAudio.sourceVoice->Stop();
+    Win32StopAudio(&winAudio);
 
     return 0;
 }

@@ -18,8 +18,6 @@ struct Sound
 
 struct AudioState
 {
-    int runningSampleIndex;
-
     Sound soundKick;
     Sound soundSnare;
     Sound soundDeath;

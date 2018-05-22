@@ -1,48 +1,42 @@
 #pragma once
 
-#include <Xaudio2.h>
+#include <audioclient.h>
+#include <mmdeviceapi.h>
 
 #include "km_defines.h"
 #include "main_platform.h"
 
-#define AUDIO_SAMPLERATE 48000
-#define AUDIO_CHANNELS 2
-#define AUDIO_BUFFER_SIZE_MILLISECONDS 2000
+#define AUDIO_DEFAULT_SAMPLERATE 48000
+#define AUDIO_DEFAULT_CHANNELS 2
+#define AUDIO_DEFAULT_BUFFER_SIZE_MILLISECONDS 1000
+
+enum AudioFormat
+{
+    AUDIO_FORMAT_PCM_INT16,
+    AUDIO_FORMAT_PCM_FLOAT32
+};
 
 struct Win32Audio
 {
-    IXAudio2SourceVoice* sourceVoice;
+    IAudioClient* audioClient;
+    IAudioRenderClient* renderClient;
+    IAudioClock* audioClock;
+    AudioFormat format;
+    int bitsPerSample;
 
     int sampleRate;
     int channels;
     int bufferSizeSamples;
-    int16* buffer;
-
-    int minLatency;
-    int maxLatency;
+    
+    uint64 samplesPlayedPrev;
+    int frameTimeSamples;
+    int latency;
 };
 
-// XAudio2 functions
-typedef HRESULT XAudio2CreateFunc(
-    _Out_   IXAudio2**          ppXAudio2,
-    _In_    UINT32              flags,
-    _In_    XAUDIO2_PROCESSOR   xAudio2Processor);
-internal XAudio2CreateFunc* xAudio2Create_ = NULL;
-#define XAudio2Create xAudio2Create_
 
-
-internal bool Win32InitAudio(Win32Audio* winAudio,
+bool32 Win32InitAudio(Win32Audio* winAudio,
     int sampleRate, int channels, int bufferSizeSamples);
+void Win32StopAudio(Win32Audio* winAudio);
 
-#if GAME_INTERNAL
-
-#define AUDIO_RECORDING_MAX_SAMPLES (AUDIO_SAMPLERATE * 30)
-
-struct Win32AudioRecording
-{
-    bool32 recording;
-    int bufferSizeSamples;
-    int16* buffer;
-};
-
-#endif
+void Win32WriteAudioSamples(const Win32Audio* winAudio,
+    const GameAudio* gameAudio, int numSamples);

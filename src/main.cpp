@@ -384,6 +384,7 @@ internal void LoadLevel(const ThreadContext* thread, const char* filePath,
     gameState->levelLength = levelLength;
 
     gameState->halfBeatCount = 0;
+    gameState->lastHalfBeat = 0.0f;
     gameState->circlePos = respawn;
 
     DEBUGPlatformFreeFileMemory(thread, &levelFile);
@@ -966,7 +967,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     glUniform1f(loc, 0.25f);
     loc = glGetUniformLocation(gameState->grainShader,
         "time");
-    glUniform1f(loc, (GLfloat)gameState->audioState.runningSampleIndex);
+    glUniform1f(loc, gameState->lastBeat * 139754.0f); // TODO janky!
 
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
