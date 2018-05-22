@@ -32,6 +32,8 @@ struct DynamicArray
     }
 };
 
+void MemCopy(void* dst, const void* src, uint64 numBytes);
+
 /*
 template <typename K, typename V>
 struct HashNode

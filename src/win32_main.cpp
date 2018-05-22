@@ -948,9 +948,7 @@ int CALLBACK WinMain(
     AUDIO_DEFAULT_SAMPLERATE, AUDIO_DEFAULT_CHANNELS, bufferSizeSamples)) {
         return 1;
     }
-    winAudio.samplesPlayedPrev = 0;
-    winAudio.frameTimeSamples = winAudio.sampleRate / monitorRefreshHz;
-    winAudio.latency = winAudio.frameTimeSamples * 2;
+    winAudio.latency = winAudio.sampleRate / monitorRefreshHz * 2;
 
     GameAudio gameAudio = {};
     gameAudio.sampleRate = winAudio.sampleRate;
@@ -1041,6 +1039,10 @@ int CALLBACK WinMain(
         timerFreq = timerFreqResult.QuadPart;
     }
 
+    /*LARGE_INTEGER timerBegin;
+    QueryPerformanceCounter(&timerBegin);
+    float64 soundBegin = 0.0f;*/
+
     LARGE_INTEGER timerLast;
     QueryPerformanceCounter(&timerLast);
     uint64 cyclesLast = __rdtsc();
@@ -1049,10 +1051,12 @@ int CALLBACK WinMain(
         Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
 
     running_ = true;
+
     while (running_) {
         // TODO this gets called twice very quickly in succession
         FILETIME newDLLWriteTime = Win32GetLastWriteTime(gameCodeDLLPath);
-        if (CompareFileTime(&newDLLWriteTime, &gameCode.lastDLLWriteTime) > 0) {
+        if (CompareFileTime(&newDLLWriteTime,
+        &gameCode.lastDLLWriteTime) > 0) {
             Win32UnloadGameCode(&gameCode);
             gameCode = Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
             gameMemory.DEBUGShouldInitGlobalFuncs = true;
@@ -1190,16 +1194,9 @@ int CALLBACK WinMain(
         /*HRESULT hr;
         UINT64 audioClockFreq;
         UINT64 audioClockPos;
-        // TODO check hr for errors
         hr = winAudio.audioClock->GetFrequency(&audioClockFreq);
         hr = winAudio.audioClock->GetPosition(&audioClockPos, NULL);
-        float64 secondsPlayed = (float64)audioClockPos / audioClockFreq;
-        uint64 samplesPlayed = (uint64)(secondsPlayed * winAudio.sampleRate);
-        int sampleDelta = (int)(samplesPlayed - winAudio.samplesPlayedPrev);
-        DEBUG_PRINT("sampleDelta: %d\n", gameAudio.sampleDelta);
-        winAudio.samplesPlayedPrev = samplesPlayed;*/
-        
-        gameAudio.fillLength = winAudio.latency;
+        float64 secondsPlayed = (float64)audioClockPos / audioClockFreq;*/
 
         LARGE_INTEGER timerEnd;
         QueryPerformanceCounter(&timerEnd);
@@ -1212,12 +1209,22 @@ int CALLBACK WinMain(
         timerLast = timerEnd;
         cyclesLast = cyclesEnd;
 
+        /*float64 totalElapsedSound = secondsPlayed - soundBegin;
+        int64 timerTotal = timerEnd.QuadPart - timerBegin.QuadPart;
+        float64 totalElapsedTime = (float64)timerTotal / timerFreq;
+        DEBUG_PRINT("sound time sync offset (real minus sound): %f\n",
+            totalElapsedTime - totalElapsedSound);*/
+
         if (gameCode.gameUpdateAndRender) {
             ThreadContext thread = {};
+            gameAudio.fillLength = winAudio.latency;
             gameCode.gameUpdateAndRender(&thread, &platformFuncs,
                 newInput, screenInfo, elapsed,
                 &gameMemory, &gameAudio);
             screenInfo.changed = false;
+        }
+        else {
+            gameAudio.fillLength = 0;
         }
 
         UINT32 audioPadding;
@@ -1225,21 +1232,14 @@ int CALLBACK WinMain(
         // TODO check for invalid device and stuff
         if (SUCCEEDED(hr)) {
             int samplesQueued = (int)audioPadding;
-            DEBUG_PRINT("samplesQueued b4: %d\n", samplesQueued);
             if (samplesQueued < winAudio.latency) {
                 // Write enough samples so that the number of queued samples
                 // is enough for one latency interval
                 int samplesToWrite = winAudio.latency - samplesQueued;
-                /*if (samplesToWrite < gameAudio.fillStartDelta) {
-                    // Write at least as much as the game audio state
-                    // was advanced by
-                    samplesToWrite = gameAudio.fillStartDelta;
-                }*/
                 if (samplesToWrite > gameAudio.fillLength) {
                     // Don't write more samples than the game generated
                     samplesToWrite = gameAudio.fillLength;
                 }
-                DEBUG_PRINT("writing samples: %d\n", samplesToWrite);
 
                 Win32WriteAudioSamples(&winAudio, &gameAudio,
                     samplesToWrite);
@@ -1269,6 +1269,7 @@ int CALLBACK WinMain(
 
 #include "win32_audio.cpp"
 
-// TODO temporary! this is a bad idea! already compiled in main.cpp
+// TODO temporary! this is a bad idea! probably already compiled in main.cpp
 #include "km_input.cpp"
 #include "km_string.cpp"
+#include "km_lib.cpp"

@@ -28,8 +28,6 @@ struct Win32Audio
     int channels;
     int bufferSizeSamples;
     
-    uint64 samplesPlayedPrev;
-    int frameTimeSamples;
     int latency;
 };
 

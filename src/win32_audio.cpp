@@ -1,6 +1,7 @@
 #include "win32_audio.h"
 
 #include "km_debug.h"
+#include "km_lib.h"
 
 // REFERENCE_TIME as defined by Windows API
 #define REFERENCE_TIME_NANOSECONDS 100
@@ -11,6 +12,7 @@ bool32 Win32InitAudio(Win32Audio* winAudio,
     int sampleRate, int channels, int bufferSizeSamples)
 {
     // TODO release/CoTaskMemFree on failure
+    // and in general
     HRESULT hr;
 
     IMMDeviceEnumerator* deviceEnumerator;
@@ -97,7 +99,7 @@ bool32 Win32InitAudio(Win32Audio* winAudio,
     REFERENCE_TIME bufferSizeRefTimes = REFERENCE_TIMES_PER_SECOND
         / sampleRate * bufferSizeSamples;
     hr = audioClient->Initialize(
-        AUDCLNT_SHAREMODE_SHARED, // TODO should I use exclusive mode?
+        AUDCLNT_SHAREMODE_SHARED,
         0,
         bufferSizeRefTimes,
         0,
@@ -176,15 +178,10 @@ void Win32WriteAudioSamples(const Win32Audio* winAudio,
     HRESULT hr = winAudio->renderClient->GetBuffer((UINT32)numSamples,
         &audioBuffer);
     if (SUCCEEDED(hr)) {
-        if (winAudio->format == AUDIO_FORMAT_PCM_FLOAT32) {
-            float32* buffer = (float32*)audioBuffer;
-            for (int i = 0; i < numSamples; i++) {
-                buffer[i * winAudio->channels] =
-                    gameAudio->buffer[i * gameAudio->channels];
-                buffer[i * winAudio->channels + 1] =
-                    gameAudio->buffer[i * gameAudio->channels + 1];
-            }
-        }
+        // TODO check that this is correct for all audio formats
+        int bytesToWrite = numSamples * winAudio->channels
+            * winAudio->bitsPerSample / 8;
+        MemCopy(audioBuffer, gameAudio->buffer, bytesToWrite);
         winAudio->renderClient->ReleaseBuffer((UINT32)numSamples, 0);
     }
 }

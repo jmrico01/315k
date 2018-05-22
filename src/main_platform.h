@@ -103,7 +103,7 @@ struct GameAudio
     int bufferSizeSamples;
     float32* buffer;
 
-    int sampleDelta; // Samples elapsed and/or final-written since last update
+    int sampleDelta; // Samples elapsed/written since last update
     int fillLength;
 };
 

@@ -3,17 +3,13 @@
 #include "km_defines.h"
 #include "load_wav.h"
 
-#define SOUND_MAX_VARIATIONS 3
-
 struct Sound
 {
     bool32 play;
     bool32 playing;
     int sampleIndex;
 
-    int variations;
-    AudioBuffer buffers[SOUND_MAX_VARIATIONS];
-    int activeVariation;
+    AudioBuffer buffer;
 };
 
 struct AudioState
@@ -25,6 +21,7 @@ struct AudioState
     Sound soundNotes[12];
 
     float32 tWave;
+    float32 toneWave;
 
     bool32 globalMute;
 

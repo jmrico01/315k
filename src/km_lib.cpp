@@ -1,6 +1,7 @@
 #include "km_lib.h"
 
 #include <stdio.h>
+#include <cstring> // memcpy is here... no idea why
 
 #define DYNAMIC_ARRAY_START_CAPACITY 10
 
@@ -77,4 +78,12 @@ template <typename T>
 void DynamicArray<T>::Free()
 {
     free(data);
+}
+
+void MemCopy(void* dst, const void* src, uint64 numBytes)
+{
+    DEBUG_ASSERT(((const char*)dst + numBytes <= (const char*)src)
+        || (dst >= (const char*)src + numBytes));
+    // TODO maybe look to reimplement this? would be informative
+    memcpy(dst, src, numBytes);
 }

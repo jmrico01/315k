@@ -1,24 +1,31 @@
 #include "load_wav.h"
 
-#define WAV_AUDIO_FORMAT_PCM_16 1
+#include "km_lib.h"
+
+#define WAVE_FORMAT_PCM         0x0001
+#define WAVE_FORMAT_IEEE_FLOAT  0x0003
+
+struct ChunkHeader
+{
+    char c1, c2, c3, c4;
+    int32 dataSize;
+};
 
 struct ChunkRIFF
 {
-    char r, i, f1, f2;
-	int32 chunkSize;
+    ChunkHeader header;
     char w, a, v, e;
 };
 
-struct ChunkFmt
+struct WaveFormat
 {
-    char f, m, t, z;
-	int32 chunkSize;
-	int16 audioFormat;
-	int16 channels;
-	int32 sampleRate;
-	int32 byteRate;
-	int16 blockAlign;
-	int16 bitsPerSample;
+    int16 audioFormat;
+    int16 channels;
+    int32 sampleRate;
+    int32 byteRate;
+    int16 blockAlign;
+    int16 bitsPerSample;
+    // there might be additional data here
 };
 
 bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
@@ -33,8 +40,8 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     }
 
     ChunkRIFF* riff = (ChunkRIFF*)wavFile.data;
-    if (riff->r != 'R' || riff->i != 'I'
-    || riff->f1 != 'F' || riff->f2 != 'F') {
+    if (riff->header.c1 != 'R' || riff->header.c2 != 'I'
+    || riff->header.c3 != 'F' || riff->header.c4 != 'F') {
         DEBUG_PRINT("Invalid RIFF header on file %s\n", filePath);
         return false;
     }
@@ -44,49 +51,63 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
         return false;
     }
 
-    ChunkFmt* fmt = (ChunkFmt*)((char*)wavFile.data + sizeof(ChunkRIFF));
-    if (fmt->f != 'f' || fmt->m != 'm' || fmt->t != 't') {
-        DEBUG_PRINT("Invalid FMT header on file: %s\n", filePath);
+    ChunkHeader* fmtHeader = (ChunkHeader*)(riff + 1);
+    if (fmtHeader->c1 != 'f' || fmtHeader->c2 != 'm' || fmtHeader->c3 != 't') {
+        DEBUG_PRINT("Invalid fmt header on file: %s\n", filePath);
         return false;
     }
-    if (fmt->audioFormat != WAV_AUDIO_FORMAT_PCM_16) {
-        DEBUG_PRINT("WAV format isn't PCM 16-bit for %s", filePath);
+    WaveFormat* format = (WaveFormat*)(fmtHeader + 1);
+    if (format->audioFormat != WAVE_FORMAT_IEEE_FLOAT) {
+        DEBUG_PRINT("WAV format isn't IEEE float (%d) for %s\n",
+            format->audioFormat, filePath);
         return false;
     }
-    if (fmt->sampleRate != gameAudio->sampleRate) {
+    if (format->sampleRate != gameAudio->sampleRate) {
         DEBUG_PRINT("WAV file sample rate mismatch: %d vs %d, for %s\n",
-            fmt->sampleRate, gameAudio->sampleRate, filePath);
+            format->sampleRate, gameAudio->sampleRate, filePath);
         return false;
     }
-    if (fmt->channels != gameAudio->channels) {
+    if (format->channels != gameAudio->channels) {
         DEBUG_PRINT("WAV file channels mismatch: %d vs %d, for %s\n",
-            fmt->channels, gameAudio->channels, filePath);
+            format->channels, gameAudio->channels, filePath);
         return false;
     }
 
-    int32 dataChunkSize = *(int32*)((char*)wavFile.data
-    	+ sizeof(ChunkRIFF) + sizeof(ChunkFmt) + sizeof(int32));
-    int16* data = (int16*)((char*)wavFile.data
-    	+ sizeof(ChunkRIFF) + sizeof(ChunkFmt) + 2 * sizeof(int32));
-    int bytesPerSample = fmt->bitsPerSample * fmt->channels / 8;
-    int samples = dataChunkSize / bytesPerSample;
-    if (samples > AUDIO_BUFFER_MAX_SAMPLES) {
+    int bytesRead = sizeof(ChunkRIFF) + sizeof(ChunkHeader)
+        + fmtHeader->dataSize;
+    ChunkHeader* header = (ChunkHeader*)((char*)format + fmtHeader->dataSize);
+    while (header->c1 != 'd' || header->c2 != 'a'
+    || header->c3 != 't' || header->c4 != 'a') {
+        /*DEBUG_PRINT("skipped chunk: %c%c%c%c\n",
+            header->c1, header->c2, header->c3, header->c4);*/
+        int bytesToSkip = sizeof(ChunkHeader) + header->dataSize;
+        if (bytesRead + bytesToSkip >= wavFile.size) {
+            DEBUG_PRINT("WAV file has no data chunk: %s\n", filePath);
+            return false;
+        }
+        header = (ChunkHeader*)((char*)header + bytesToSkip);
+        bytesRead += bytesToSkip;
+    }
+
+    void* data = (void*)(header + 1);
+    int bytesPerSample = format->bitsPerSample / 8;
+    int lengthSamples = header->dataSize / bytesPerSample / format->channels;
+    if (lengthSamples > AUDIO_BUFFER_MAX_SAMPLES) {
         DEBUG_PRINT("WAV file too long: %s\n", filePath);
         return false;
     }
-    for (int i = 0; i < samples; i++) {
-        audioBuffer->buffer[i * 2] =
-            (float32)data[i * 2] / INT16_MAXVAL;
-        audioBuffer->buffer[i * 2 + 1] =
-            (float32)data[i * 2 + 1] / INT16_MAXVAL;
-    }
+    MemCopy(audioBuffer->buffer, data, header->dataSize);
+    /*for (int i = 0; i < samples; i++) {
+        audioBuffer->buffer[i * 2] = data[i * 2];
+        audioBuffer->buffer[i * 2 + 1] = data[i * 2 + 1];
+    }*/
 
-    audioBuffer->sampleRate = fmt->sampleRate;
-    audioBuffer->channels = fmt->channels;
-    audioBuffer->bufferSizeSamples = samples;
+    audioBuffer->sampleRate = format->sampleRate;
+    audioBuffer->channels = format->channels;
+    audioBuffer->bufferSizeSamples = lengthSamples;
 
-    DEBUG_PRINT("Loaded WAV file: %s\n", filePath);
-    DEBUG_PRINT("Samples: %d\n", audioBuffer->bufferSizeSamples);
+    //DEBUG_PRINT("Loaded WAV file: %s\n", filePath);
+    //DEBUG_PRINT("Samples: %d\n", audioBuffer->bufferSizeSamples);
 
     DEBUGPlatformFreeFileMemory(thread, &wavFile);
 

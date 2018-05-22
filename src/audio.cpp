@@ -73,30 +73,24 @@ internal float32 TriangleWave(float32 t)
 
 internal void SoundInit(const ThreadContext* thread,
     const GameAudio* audio, Sound* sound,
-    int variations, const char* filePaths[],
+    const char* filePath,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-    DEBUG_ASSERT(variations < SOUND_MAX_VARIATIONS);
     sound->play = false;
     sound->playing = false;
     sound->sampleIndex = 0;
-    sound->variations = variations;
 
-    for (int i = 0; i < variations; i++) {
-        LoadWAV(thread, filePaths[i],
-            audio, &sound->buffers[i],
-            DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
-    }
-    sound->activeVariation = 0;
+    LoadWAV(thread, filePath,
+        audio, &sound->buffer,
+        DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
 }
 
 internal void SoundUpdate(const GameAudio* audio, Sound* sound)
 {
     if (sound->playing) {
         sound->sampleIndex += audio->sampleDelta;
-        if (sound->sampleIndex
-        >= sound->buffers[sound->activeVariation].bufferSizeSamples) {
+        if (sound->sampleIndex >= sound->buffer.bufferSizeSamples) {
             sound->playing = false;
         }
     }
@@ -104,7 +98,6 @@ internal void SoundUpdate(const GameAudio* audio, Sound* sound)
         sound->play = false;
         sound->playing = true;
         sound->sampleIndex = 0;
-        sound->activeVariation = rand() % sound->variations;
     }
 }
 
@@ -115,16 +108,17 @@ internal void SoundWriteSamples(const Sound* sound, float32 amplitude,
         return;
     }
 
-    const AudioBuffer* activeBuffer = &sound->buffers[sound->activeVariation];
-    for (int i = 0; i < audio->fillLength; i++) {
+    const AudioBuffer* buffer = &sound->buffer;
+    int samplesToWrite = audio->fillLength;
+    if (sound->sampleIndex + samplesToWrite > buffer->bufferSizeSamples) {
+        samplesToWrite = buffer->bufferSizeSamples - sound->sampleIndex;
+    }
+    for (int i = 0; i < samplesToWrite; i++) {
         int sampleInd = sound->sampleIndex + i;
-        if (sampleInd >= activeBuffer->bufferSizeSamples) {
-            break;
-        }
         float32 sample1 = amplitude
-            * activeBuffer->buffer[sampleInd * audio->channels];
+            * buffer->buffer[sampleInd * audio->channels];
         float32 sample2 = amplitude
-            * activeBuffer->buffer[sampleInd * audio->channels + 1];
+            * buffer->buffer[sampleInd * audio->channels + 1];
 
         audio->buffer[i * audio->channels] += sample1;
         audio->buffer[i * audio->channels + 1] += sample2;
@@ -153,26 +147,23 @@ void InitAudioState(const ThreadContext* thread,
 
     SoundInit(thread, audio,
         &audioState->soundKick,
-        KICK_VARIATIONS, kickSoundFiles,
+        kickSoundFiles[0],
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     SoundInit(thread, audio,
         &audioState->soundSnare,
-        SNARE_VARIATIONS, snareSoundFiles,
+        snareSoundFiles[0],
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     SoundInit(thread, audio,
         &audioState->soundDeath,
-        DEATH_VARIATIONS, deathSoundFiles,
+        deathSoundFiles[0],
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
 
     for (int i = 0; i < 12; i++) {
         char buf[128];
         sprintf(buf, "data/audio/note%d.wav", i);
-        const char* noteSoundFiles[1] = {
-            buf
-        };
         SoundInit(thread, audio,
             &audioState->soundNotes[i],
-            1, noteSoundFiles,
+            buf,
             DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     }
 
@@ -186,21 +177,20 @@ void InitAudioState(const ThreadContext* thread,
 void OutputAudio(GameAudio* audio, GameState* gameState,
     const GameInput* input, MemoryBlock transient)
 {
-    float32 ampWave = 0.15f;
-    float32 toneWave = 261.0f;
+    DEBUG_ASSERT(audio->sampleDelta >= 0);
+    AudioState* audioState = &gameState->audioState;
+    // Advance tWave based on previous toneWave frequency
+    audioState->tWave += 2.0f * PI_F * audioState->toneWave
+        * audio->sampleDelta / audio->sampleRate;
 
-    // Modify wave tone based on mouse position
-    float32 toneMin = toneWave * 1.0f;
-    float32 toneMax = toneWave * 2.0f;
+    float32 ampWave = 0.15f;
+    float32 toneWaveBase = 261.0f;
+    float32 toneMin = toneWaveBase * 1.0f;
+    float32 toneMax = toneWaveBase * 2.0f;
     float32 tonePixelRange = 600.0f;
     float32 tonePixelOffset = 600.0f;
     float32 toneT = (input->mousePos.x - tonePixelOffset) / tonePixelRange;
-    toneWave = Lerp(toneMin, toneMax, toneT);
-
-    DEBUG_ASSERT(audio->sampleDelta >= 0);
-    AudioState* audioState = &gameState->audioState;
-    audioState->tWave += 2.0f * PI_F * toneWave
-        * audio->sampleDelta / audio->sampleRate;
+    audioState->toneWave = Lerp(toneMin, toneMax, toneT);
 
     SoundUpdate(audio, &audioState->soundKick);
     SoundUpdate(audio, &audioState->soundSnare);
@@ -219,7 +209,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     }
 
     for (int i = 0; i < audio->fillLength; i++) {
-        float32 tWaveOff = 2.0f * PI_F * toneWave
+        float32 tWaveOff = 2.0f * PI_F * audioState->toneWave
             * i / audio->sampleRate;
         /*float32 ampBass = Lerp(ampBassStart, ampBassEnd,
             t / soundRequestLength);*/

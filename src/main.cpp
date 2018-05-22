@@ -1009,6 +1009,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
 #include "km_input.cpp"
 #include "km_string.cpp"
+#include "km_lib.cpp"
 #include "opengl_base.cpp"
 #include "text.cpp"
 #include "load_png.cpp"
