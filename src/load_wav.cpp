@@ -109,3 +109,15 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
 
     return true;
 }
+
+float32 LinearSample(const GameAudio* audio,
+    const float32* buffer, int bufferLengthSamples,
+    int channel, float32 t)
+{
+    float32 iFloat = t * bufferLengthSamples;
+    int i1 = (int)floorf(iFloat);
+    int i2 = (int)ceilf(iFloat);
+    float32 val1 = buffer[i1 * audio->channels + channel];
+    float32 val2 = buffer[i2 * audio->channels + channel];
+    return Lerp(val1, val2, iFloat - i1);
+}

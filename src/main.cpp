@@ -490,7 +490,12 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         if (error) {
             DEBUG_PRINT("FreeType init error: %d\n", error);
         }
-        gameState->fontFace = LoadFontFace(thread, gameState->ftLibrary,
+        gameState->fontFaceSmall = LoadFontFace(thread, gameState->ftLibrary,
+            "data/fonts/ibm-plex-mono/regular.ttf", 18,
+            memory->transient,
+            platformFuncs->DEBUGPlatformReadFile,
+            platformFuncs->DEBUGPlatformFreeFileMemory);
+        gameState->fontFaceMedium = LoadFontFace(thread, gameState->ftLibrary,
             "data/fonts/ibm-plex-mono/regular.ttf", 24,
             memory->transient,
             platformFuncs->DEBUGPlatformReadFile,
@@ -674,23 +679,23 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     // Debug camera position control
 	float32 speed = 1.0f;
 	Vec3 vel = Vec3::zero;
-	if (input->keyboard[KM_KEY_I].isDown) {
+	if (IsKeyPressed(input, KM_KEY_I)) {
 		vel += Vec3::unitY * speed;
 	}
-	if (input->keyboard[KM_KEY_K].isDown) {
+	if (IsKeyPressed(input, KM_KEY_K)) {
 		vel -= Vec3::unitY * speed;
 	}
-    if (input->keyboard[KM_KEY_J].isDown) {
+    if (IsKeyPressed(input, KM_KEY_J)) {
         vel -= Vec3::unitX * speed;
     }
-    if (input->keyboard[KM_KEY_L].isDown) {
+    if (IsKeyPressed(input, KM_KEY_L)) {
         vel += Vec3::unitX * speed;
     }
 	gameState->debugCamPos += vel * deltaTime;
-    if (input->keyboard[KM_KEY_O].isDown) {
+    if (IsKeyPressed(input, KM_KEY_O)) {
         gameState->debugZoom += speed * deltaTime;
     }
-    if (input->keyboard[KM_KEY_U].isDown) {
+    if (IsKeyPressed(input, KM_KEY_U)) {
         gameState->debugZoom -= speed * deltaTime;
     }
 
@@ -987,16 +992,58 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
     // -------------------------- End Rendering --------------------------
 
-    char fpsStr[128];
-    sprintf(fpsStr, "FPS: %f", 1.0f / deltaTime);
-    Vec2Int fpsPos = {
-        screenInfo.size.x - 10,
-        screenInfo.size.y - 10,
-    };
-    DrawText(gameState->textGL, gameState->fontFace, screenInfo,
-        fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one, memory->transient);
+    {
+        char fpsStr[128];
+        sprintf(fpsStr, "FPS: %f", 1.0f / deltaTime);
+        Vec2Int fpsPos = {
+            screenInfo.size.x - 10,
+            screenInfo.size.y - 10,
+        };
+        DrawText(gameState->textGL, gameState->fontFaceMedium, screenInfo,
+            fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one, memory->transient);
+    }
 
     OutputAudio(audio, gameState, input, memory->transient);
+
+#if GAME_INTERNAL
+    if (gameState->audioState.debugView) {
+        char strBuf[128];
+        Vec2Int audioInfoStride = {
+            0,
+            -((int)gameState->fontFaceSmall.height + 6)
+        };
+        Vec2Int audioInfoPos = {
+            10,
+            screenInfo.size.y - 10,
+        };
+        DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
+            "Audio Engine", audioInfoPos, Vec2 { 0.0f, 1.0f },
+            circleSelectedColor_,
+            memory->transient
+        );
+        sprintf(strBuf, "Sample Rate: %d", audio->sampleRate);
+        audioInfoPos += audioInfoStride;
+        DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
+            strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
+            Vec4::one,
+            memory->transient
+        );
+        sprintf(strBuf, "Channels: %d", audio->channels);
+        audioInfoPos += audioInfoStride;
+        DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
+            strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
+            Vec4::one,
+            memory->transient
+        );
+        sprintf(strBuf, "tWaveTable: %f", gameState->audioState.waveTable.tWaveTable);
+        audioInfoPos += audioInfoStride;
+        DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
+            strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
+            Vec4::one,
+            memory->transient
+        );
+    }
+#endif
 
 #if GAME_SLOW
     // Catch-all site for OpenGL errors

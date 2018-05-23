@@ -6,7 +6,7 @@
 #define WAVE_BUFFER_LENGTH_SECONDS 1
 #define WAVE_BUFFER_MAX_SAMPLES (AUDIO_MAX_SAMPLERATE \
     * WAVE_BUFFER_LENGTH_SECONDS)
-#define WAVETABLE_MAX_WAVES 4
+#define WAVETABLE_MAX_WAVES 16
 
 struct Sound
 {
@@ -24,14 +24,21 @@ struct Wave
 
 struct WaveTable
 {
-    float32 freq;
-    float32 amp;
-
     float32 tWave;
+    float32 waveFreq;
+    float32 waveAmp;
+
     float32 tWaveTable;
     int bufferLengthSamples;
     int numWaves;
     Wave waves[WAVETABLE_MAX_WAVES];
+
+    float32 tOsc1;
+    float32 osc1Freq;
+    float32 osc1Amp;
+    float32 tOsc2;
+    float32 osc2Freq;
+    float32 osc2Amp;
 };
 
 struct AudioState
@@ -41,9 +48,6 @@ struct AudioState
     Sound soundDeath;
 
     Sound soundNotes[12];
-
-    float32 tWave;
-    float32 toneWave;
 
     WaveTable waveTable;
 

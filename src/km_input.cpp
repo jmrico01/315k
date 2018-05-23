@@ -1,6 +1,10 @@
 #include "km_input.h"
 #include "main_platform.h"
 
+inline bool32 IsKeyPressed(const GameInput* input, KeyInputCode keyCode)
+{
+    return input->keyboard[keyCode].isDown;
+}
 inline bool32 WasKeyPressed(const GameInput* input, KeyInputCode keyCode)
 {
     return input->keyboard[keyCode].isDown

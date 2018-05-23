@@ -75,7 +75,8 @@ struct GameState
     CircleGL circleGL;
 
     FT_Library ftLibrary;
-    FontFace fontFace;
+    FontFace fontFaceSmall;
+    FontFace fontFaceMedium;
 
     GLuint framebuffers[NUM_FRAMEBUFFERS];
     GLuint colorBuffers[NUM_FRAMEBUFFERS];

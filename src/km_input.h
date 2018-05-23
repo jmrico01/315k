@@ -69,6 +69,7 @@ enum KeyInputCode
 };
 
 struct GameInput;
+inline bool32 IsKeyPressed(const GameInput* input, KeyInputCode keyCode);
 inline bool32 WasKeyPressed(const GameInput* input, KeyInputCode keyCode);
 inline bool32 WasKeyReleased(const GameInput* input, KeyInputCode keyCode);
 

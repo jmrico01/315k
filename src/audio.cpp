@@ -21,18 +21,6 @@ internal float32 CalcWaveLoudness(const GameAudio* audio,
     return loudness;
 }
 
-internal float32 LinearSample(const GameAudio* audio,
-    const float32* buffer, int bufferLengthSamples,
-    int channel, float32 t)
-{
-    float32 iFloat = t * bufferLengthSamples;
-    int i1 = (int)floorf(iFloat);
-    int i2 = (int)ceilf(iFloat);
-    float32 val1 = buffer[i1 * audio->channels + channel];
-    float32 val2 = buffer[i2 * audio->channels + channel];
-    return Lerp(val1, val2, iFloat - i1);
-}
-
 internal void DrawAudioBuffer(
     const GameState* gameState, const GameAudio* audio,
     const float32* buffer, int bufferSizeSamples, int channel,
@@ -187,6 +175,14 @@ internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
         waveTable->waves[3].buffer[ind2] = 0.3f * SquareWave(t);
     }
 
+    waveTable->tOsc1 = 0.0f;
+    waveTable->osc1Freq = 1.5f;
+    waveTable->osc1Amp = 0.4f;
+
+    waveTable->tOsc2 = 0.0f;
+    waveTable->osc2Freq = 2.5f;
+    waveTable->osc2Amp = 0.01f;
+
     // Very rough normalization
     // Meh, nevermind. Need a good loudness function for this.
     /*float32 loudness[WAVETABLE_MAX_WAVES];
@@ -213,9 +209,15 @@ internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
 internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     WaveTable* waveTable)
 {
-    waveTable->tWave += waveTable->freq
+    waveTable->tWave += waveTable->waveFreq
         * audio->sampleDelta / audio->sampleRate;
     waveTable->tWave = fmod(waveTable->tWave, 1.0f);
+    waveTable->tOsc1 += waveTable->osc1Freq
+        * audio->sampleDelta / audio->sampleRate;
+    waveTable->tOsc1 = fmod(waveTable->tOsc1, 1.0f);
+    waveTable->tOsc2 += waveTable->osc2Freq
+        * audio->sampleDelta / audio->sampleRate;
+    waveTable->tOsc2 = fmod(waveTable->tOsc2, 1.0f);
 
     float32 freqBase = 261.0f;
     float32 freqMin = freqBase * 1.0f;
@@ -223,8 +225,8 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     float32 freqPixelRange = 1200.0f;
     float32 freqPixelOffset = 600.0f;
     float32 freqT = (input->mousePos.x - freqPixelOffset) / freqPixelRange;
-    waveTable->freq = Lerp(freqMin, freqMax, freqT);
-    waveTable->amp = 0.2f;
+    waveTable->waveFreq = Lerp(freqMin, freqMax, freqT);
+    waveTable->waveAmp = 0.2f;
 
     float32 tWaveTablePixRange = 600.0f;
     float32 tWaveTablePixOffset = 200.0f;
@@ -232,6 +234,29 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
         / tWaveTablePixRange;
     waveTable->tWaveTable = Lerp(0.0f, 1.0f, tWaveTableT);
     waveTable->tWaveTable = ClampFloat32(waveTable->tWaveTable, 0.0f, 1.0f);
+
+    if (IsKeyPressed(input, KM_KEY_Y)) {
+        waveTable->osc1Freq += 0.01f;
+    }
+    if (IsKeyPressed(input, KM_KEY_H)) {
+        waveTable->osc1Freq -= 0.01f;
+    }
+    if (IsKeyPressed(input, KM_KEY_T)) {
+        waveTable->osc2Freq += 0.01f;
+    }
+    if (IsKeyPressed(input, KM_KEY_G)) {
+        waveTable->osc2Freq -= 0.01f;
+    }
+    float32 sampleOsc1 = waveTable->osc1Amp * LinearSample(audio,
+        waveTable->waves[0].buffer, waveTable->bufferLengthSamples,
+        0, waveTable->tOsc1);
+    float32 sampleOsc2 = waveTable->osc2Amp * LinearSample(audio,
+        waveTable->waves[0].buffer, waveTable->bufferLengthSamples,
+        0, waveTable->tOsc2);
+    waveTable->tWaveTable = ClampFloat32(
+        waveTable->tWaveTable + sampleOsc1,
+        0.0f, 1.0f);
+    waveTable->waveFreq += waveTable->waveFreq * sampleOsc2;
 }
 
 internal void WaveTableWriteSamples(WaveTable* waveTable,
@@ -246,20 +271,27 @@ internal void WaveTableWriteSamples(WaveTable* waveTable,
     const float32* wave1Buffer = waveTable->waves[wave1].buffer;
     const float32* wave2Buffer = waveTable->waves[wave2].buffer;
     for (int i = 0; i < audio->fillLength; i++) {
-        float32 t = fmod(waveTable->tWave
-            + waveTable->freq * i / audio->sampleRate, 1.0f);
-        float32 sample1Wave1 = waveTable->amp * LinearSample(audio,
-            wave1Buffer, waveBufferLength, 0, t);
-        float32 sample1Wave2 = waveTable->amp * LinearSample(audio,
-            wave2Buffer, waveBufferLength, 0, t);
-        float32 sample2Wave1 = waveTable->amp * LinearSample(audio,
-            wave1Buffer, waveBufferLength, 1, t);
-        float32 sample2Wave2 = waveTable->amp * LinearSample(audio,
-            wave2Buffer, waveBufferLength, 1, t);
+        // TODO oh boy, doing this here would be very hard...
+        /*float32 tOsc1 = fmod(waveTable->tOsc1
+            + waveTable->osc1Freq * i / audio->sampleRate, 1.0f);
+        float32 sampleOsc1 = LinearSample(audio,
+            waveTable->waves[0].buffer, waveBufferLength, 0, tOsc1);
+        waveTable->waveFreq *= sampleOsc1;*/
 
-        audio->buffer[i * audio->channels] += Lerp(
+        float32 tWave = fmod(waveTable->tWave
+            + waveTable->waveFreq * i / audio->sampleRate, 1.0f);
+        float32 sample1Wave1 = LinearSample(audio,
+            wave1Buffer, waveBufferLength, 0, tWave);
+        float32 sample1Wave2 = LinearSample(audio,
+            wave2Buffer, waveBufferLength, 0, tWave);
+        float32 sample2Wave1 = LinearSample(audio,
+            wave1Buffer, waveBufferLength, 1, tWave);
+        float32 sample2Wave2 = LinearSample(audio,
+            wave2Buffer, waveBufferLength, 1, tWave);
+
+        audio->buffer[i * audio->channels] += waveTable->waveAmp * Lerp(
             sample1Wave1, sample1Wave2, tMix);
-        audio->buffer[i * audio->channels + 1] += Lerp(
+        audio->buffer[i * audio->channels + 1] += waveTable->waveAmp * Lerp(
             sample2Wave1, sample2Wave2, tMix);
     }
 }
@@ -306,8 +338,6 @@ void InitAudioState(const ThreadContext* thread,
             DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     }
 
-    audioState->tWave = 0.0f;
-
     WaveTableInit(audio, &audioState->waveTable);
 
 #if GAME_INTERNAL
@@ -320,18 +350,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 {
     DEBUG_ASSERT(audio->sampleDelta >= 0);
     AudioState* audioState = &gameState->audioState;
-    // Advance tWave based on previous toneWave frequency
-    audioState->tWave += 2.0f * PI_F * audioState->toneWave
-        * audio->sampleDelta / audio->sampleRate;
-
-    float32 ampWave = 0.15f;
-    float32 toneWaveBase = 261.0f;
-    float32 toneMin = toneWaveBase * 1.0f;
-    float32 toneMax = toneWaveBase * 2.0f;
-    float32 tonePixelRange = 600.0f;
-    float32 tonePixelOffset = 600.0f;
-    float32 toneT = (input->mousePos.x - tonePixelOffset) / tonePixelRange;
-    audioState->toneWave = Lerp(toneMin, toneMax, toneT);
 
     SoundUpdate(audio, &audioState->soundKick);
     SoundUpdate(audio, &audioState->soundSnare);
@@ -351,30 +369,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         return;
     }
 
-    /*for (int i = 0; i < audio->fillLength; i++) {
-        float32 tWaveOff = 2.0f * PI_F * audioState->toneWave
-            * i / audio->sampleRate;
-
-        float32 waveSample = 0.0f;
-        if (input->keyboard[KM_KEY_Z].isDown) {
-            waveSample += ampWave * sinf(audioState->tWave + tWaveOff);
-        }
-        if (input->keyboard[KM_KEY_X].isDown) {
-            float32 amp = ampWave * 0.9f;
-            waveSample += amp * TriangleWave(audioState->tWave + tWaveOff);
-        }
-        if (input->keyboard[KM_KEY_C].isDown) {
-            float32 amp = ampWave * 0.3f;
-            waveSample += amp * SawtoothWave(audioState->tWave + tWaveOff);
-        }
-        if (input->keyboard[KM_KEY_V].isDown) {
-            float32 amp = ampWave * 0.3f;
-            waveSample += amp * SquareWave(audioState->tWave + tWaveOff);
-        }
-        audio->buffer[i * audio->channels]      += waveSample;
-        audio->buffer[i * audio->channels + 1]  += waveSample;
-    }*/
-
     SoundWriteSamples(&audioState->soundKick, 1.0f, audio);
     SoundWriteSamples(&audioState->soundSnare, 0.7f, audio);
     SoundWriteSamples(&audioState->soundDeath, 0.5f, audio);
@@ -382,7 +376,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
         SoundWriteSamples(&audioState->soundNotes[i], 0.2f, audio);
     }
 
-    if (input->keyboard[KM_KEY_Z].isDown) {
+    if (IsKeyPressed(input, KM_KEY_Z)) {
         WaveTableWriteSamples(&audioState->waveTable, audio);
     }
 
@@ -406,45 +400,25 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
             transient
         );
 
-        DrawAudioBuffer(gameState, audio,
-            audioState->waveTable.waves[0].buffer,
-            audioState->waveTable.bufferLengthSamples,
-            0,
-            nullptr, nullptr, 0,
-            Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
+        /*Vec4 waveColors[WAVETABLE_MAX_WAVES] = {
             Vec4 { 1.0f, 0.5f, 0.5f, 1.0f },
-            transient
-        );
-
-        DrawAudioBuffer(gameState, audio,
-            audioState->waveTable.waves[1].buffer,
-            audioState->waveTable.bufferLengthSamples,
-            0,
-            nullptr, nullptr, 0,
-            Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
             Vec4 { 0.5f, 1.0f, 0.5f, 1.0f },
-            transient
-        );
-
-        DrawAudioBuffer(gameState, audio,
-            audioState->waveTable.waves[2].buffer,
-            audioState->waveTable.bufferLengthSamples,
-            0,
-            nullptr, nullptr, 0,
-            Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
             Vec4 { 0.5f, 0.5f, 1.0f, 1.0f },
-            transient
-        );
-
-        DrawAudioBuffer(gameState, audio,
-            audioState->waveTable.waves[3].buffer,
-            audioState->waveTable.bufferLengthSamples,
-            0,
-            nullptr, nullptr, 0,
-            Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
+            Vec4 { 0.8f, 0.8f, 0.5f, 1.0f },
+            Vec4 { 0.8f, 0.5f, 0.8f, 1.0f },
             Vec4 { 0.5f, 0.8f, 0.8f, 1.0f },
-            transient
-        );
+        };
+        for (int i = 0; i < audioState->waveTable.numWaves; i++) {    
+            DrawAudioBuffer(gameState, audio,
+                audioState->waveTable.waves[i].buffer,
+                audioState->waveTable.bufferLengthSamples,
+                0,
+                nullptr, nullptr, 0,
+                Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
+                waveColors[i],
+                transient
+            );
+        }*/
     }
 #endif
 }
