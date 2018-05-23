@@ -92,15 +92,11 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     void* data = (void*)(header + 1);
     int bytesPerSample = format->bitsPerSample / 8;
     int lengthSamples = header->dataSize / bytesPerSample / format->channels;
-    if (lengthSamples > AUDIO_BUFFER_MAX_SAMPLES) {
+    if (lengthSamples > AUDIO_MAX_SAMPLES) {
         DEBUG_PRINT("WAV file too long: %s\n", filePath);
         return false;
     }
     MemCopy(audioBuffer->buffer, data, header->dataSize);
-    /*for (int i = 0; i < samples; i++) {
-        audioBuffer->buffer[i * 2] = data[i * 2];
-        audioBuffer->buffer[i * 2 + 1] = data[i * 2 + 1];
-    }*/
 
     audioBuffer->sampleRate = format->sampleRate;
     audioBuffer->channels = format->channels;
