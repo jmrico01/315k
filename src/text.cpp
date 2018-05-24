@@ -213,9 +213,6 @@ FontFace LoadFontFace(const ThreadContext* thread,
     if (atlasWidth == 0 || atlasHeight == 0) {
         DEBUG_PANIC("Atlas not big enough\n");
     }
-    DEBUG_PRINT("atlasSize: %u x %u\n", atlasWidth, atlasHeight);
-    DEBUG_PRINT("sizeof AtlasData: %d\n", sizeof(AtlasData));
-    DEBUG_PRINT("transient size: %d\n", (int)transient.size);
 
     // Allocate and initialize atlas texture data.
     DEBUG_ASSERT(transient.size >= sizeof(AtlasData));
