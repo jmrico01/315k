@@ -666,10 +666,16 @@ int main(int argc, const char* argv[])
     	* AUDIO_SAMPLERATE / 1000;
     MacOSInitCoreAudio(&macAudio, AUDIO_SAMPLERATE,
     	AUDIO_CHANNELS, bufferSizeSamples);
-    macAudio.minLatency = AUDIO_SAMPLERATE / 30 / 2;
-    macAudio.maxLatency = AUDIO_SAMPLERATE / 8;
-    DEBUG_PRINT("latency: %d - %d\n", macAudio.minLatency,
-        macAudio.maxLatency);
+    macAudio.latency = AUDIO_SAMPLERATE / 30 * 4; // TODO use refresh rate
+
+    GameAudio gameAudio = {};
+    gameAudio.sampleRate = macAudio.sampleRate;
+    gameAudio.channels = macAudio.channels;
+    gameAudio.bufferSizeSamples = macAudio.bufferSizeSamples;
+    int bufferSizeBytes = gameAudio.bufferSizeSamples
+        * gameAudio.channels * sizeof(float32);
+    gameAudio.buffer = (float32*)mmap(0, (size_t)bufferSizeBytes,
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     DEBUG_PRINT("Initialized MacOS CoreAudio\n");
 
 #if GAME_INTERNAL
@@ -680,18 +686,17 @@ int main(int argc, const char* argv[])
     
     GameMemory gameMemory = {};
     gameMemory.DEBUGShouldInitGlobalFuncs = true;
-	gameMemory.permanentStorageSize = MEGABYTES(64);
-	gameMemory.transientStorageSize = GIGABYTES(1);
+	gameMemory.permanent.size = MEGABYTES(64);
+	gameMemory.transient.size = GIGABYTES(1);
 
 	// TODO Look into using large virtual pages for this
     // potentially big allocation
-	uint64 totalSize = gameMemory.permanentStorageSize
-        + gameMemory.transientStorageSize;
+	uint64 totalSize = gameMemory.permanent.size + gameMemory.transient.size;
 	// TODO check allocation fail?
-	gameMemory.permanentStorage = mmap(baseAddress, (size_t)totalSize,
+	gameMemory.permanent.memory = mmap(baseAddress, (size_t)totalSize,
 		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	gameMemory.transientStorage = ((uint8*)gameMemory.permanentStorage +
-		gameMemory.permanentStorageSize);
+	gameMemory.transient.memory = ((uint8*)gameMemory.permanent.memory +
+		gameMemory.permanent.size);
 	DEBUG_PRINT("Initialized game memory\n");
 
 	GameInput input[2];
@@ -710,7 +715,6 @@ int main(int argc, const char* argv[])
 
 	uint64 startTime = mach_absolute_time();
 	mach_timebase_info(&machTimebaseInfo_);
-	int audioReadCursorPrev = macAudio.readCursor;
 	running_ = true;
 
 	while (running_) {
@@ -752,27 +756,6 @@ int main(int argc, const char* argv[])
 			newInput->mouseButtons[buttonIndex].transitions = transitions;
 		}
 
-		// Old from Jeff's code
-		/*OSXProcessFrameAndRunGameLogic(&GameData, ContentViewFrame,
-										MouseInWindowFlag, mousePosInView,
-										MouseButtonMask);*/
-
-        GameAudio gameAudio = {};
-        gameAudio.sampleRate = macAudio.sampleRate;
-        gameAudio.channels = macAudio.channels;
-        gameAudio.bufferSizeSamples = macAudio.bufferSizeSamples;
-        gameAudio.buffer = macAudio.buffer;
-        gameAudio.fillStart = (macAudio.readCursor + macAudio.minLatency)
-            % macAudio.bufferSizeSamples;
-        gameAudio.fillLength = macAudio.maxLatency * 2 - macAudio.minLatency;
-        gameAudio.fillStartDelta = macAudio.readCursor - audioReadCursorPrev;
-        if (macAudio.readCursor < audioReadCursorPrev) {
-            gameAudio.fillStartDelta =
-                macAudio.bufferSizeSamples - audioReadCursorPrev
-                + macAudio.readCursor;
-        }
-        audioReadCursorPrev = macAudio.readCursor;
-
 		uint64 endTime = mach_absolute_time();
 		uint64 elapsed = endTime - startTime;
 		startTime = endTime;
@@ -789,15 +772,34 @@ int main(int argc, const char* argv[])
                 screenInfo.size.x = (int)contentViewFrame.size.width;
                 screenInfo.size.y = (int)contentViewFrame.size.height;
             }
+            gameAudio.fillLength = macAudio.latency;
 
 			gameCode.gameUpdateAndRender(&thread, &platformFuncs,
 				newInput, screenInfo, deltaTime,
 				&gameMemory, &gameAudio
 			);
-			macAudio.writeCursor = (gameAudio.fillStart + gameAudio.fillLength)
-                % macAudio.bufferSizeSamples;
+			/*macAudio.writeCursor = (gameAudio.fillStart + gameAudio.fillLength)
+                % macAudio.bufferSizeSamples;*/
             screenInfo.changed = false;
 		}
+        else {
+            gameAudio.fillLength = 0;
+        }
+
+        int samplesQueued = macAudio.writeCursor - macAudio.readCursor;
+        if (macAudio.writeCursor < macAudio.readCursor) {
+            samplesQueued = macAudio.bufferSizeSamples - macAudio.readCursor
+                + macAudio.writeCursor;
+        }
+        if (samplesQueued < macAudio.latency) {
+            int samplesToWrite = macAudio.latency - samplesQueued;
+            if (samplesToWrite > gameAudio.fillLength) {
+                samplesToWrite = gameAudio.fillLength;
+            }
+
+            MacOSWriteSamples(&macAudio, &gameAudio, samplesToWrite);
+            gameAudio.sampleDelta = samplesToWrite;
+        }
 
 		// flushes and forces vsync
 		[glContext_ flushBuffer];

@@ -3,6 +3,7 @@
 #include "main.h"
 #include "km_debug.h"
 
+#if 0
 internal float32 CalcWaveLoudness(const GameAudio* audio,
     const float32* buffer, int bufferLengthSamples)
 {
@@ -20,6 +21,7 @@ internal float32 CalcWaveLoudness(const GameAudio* audio,
 
     return loudness;
 }
+#endif
 
 internal void DrawAudioBuffer(
     const GameState* gameState, const GameAudio* audio,

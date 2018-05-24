@@ -2,6 +2,9 @@
 
 #include <AudioUnit/AudioUnit.h>
 
+#include "km_defines.h"
+#include "main_platform.h"
+
 #define AUDIO_SAMPLERATE 48000
 #define AUDIO_CHANNELS 2
 #define AUDIO_BUFFER_SIZE_MILLISECONDS 1000
@@ -19,10 +22,12 @@ struct MacOSAudio
 	int readCursor;
 	int writeCursor;
 
-	int minLatency;
-	int maxLatency;
+	int latency;
 };
 
 void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
     int sampleRate, int channels, int bufferSizeSamples);
 void MacOSStopCoreAudio(MacOSAudio* macOSAudio);
+
+void MacOSWriteSamples(MacOSAudio* macAudio,
+	const GameAudio* gameAudio, int numSamples);

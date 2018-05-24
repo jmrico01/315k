@@ -13,7 +13,7 @@ OSStatus MacOSAudioUnitCallback(void* inRefCon,
 	MacOSAudio* audio = ((MacOSAudio*)inRefCon);
 
 	int sampleCount = inNumberFrames;
-	// TODO handle write cursor before read cursor wrap
+	// TODO handle write cursor before read cursor wrap more efficiently
 	int newSamples = audio->writeCursor - audio->readCursor;
 	if (audio->writeCursor < audio->readCursor) {
 		newSamples = audio->bufferSizeSamples - audio->readCursor
@@ -72,7 +72,7 @@ void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
 	macOSAudio->audioDescriptor.mFormatID         = kAudioFormatLinearPCM;
 	macOSAudio->audioDescriptor.mFormatFlags      =
 		kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsNonInterleaved
-		| kAudioFormatFlagIsPacked;
+		| kAudioFormatFlagIsPacked; // TODO request float format
 	macOSAudio->audioDescriptor.mFramesPerPacket  = 1;
 	macOSAudio->audioDescriptor.mChannelsPerFrame = channels; // Stereo
 	macOSAudio->audioDescriptor.mBitsPerChannel   = sizeof(int16) * 8;
@@ -125,4 +125,19 @@ void MacOSStopCoreAudio(MacOSAudio* macOSAudio)
 	AudioOutputUnitStop(macOSAudio->audioUnit);
 	AudioUnitUninitialize(macOSAudio->audioUnit);
 	AudioComponentInstanceDispose(macOSAudio->audioUnit);
+}
+
+void MacOSWriteSamples(MacOSAudio* macAudio,
+	const GameAudio* gameAudio, int numSamples)
+{
+	for (int i = 0; i < numSamples; i++) {
+		int ind = (macAudio->writeCursor + i) % macAudio->bufferSizeSamples;
+		macAudio->buffer[ind * macAudio->channels] = (int16)(INT16_MAXVAL *
+			gameAudio->buffer[i * gameAudio->channels]);
+		macAudio->buffer[ind * macAudio->channels + 1] = (int16)(INT16_MAXVAL *
+			gameAudio->buffer[i * gameAudio->channels + 1]);
+	}
+
+	macAudio->writeCursor = (macAudio->writeCursor + numSamples)
+		% macAudio->bufferSizeSamples;
 }
