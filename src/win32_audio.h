@@ -6,8 +6,6 @@
 #include "km_defines.h"
 #include "main_platform.h"
 
-#define AUDIO_DEFAULT_SAMPLERATE 48000
-#define AUDIO_DEFAULT_CHANNELS 2
 #define AUDIO_DEFAULT_BUFFER_SIZE_MILLISECONDS 1000
 
 enum AudioFormat
@@ -32,8 +30,7 @@ struct Win32Audio
 };
 
 
-bool32 Win32InitAudio(Win32Audio* winAudio,
-    int sampleRate, int channels, int bufferSizeSamples);
+bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds);
 void Win32StopAudio(Win32Audio* winAudio);
 
 void Win32WriteAudioSamples(const Win32Audio* winAudio,

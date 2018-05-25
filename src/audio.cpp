@@ -399,6 +399,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
     const GameInput* input, MemoryBlock transient)
 {
     DEBUG_ASSERT(audio->sampleDelta >= 0);
+    DEBUG_ASSERT(audio->channels == 2); // Stereo support only
     AudioState* audioState = &gameState->audioState;
 
     SoundUpdate(audio, &audioState->soundKick);

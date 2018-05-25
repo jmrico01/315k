@@ -942,17 +942,15 @@ int CALLBACK WinMain(
 
     // Initialize audio
     Win32Audio winAudio = {};
-    uint32 bufferSizeSamples = AUDIO_DEFAULT_SAMPLERATE
-        * AUDIO_DEFAULT_BUFFER_SIZE_MILLISECONDS / 1000;
-    if (!Win32InitAudio(&winAudio,
-    AUDIO_DEFAULT_SAMPLERATE, AUDIO_DEFAULT_CHANNELS, bufferSizeSamples)) {
+    if (!Win32InitAudio(&winAudio, AUDIO_DEFAULT_BUFFER_SIZE_MILLISECONDS)) {
         return 1;
     }
     winAudio.latency = winAudio.sampleRate / monitorRefreshHz * 2;
 
     GameAudio gameAudio = {};
     gameAudio.sampleRate = winAudio.sampleRate;
-    gameAudio.channels = winAudio.channels;
+    //gameAudio.channels = winAudio.channels;
+    gameAudio.channels = 2;
     gameAudio.bufferSizeSamples = winAudio.bufferSizeSamples;
     int bufferSizeBytes = gameAudio.bufferSizeSamples
         * gameAudio.channels * sizeof(float32);
@@ -1241,8 +1239,7 @@ int CALLBACK WinMain(
                     samplesToWrite = gameAudio.fillLength;
                 }
 
-                Win32WriteAudioSamples(&winAudio, &gameAudio,
-                    samplesToWrite);
+                Win32WriteAudioSamples(&winAudio, &gameAudio, samplesToWrite);
                 gameAudio.sampleDelta = samplesToWrite;
             }
         }
