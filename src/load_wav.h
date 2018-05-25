@@ -18,6 +18,7 @@ struct AudioBuffer
 
 bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     const GameAudio* gameAudio, AudioBuffer* audioBuffer,
+    MemoryBlock* transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 

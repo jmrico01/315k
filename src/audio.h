@@ -77,6 +77,7 @@ struct AudioState
 struct GameState;
 void InitAudioState(const ThreadContext* thread,
     AudioState* audioState, GameAudio* audio,
+    MemoryBlock* transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 void OutputAudio(GameAudio* audio, GameState* gameState,

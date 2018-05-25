@@ -104,6 +104,7 @@ internal float32 TriangleWave(float32 t)
 internal void SoundInit(const ThreadContext* thread,
     const GameAudio* audio, Sound* sound,
     const char* filePath,
+    MemoryBlock* transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -113,6 +114,7 @@ internal void SoundInit(const ThreadContext* thread,
 
     LoadWAV(thread, filePath,
         audio, &sound->buffer,
+        transient,
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
 }
 
@@ -341,6 +343,7 @@ internal void WaveTableWriteSamples(WaveTable* waveTable,
 
 void InitAudioState(const ThreadContext* thread,
     AudioState* audioState, GameAudio* audio,
+    MemoryBlock* transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -362,14 +365,17 @@ void InitAudioState(const ThreadContext* thread,
     SoundInit(thread, audio,
         &audioState->soundKick,
         kickSoundFiles[0],
+        transient,
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     SoundInit(thread, audio,
         &audioState->soundSnare,
         snareSoundFiles[0],
+        transient,
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     SoundInit(thread, audio,
         &audioState->soundDeath,
         deathSoundFiles[0],
+        transient,
         DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
 
     for (int i = 0; i < 12; i++) {
@@ -378,6 +384,7 @@ void InitAudioState(const ThreadContext* thread,
         SoundInit(thread, audio,
             &audioState->soundNotes[i],
             buf,
+            transient,
             DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
     }
 
@@ -449,7 +456,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
             Vec4 { 0.8f, 0.5f, 0.8f, 1.0f },
             Vec4 { 0.5f, 0.8f, 0.8f, 1.0f },
         };
-        for (int i = 0; i < audioState->waveTable.numWaves; i++) {    
+        for (int i = 0; i < audioState->waveTable.numWaves; i++) {
             DrawAudioBuffer(gameState, audio,
                 audioState->waveTable.waves[i].buffer,
                 audioState->waveTable.bufferLengthSamples,
@@ -460,6 +467,16 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
                 transient
             );
         }*/
+        DrawAudioBuffer(gameState, audio,
+            audioState->soundKick.buffer.buffer,
+            audioState->soundKick.buffer.bufferSizeSamples,
+            0,
+            nullptr, nullptr, 0,
+            Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
+            Vec4 { 0.5f, 0.7f, 0.8f, 1.0f },
+            transient
+        );
+        DEBUG_PRINT("%d\n", audioState->soundKick.buffer.bufferSizeSamples);
     }
 #endif
 }

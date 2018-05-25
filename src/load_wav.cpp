@@ -29,7 +29,8 @@ struct WaveFormat
 };
 
 bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
-    const GameAudio* gameAudio, AudioBuffer* audioBuffer,
+    const GameAudio* audio, AudioBuffer* audioBuffer,
+    MemoryBlock* transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -62,16 +63,16 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
             format->audioFormat, filePath);
         return false;
     }
-    if (format->sampleRate != gameAudio->sampleRate) {
+    /*if (format->sampleRate != audio->sampleRate) {
         DEBUG_PRINT("WAV file sample rate mismatch: %d vs %d, for %s\n",
-            format->sampleRate, gameAudio->sampleRate, filePath);
+            format->sampleRate, audio->sampleRate, filePath);
         return false;
     }
-    if (format->channels != gameAudio->channels) {
+    if (format->channels != audio->channels) {
         DEBUG_PRINT("WAV file channels mismatch: %d vs %d, for %s\n",
-            format->channels, gameAudio->channels, filePath);
+            format->channels, audio->channels, filePath);
         return false;
-    }
+    }*/
 
     int bytesRead = sizeof(ChunkRIFF) + sizeof(ChunkHeader)
         + fmtHeader->dataSize;
@@ -96,14 +97,38 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
         DEBUG_PRINT("WAV file too long: %s\n", filePath);
         return false;
     }
-    MemCopy(audioBuffer->buffer, data, header->dataSize);
 
-    audioBuffer->sampleRate = format->sampleRate;
-    audioBuffer->channels = format->channels;
-    audioBuffer->bufferSizeSamples = lengthSamples;
+    if (format->sampleRate != audio->sampleRate) {
+        // TODO fix
+        DEBUG_ASSERT(sizeof(AudioBuffer) <= transient->size);
+        AudioBuffer* origBuffer = (AudioBuffer*)transient->memory;
+        MemCopy(origBuffer->buffer, data, header->dataSize);
+        int targetLengthSamples = (int)((float32)lengthSamples /
+            format->sampleRate * audio->sampleRate);
+        DEBUG_PRINT("samples: %d to %d\n", lengthSamples, targetLengthSamples);
+        for (int i = 0; i < targetLengthSamples; i++) {
+            float32 t = (float32)i / (targetLengthSamples - 1);
+            float32 sample1 = LinearSample(audio,
+                origBuffer->buffer, lengthSamples, 0, t);
+            float32 sample2 = LinearSample(audio,
+                origBuffer->buffer, lengthSamples, 1, t);
+            DEBUG_PRINT("%f -> (%f, %f)\n", t, sample1, sample2);
+            audioBuffer->buffer[i * audio->channels] = sample1;
+            audioBuffer->buffer[i * audio->channels + 1] = sample2;
+        }
+        MemCopy(audioBuffer->buffer, data, header->dataSize);
+        audioBuffer->bufferSizeSamples = targetLengthSamples;
+    }
+    else {
+        MemCopy(audioBuffer->buffer, data, header->dataSize);
+        audioBuffer->bufferSizeSamples = lengthSamples;
+    }
 
-    //DEBUG_PRINT("Loaded WAV file: %s\n", filePath);
-    //DEBUG_PRINT("Samples: %d\n", audioBuffer->bufferSizeSamples);
+    audioBuffer->sampleRate = audio->sampleRate;
+    audioBuffer->channels = audio->channels;
+
+    DEBUG_PRINT("Loaded WAV file: %s\n", filePath);
+    DEBUG_PRINT("Samples: %d\n", audioBuffer->bufferSizeSamples);
 
     DEBUGPlatformFreeFileMemory(thread, &wavFile);
 
