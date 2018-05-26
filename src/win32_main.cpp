@@ -1081,6 +1081,14 @@ int CALLBACK WinMain(
             }
         }
 
+        // MIDI input
+        if (!winAudio.midiInBusy) {
+            winAudio.midiInBusy = true;
+            newInput->midiIn = winAudio.midiIn;
+            winAudio.midiIn.numMessages = 0;
+            winAudio.midiInBusy = false;
+        }
+
         DWORD maxControllerCount = XUSER_MAX_COUNT;
         if (maxControllerCount > ARRAY_COUNT(newInput->controllers)) {
             maxControllerCount = ARRAY_COUNT(newInput->controllers);

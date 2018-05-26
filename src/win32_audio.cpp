@@ -9,6 +9,38 @@
 #define REFERENCE_TIMES_PER_MILLISECOND \
     (1000000 / REFERENCE_TIME_NANOSECONDS)
 
+void CALLBACK MidiInputCallback(
+    HMIDIIN hMidiIn, UINT wMsg,
+    DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
+{
+    Win32Audio* winAudio = (Win32Audio*)dwInstance;
+    while (winAudio->midiInBusy) {
+        Sleep(0); // TODO use better thread sync thingy
+    }
+    if (winAudio->midiIn.numMessages >= MIDI_IN_QUEUE_SIZE) {
+        return;
+    }
+    winAudio->midiInBusy = true;
+    switch (wMsg) {
+        case MIM_OPEN: {
+            DEBUG_PRINT("MIDI input opened\n");
+        } break;
+        case MIM_CLOSE: {
+            DEBUG_PRINT("MIDI input closed\n");
+        } break;
+        case MIM_DATA: {
+            //DEBUG_PRINT("MIDI input data message\n");
+            MidiMessage msg;
+            msg.status = (uint8)(dwParam1 & 0xff);
+            msg.dataByte1 = (uint8)((dwParam1 >> 8) & 0xff);
+            msg.dataByte2 = (uint8)((dwParam1 >> 16) & 0xff);
+            winAudio->midiIn.messages[winAudio->midiIn.numMessages] = msg;
+            winAudio->midiIn.numMessages++;
+        } break;
+    }
+    winAudio->midiInBusy = false;
+}
+
 bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds)
 {
     // TODO release/CoTaskMemFree on failure
@@ -159,6 +191,51 @@ bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds)
     if (FAILED(hr)) {
         DEBUG_PRINT("Failed to start audio client\n");
         return false;
+    }
+
+    // Setup MIDI input
+    UINT midiInDevs = midiInGetNumDevs();
+    if (midiInDevs > 0) {
+        int midiInDeviceID = 0;
+        MMRESULT res;
+        MIDIINCAPS midiInCaps;
+        res = midiInGetDevCaps(midiInDeviceID,
+            &midiInCaps, sizeof(MIDIINCAPS));
+        if (res != MMSYSERR_NOERROR) {
+            DEBUG_PRINT("Couldn't get MIDI input device caps\n");
+            return true;
+        }
+
+        DEBUG_PRINT("MIDI input device: %s\n", midiInCaps.szPname);
+        HMIDIIN midiInHandle;
+        res = midiInOpen(&midiInHandle, midiInDeviceID,
+            (DWORD_PTR)MidiInputCallback, (DWORD_PTR)winAudio,
+            CALLBACK_FUNCTION);
+        if (res != MMSYSERR_NOERROR) {
+            DEBUG_PRINT("Couldn't open MIDI input\n");
+            return true;
+        }
+
+        MIDIHDR midiHeader;
+        int midiBufferSizeBytes = MEGABYTES(1);
+        midiHeader.lpData = (LPSTR)VirtualAlloc(0, (size_t)midiBufferSizeBytes,
+            MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        midiHeader.dwBufferLength = midiBufferSizeBytes;
+        midiHeader.dwFlags = 0;
+        res = midiInPrepareHeader(midiInHandle, &midiHeader, sizeof(MIDIHDR));
+        if (res != MMSYSERR_NOERROR) {
+            DEBUG_PRINT("Couldn't prepare MIDI input header\n");
+            return true;
+        }
+
+        res = midiInStart(midiInHandle);
+        if (res != MMSYSERR_NOERROR) {
+            DEBUG_PRINT("Couldn't start MIDI input\n");
+            return true;
+        }
+    }
+    else {
+        DEBUG_PRINT("No MIDI input devices detected\n");
     }
 
     return true;

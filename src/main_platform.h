@@ -5,6 +5,8 @@
 #include "km_input.h"
 #include "opengl.h"
 
+#define MIDI_IN_QUEUE_SIZE 64
+
 struct ThreadContext
 {
 	int placeholder;
@@ -81,6 +83,19 @@ struct GameControllerInput
 	};
 };
 
+struct MidiMessage
+{
+    uint8 status;
+    uint8 dataByte1;
+    uint8 dataByte2;
+};
+
+struct MidiInput
+{
+    int numMessages;
+    MidiMessage messages[MIDI_IN_QUEUE_SIZE];
+};
+
 struct GameInput
 {
 	GameButtonState mouseButtons[5];
@@ -94,6 +109,8 @@ struct GameInput
     uint32 keyboardStringLen;
 
 	GameControllerInput controllers[4];
+
+    MidiInput midiIn;
 };
 
 struct GameAudio

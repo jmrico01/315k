@@ -24,7 +24,8 @@ struct Voice
     float32 t;
     float32 freq;
     float32 amp;
-    bool32 active;
+    int midiNote;
+    //bool32 active;
 };
 
 struct Wave
@@ -43,7 +44,7 @@ struct WaveTable
     int numWaves;
     Wave waves[WAVETABLE_MAX_WAVES];
 
-    int numVoices;
+    int activeVoices;
     Voice voices[WAVETABLE_MAX_VOICES];
 
     float32 tOsc1;

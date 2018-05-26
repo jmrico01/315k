@@ -3,6 +3,9 @@
 #include "main.h"
 #include "km_debug.h"
 
+#define MIDI_EVENT_NOTEON 0x9
+#define MIDI_EVENT_NOTEOFF 0x8
+
 #if 0
 internal float32 CalcWaveLoudness(const GameAudio* audio,
     const float32* buffer, int bufferLengthSamples)
@@ -159,7 +162,6 @@ internal void SoundWriteSamples(const Sound* sound, float32 amplitude,
 
 internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
 {
-    //waveTable->tWave = 0.0f;
     waveTable->tWaveTable = 0.0f;
 
     int waveBufferLength = WAVE_BUFFER_LENGTH_SECONDS * audio->sampleRate;
@@ -181,11 +183,11 @@ internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
         waveTable->waves[3].buffer[ind2] = 0.3f * SquareWave(t);
     }
 
-    waveTable->numVoices = 12;
-    for (int i = 0; i < waveTable->numVoices; i++) {
+    waveTable->activeVoices = 0;
+    /*for (int i = 0; i < WAVETABLE_MAX_VOICES; i++) {
         waveTable->voices[i].t = 0.0f;
-        waveTable->voices[i].active = false;
-    }
+        //waveTable->voices[i].active = false;
+    }*/
     //waveTable->voices[1].active = true;
 
     waveTable->tOsc1 = 0.0f;
@@ -222,10 +224,7 @@ internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
 internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     WaveTable* waveTable)
 {
-    /*waveTable->tWave += waveTable->waveFreq
-        * audio->sampleDelta / audio->sampleRate;
-    waveTable->tWave = fmod(waveTable->tWave, 1.0f);*/
-    for (int i = 0; i < waveTable->numVoices; i++) {
+    for (int i = 0; i < waveTable->activeVoices; i++) {
         waveTable->voices[i].t += waveTable->voices[i].freq
             * audio->sampleDelta / audio->sampleRate;
         waveTable->voices[i].t = fmod(waveTable->voices[i].t, 1.0f);
@@ -275,7 +274,51 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
         waveTable->tWaveTable + sampleOsc1,
         0.0f, 1.0f);
 
-    float32 tonicFreq = 261.0f;
+    for (int i = 0; i < input->midiIn.numMessages; i++) {
+        uint8 status = input->midiIn.messages[i].status;
+        uint8 dataByte1 = input->midiIn.messages[i].dataByte1;
+        uint8 dataByte2 = input->midiIn.messages[i].dataByte2;
+        uint8 event = status >> 4;
+        uint8 channel = status & 0xf;
+        switch (event) {
+            case MIDI_EVENT_NOTEON: {
+                int midiNote = (int)dataByte1;
+                if (waveTable->activeVoices >= WAVETABLE_MAX_VOICES) {
+                    continue;
+                }
+                float32 freq = 261.625565f *
+                    powf(2.0f, (midiNote - 60.0f) / 12.0f);
+                int ind = waveTable->activeVoices;
+                waveTable->voices[ind].t = 0.0f;
+                waveTable->voices[ind].freq = freq;
+                waveTable->voices[ind].amp = 0.2f;
+                waveTable->voices[ind].midiNote = midiNote;
+                waveTable->activeVoices++;
+            } break;
+            case MIDI_EVENT_NOTEOFF: {
+                int midiNote = (int)dataByte1;
+                if (waveTable->activeVoices <= 0) {
+                    continue;
+                }
+                int toRemove = -1;
+                for (int v = 0; v < waveTable->activeVoices; v++) {
+                    if (waveTable->voices[v].midiNote == midiNote) {
+                        toRemove = v;
+                        break;
+                    }
+                }
+                if (toRemove == -1) {
+                    continue;
+                }
+                for (int v = toRemove; v < waveTable->activeVoices - 1; v++) {
+                    waveTable->voices[v] = waveTable->voices[v + 1];
+                }
+                waveTable->activeVoices--;
+            } break;
+        }
+    }
+
+    /*float32 tonicFreq = 261.0f;
     float32 chromaticFreqs[12];
     float32 root12Two = powf(2.0f, 1.0f / 12.0f);
     for (int i = 0; i < 12; i++) {
@@ -286,8 +329,8 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     for (int i = 0; i < waveTable->numVoices; i++) {
         waveTable->voices[i].freq = chromaticFreqs[i];
         waveTable->voices[i].amp = 0.1f;
-    }
-    waveTable->voices[1].freq += waveTable->voices[1].freq * sampleOsc2;
+    }*/
+    /*waveTable->voices[1].freq += waveTable->voices[1].freq * sampleOsc2;
     waveTable->voices[3].freq += waveTable->voices[3].freq * sampleOsc1;
 
     waveTable->voices[0].active = IsKeyPressed(input, KM_KEY_Z);
@@ -296,7 +339,7 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     waveTable->voices[5].active = IsKeyPressed(input, KM_KEY_V);
     waveTable->voices[7].active = IsKeyPressed(input, KM_KEY_B);
     waveTable->voices[9].active = IsKeyPressed(input, KM_KEY_N);
-    waveTable->voices[11].active = IsKeyPressed(input, KM_KEY_M);
+    waveTable->voices[11].active = IsKeyPressed(input, KM_KEY_M);*/
 }
 
 internal void WaveTableWriteSamples(WaveTable* waveTable,
@@ -310,10 +353,7 @@ internal void WaveTableWriteSamples(WaveTable* waveTable,
     int waveBufferLength = waveTable->bufferLengthSamples;
     const float32* wave1Buffer = waveTable->waves[wave1].buffer;
     const float32* wave2Buffer = waveTable->waves[wave2].buffer;
-    for (int v = 0; v < waveTable->numVoices; v++) {
-        if (!waveTable->voices[v].active) {
-            continue;
-        }
+    for (int v = 0; v < waveTable->activeVoices; v++) {
         for (int i = 0; i < audio->fillLength; i++) {
             // TODO oh boy, doing this here would be very hard...
             /*float32 tOsc1 = fmod(waveTable->tOsc1
@@ -468,7 +508,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
                 transient
             );
         }*/
-        DrawAudioBuffer(gameState, audio,
+        /*DrawAudioBuffer(gameState, audio,
             audioState->soundKick.buffer.buffer,
             audioState->soundKick.buffer.bufferSizeSamples,
             0,
@@ -476,8 +516,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
             Vec3 { -1.0f, 0.0f, 0.0f }, Vec2 { 2.0f, 1.0f },
             Vec4 { 0.5f, 0.7f, 0.8f, 1.0f },
             transient
-        );
-        DEBUG_PRINT("%d\n", audioState->soundKick.buffer.bufferSizeSamples);
+        );*/
     }
 #endif
 }

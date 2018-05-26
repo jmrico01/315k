@@ -27,8 +27,10 @@ struct Win32Audio
     int bufferSizeSamples;
     
     int latency;
-};
 
+    bool32 midiInBusy;
+    MidiInput midiIn;
+};
 
 bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds);
 void Win32StopAudio(Win32Audio* winAudio);
