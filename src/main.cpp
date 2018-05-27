@@ -32,6 +32,16 @@ global_var Vec4 circleSelectedColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 1.0f };
 global_var Vec4 snareHitColor_ = Vec4 { 1.0f, 0.7f, 0.6f, 0.5f };
 global_var Vec4 noteColor_ = Vec4 { 0.6f, 1.0f, 0.7f, 0.5f };
 
+inline float32 RandFloat32()
+{
+    return (float32)rand() / RAND_MAX;
+}
+inline float32 RandFloat32(float32 min, float32 max)
+{
+    DEBUG_ASSERT(max > min);
+    return RandFloat32() * (max - min) + min;
+}
+
 internal MarkerGL InitMarkerGL(const ThreadContext* thread,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
@@ -150,16 +160,6 @@ internal void DrawCircle(CircleGL circleGL, ScreenInfo screenInfo,
     glBindVertexArray(0);
 }
 
-internal inline float32 RandFloat()
-{
-    return (float32)rand() / RAND_MAX;
-}
-internal inline float32 RandFloat(float32 min, float32 max)
-{
-    DEBUG_ASSERT(max > min);
-    return RandFloat() * (max - min) + min;
-}
-
 struct ParticleDeathData {
     GameState* gameState;
     int circleDiameter;
@@ -182,15 +182,15 @@ internal void InitParticleDeath(ParticleSystem* ps, Particle* particle,
     particle->life = 0.0f;
     Vec3 circlePos;
     do {
-        circlePos.x = RandFloat(-1.0f, 1.0f);
-        circlePos.y = RandFloat(-1.0f, 1.0f);
+        circlePos.x = RandFloat32(-1.0f, 1.0f);
+        circlePos.y = RandFloat32(-1.0f, 1.0f);
         circlePos.z = 0.0f;
     } while (Mag(circlePos) > 1.0f);
     circlePos *= radius;
     particle->pos = origin + circlePos;
 
-    //float32 speedX = RandFloat(-20.0f, 20.0f);
-    //float32 speedY = RandFloat(-400.0f, 400.0f);
+    //float32 speedX = RandFloat32(-20.0f, 20.0f);
+    //float32 speedY = RandFloat32(-400.0f, 400.0f);
     float32 speedXVar = slotWidthPix / 8.0f;
     float32 speedYVar = slotWidthPix;
     std::random_device rd;
@@ -201,11 +201,11 @@ internal void InitParticleDeath(ParticleSystem* ps, Particle* particle,
     float32 speedX = distX(gen);
     float32 speedY = distY(gen);
     particle->vel = speedX * Vec3::unitX + speedY * Vec3::unitY;
-    float32 colorRandT = RandFloat();
+    float32 colorRandT = RandFloat32();
     particle->color = Lerp(circleSelectedColor_, snareHitColor_, colorRandT);
     float32 baseSize = pdd->circleDiameter / 10.0f;
     baseSize = MaxFloat32(baseSize, 2.0f);
-    float32 randSize = baseSize * RandFloat(0.5f, 1.5f);
+    float32 randSize = baseSize * RandFloat32(0.5f, 1.5f);
     particle->size = { randSize, randSize };
     particle->bounceMult = 1.0f;
     particle->frictionMult = 1.0f;

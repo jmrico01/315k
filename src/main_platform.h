@@ -5,7 +5,7 @@
 #include "km_input.h"
 #include "opengl.h"
 
-#define MIDI_IN_QUEUE_SIZE 64
+#define MIDI_IN_QUEUE_SIZE 256
 
 struct ThreadContext
 {

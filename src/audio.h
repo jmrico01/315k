@@ -9,6 +9,8 @@
 
 #define WAVETABLE_MAX_WAVES 16
 #define WAVETABLE_MAX_VOICES 16
+#define WAVETABLE_OSCILLATORS 16
+#define WAVETABLE_ENVELOPES 4
 
 struct Sound
 {
@@ -21,11 +23,27 @@ struct Sound
 
 struct Voice
 {
-    float32 t;
+    float32 baseFreq;
+    float32 maxAmp;
+    int midiNote;
+
+    float32 time;
+    float32 tWave;
     float32 freq;
     float32 amp;
-    int midiNote;
-    //bool32 active;
+
+    bool32 sustained;
+    float32 releaseTime;
+    float32 releaseAmp;
+
+    int envelope;
+};
+
+struct Oscillator
+{
+    float32 tWave;
+    float32 freq;
+    float32 amp;
 };
 
 struct Wave
@@ -33,12 +51,16 @@ struct Wave
     float32 buffer[WAVE_BUFFER_MAX_SAMPLES * AUDIO_MAX_CHANNELS];
 };
 
+struct EnvelopeADSR
+{
+    float32 attack;
+    float32 decay;
+    float32 sustain;
+    float32 release;
+};
+
 struct WaveTable
 {
-    /*float32 tWave;
-    float32 waveFreq;
-    float32 waveAmp;*/
-
     float32 tWaveTable;
     int bufferLengthSamples;
     int numWaves;
@@ -47,15 +69,9 @@ struct WaveTable
     int activeVoices;
     Voice voices[WAVETABLE_MAX_VOICES];
 
-    float32 tOsc1;
-    float32 osc1Freq;
-    float32 osc1Amp;
-    float32 tOsc2;
-    float32 osc2Freq;
-    float32 osc2Amp;
+    Oscillator oscillators[WAVETABLE_OSCILLATORS];
 
-    Voice osc1;
-    Voice osc2;
+    EnvelopeADSR envelopes[WAVETABLE_ENVELOPES];
 };
 
 struct AudioState

@@ -95,3 +95,6 @@ struct GameState
     GLuint pTexBase;
     ParticleSystem ps;
 };
+
+inline float32 RandFloat32();
+inline float32 RandFloat32(float32 min, float32 max);

@@ -26,6 +26,11 @@ internal float32 CalcWaveLoudness(const GameAudio* audio,
 }
 #endif
 
+internal inline float32 MidiNoteToFreq(int midiNote)
+{
+    return 261.625565f * powf(2.0f, (midiNote - 60.0f) / 12.0f);
+}
+
 internal void DrawAudioBuffer(
     const GameState* gameState, const GameAudio* audio,
     const float32* buffer, int bufferSizeSamples, int channel,
@@ -184,19 +189,21 @@ internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
     }
 
     waveTable->activeVoices = 0;
-    /*for (int i = 0; i < WAVETABLE_MAX_VOICES; i++) {
-        waveTable->voices[i].t = 0.0f;
-        //waveTable->voices[i].active = false;
-    }*/
-    //waveTable->voices[1].active = true;
 
-    waveTable->tOsc1 = 0.0f;
-    waveTable->osc1Freq = 1.5f;
-    waveTable->osc1Amp = 0.4f;
+    for (int i = 0; i < WAVETABLE_OSCILLATORS; i++) {
+        waveTable->oscillators[i].tWave = 0.0f;
+        waveTable->oscillators[i].freq = 0.0f;
+        waveTable->oscillators[i].amp = 0.0f;
+    }
+    for (int i = 0; i < WAVETABLE_OSCILLATORS; i++) {
+        waveTable->oscillators[i].freq = RandFloat32(0.2f, 2.0f);
+        waveTable->oscillators[i].amp = 0.0f;
+    }
 
-    waveTable->tOsc2 = 0.0f;
-    waveTable->osc2Freq = 2.0f;
-    waveTable->osc2Amp = 0.05f;
+    waveTable->envelopes[0].attack = 0.05f;
+    waveTable->envelopes[0].decay = 0.05f;
+    waveTable->envelopes[0].sustain = 0.8f;
+    waveTable->envelopes[0].release = 0.1f;
 
     // Very rough normalization
     // Meh, nevermind. Need a good loudness function for this.
@@ -225,25 +232,18 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     WaveTable* waveTable)
 {
     for (int i = 0; i < waveTable->activeVoices; i++) {
-        waveTable->voices[i].t += waveTable->voices[i].freq
+        waveTable->voices[i].time += (float32)audio->sampleDelta /
+            audio->sampleRate;
+        waveTable->voices[i].tWave += waveTable->voices[i].freq
             * audio->sampleDelta / audio->sampleRate;
-        waveTable->voices[i].t = fmod(waveTable->voices[i].t, 1.0f);
+        waveTable->voices[i].tWave = fmod(waveTable->voices[i].tWave, 1.0f);
     }
-    waveTable->tOsc1 += waveTable->osc1Freq
-        * audio->sampleDelta / audio->sampleRate;
-    waveTable->tOsc1 = fmod(waveTable->tOsc1, 1.0f);
-    waveTable->tOsc2 += waveTable->osc2Freq
-        * audio->sampleDelta / audio->sampleRate;
-    waveTable->tOsc2 = fmod(waveTable->tOsc2, 1.0f);
-
-    /*float32 freqBase = 261.0f;
-    float32 freqMin = freqBase * 1.0f;
-    float32 freqMax = freqBase * 2.0f;
-    float32 freqPixelRange = 1200.0f;
-    float32 freqPixelOffset = 600.0f;
-    float32 freqT = (input->mousePos.x - freqPixelOffset) / freqPixelRange;
-    waveTable->waveFreq = Lerp(freqMin, freqMax, freqT);
-    waveTable->waveAmp = 0.2f;*/
+    for (int i = 0; i < WAVETABLE_OSCILLATORS; i++) {
+        waveTable->oscillators[i].tWave += waveTable->oscillators[i].freq
+            * audio->sampleDelta / audio->sampleRate;
+        waveTable->oscillators[i].tWave = 
+            fmod(waveTable->oscillators[i].tWave, 1.0f);
+    }
 
     float32 tWaveTablePixRange = 600.0f;
     float32 tWaveTablePixOffset = 200.0f;
@@ -252,28 +252,7 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     waveTable->tWaveTable = Lerp(0.0f, 1.0f, tWaveTableT);
     waveTable->tWaveTable = ClampFloat32(waveTable->tWaveTable, 0.0f, 1.0f);
 
-    if (IsKeyPressed(input, KM_KEY_Y)) {
-        waveTable->osc1Freq += 0.01f;
-    }
-    if (IsKeyPressed(input, KM_KEY_H)) {
-        waveTable->osc1Freq -= 0.01f;
-    }
-    if (IsKeyPressed(input, KM_KEY_T)) {
-        waveTable->osc2Freq += 0.01f;
-    }
-    if (IsKeyPressed(input, KM_KEY_G)) {
-        waveTable->osc2Freq -= 0.01f;
-    }
-    float32 sampleOsc1 = waveTable->osc1Amp * LinearSample(audio,
-        waveTable->waves[0].buffer, waveTable->bufferLengthSamples,
-        0, waveTable->tOsc1);
-    float32 sampleOsc2 = waveTable->osc2Amp * LinearSample(audio,
-        waveTable->waves[0].buffer, waveTable->bufferLengthSamples,
-        0, waveTable->tOsc2);
-    waveTable->tWaveTable = ClampFloat32(
-        waveTable->tWaveTable + sampleOsc1,
-        0.0f, 1.0f);
-
+    // Drive WaveTable voices with MIDI input
     for (int i = 0; i < input->midiIn.numMessages; i++) {
         uint8 status = input->midiIn.messages[i].status;
         uint8 dataByte1 = input->midiIn.messages[i].dataByte1;
@@ -283,16 +262,36 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
         switch (event) {
             case MIDI_EVENT_NOTEON: {
                 int midiNote = (int)dataByte1;
-                if (waveTable->activeVoices >= WAVETABLE_MAX_VOICES) {
-                    continue;
+                int vInd = -1;
+
+                // Try to find an existing voice with matching MIDI note
+                bool32 overwroteVoice = false;
+                for (int v = 0; v < waveTable->activeVoices; v++) {
+                    if (waveTable->voices[v].midiNote == midiNote) {
+                        vInd = v;
+                        overwroteVoice = true;
+                        /*waveTable->voices[v].time = 0.0f;
+                        waveTable->voices[v].baseFreq = MidiNoteToFreq(midiNote);
+                        waveTable->voices[v].maxAmp = 0.2f;
+                        waveTable->voices[v].sustained = true;
+                        overwroteVoice = true;*/
+                        break;
+                    }
                 }
-                float32 freq = 261.625565f *
-                    powf(2.0f, (midiNote - 60.0f) / 12.0f);
-                int ind = waveTable->activeVoices;
-                waveTable->voices[ind].t = 0.0f;
-                waveTable->voices[ind].freq = freq;
-                waveTable->voices[ind].amp = 0.2f;
-                waveTable->voices[ind].midiNote = midiNote;
+                if (!overwroteVoice) {
+                    // No existing voice, must add a new one
+                    if (waveTable->activeVoices >= WAVETABLE_MAX_VOICES) {
+                        continue;
+                    }
+                    vInd = waveTable->activeVoices;
+                }
+
+                waveTable->voices[vInd].time = 0.0f;
+                waveTable->voices[vInd].baseFreq = MidiNoteToFreq(midiNote);
+                waveTable->voices[vInd].maxAmp = 0.2f;
+                waveTable->voices[vInd].midiNote = midiNote;
+                waveTable->voices[vInd].sustained = true;
+                waveTable->voices[vInd].envelope = 0;
                 waveTable->activeVoices++;
             } break;
             case MIDI_EVENT_NOTEOFF: {
@@ -300,46 +299,71 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
                 if (waveTable->activeVoices <= 0) {
                     continue;
                 }
-                int toRemove = -1;
                 for (int v = 0; v < waveTable->activeVoices; v++) {
                     if (waveTable->voices[v].midiNote == midiNote) {
-                        toRemove = v;
-                        break;
+                        waveTable->voices[v].sustained = false;
+                        waveTable->voices[v].releaseTime =
+                            waveTable->voices[v].time;
+                        waveTable->voices[v].releaseAmp =
+                            waveTable->voices[v].amp;
                     }
                 }
-                if (toRemove == -1) {
-                    continue;
-                }
-                for (int v = toRemove; v < waveTable->activeVoices - 1; v++) {
-                    waveTable->voices[v] = waveTable->voices[v + 1];
-                }
-                waveTable->activeVoices--;
             } break;
         }
     }
 
-    /*float32 tonicFreq = 261.0f;
-    float32 chromaticFreqs[12];
-    float32 root12Two = powf(2.0f, 1.0f / 12.0f);
-    for (int i = 0; i < 12; i++) {
-        chromaticFreqs[i] = tonicFreq * powf(root12Two, (float32)i);
+    // Apply oscillators
+    if (IsKeyPressed(input, KM_KEY_Y)) {
+        for (int i = 0; i < WAVETABLE_OSCILLATORS; i++) {
+            waveTable->oscillators[i].amp += 0.001f;
+            waveTable->oscillators[i].amp =
+                ClampFloat32(waveTable->oscillators[i].amp, 0.0f, 1.0f);
+        }
     }
-    //chromaticFreqs[0] = tonicFreq * 1.0f;
-    //chromaticFreqs[7] = tonicFreq * 3.0f / 2.0f;
-    for (int i = 0; i < waveTable->numVoices; i++) {
-        waveTable->voices[i].freq = chromaticFreqs[i];
-        waveTable->voices[i].amp = 0.1f;
-    }*/
-    /*waveTable->voices[1].freq += waveTable->voices[1].freq * sampleOsc2;
-    waveTable->voices[3].freq += waveTable->voices[3].freq * sampleOsc1;
+    if (IsKeyPressed(input, KM_KEY_H)) {
+        for (int i = 0; i < WAVETABLE_OSCILLATORS; i++) {
+            waveTable->oscillators[i].amp -= 0.001f;
+            waveTable->oscillators[i].amp =
+                ClampFloat32(waveTable->oscillators[i].amp, 0.0f, 1.0f);
+        }
+    }
+    float32 sampleOsc0 = waveTable->oscillators[0].amp * LinearSample(audio,
+        waveTable->waves[0].buffer, waveTable->bufferLengthSamples,
+        0, waveTable->oscillators[0].tWave);
+    waveTable->tWaveTable = ClampFloat32(
+        waveTable->tWaveTable + sampleOsc0,
+        0.0f, 1.0f);
 
-    waveTable->voices[0].active = IsKeyPressed(input, KM_KEY_Z);
-    waveTable->voices[2].active = IsKeyPressed(input, KM_KEY_X);
-    waveTable->voices[4].active = IsKeyPressed(input, KM_KEY_C);
-    waveTable->voices[5].active = IsKeyPressed(input, KM_KEY_V);
-    waveTable->voices[7].active = IsKeyPressed(input, KM_KEY_B);
-    waveTable->voices[9].active = IsKeyPressed(input, KM_KEY_N);
-    waveTable->voices[11].active = IsKeyPressed(input, KM_KEY_M);*/
+    for (int i = 0; i < waveTable->activeVoices; i++) {
+        float32 sampleOsc = waveTable->oscillators[i].amp * LinearSample(
+            audio,
+            waveTable->waves[0].buffer, waveTable->bufferLengthSamples,
+            0, waveTable->oscillators[i].tWave);
+        waveTable->voices[i].freq = waveTable->voices[i].baseFreq *
+            (1.0f + sampleOsc);
+    }
+
+    // Remove voices that were released and have faded out
+    for (int i = 0; i < waveTable->activeVoices; i++) {
+        const EnvelopeADSR env = waveTable->envelopes[
+            waveTable->voices[i].envelope];
+        float32 t = waveTable->voices[i].time;
+        if (!waveTable->voices[i].sustained) {
+            // R envelope
+            float32 elapsed = t - waveTable->voices[i].releaseTime;
+            // [0, +inf]
+            float32 elapsedNorm = elapsed / env.release;
+            if (elapsedNorm >= 1.0f) {
+                // Remove voices when not sustained and amp <= 0.0f
+                for (int v = i; v < waveTable->activeVoices - 1; v++) {
+                    waveTable->voices[v] = waveTable->voices[v + 1];
+                }
+                waveTable->activeVoices--;
+                i--;
+                continue;
+            }
+        }
+    }
 }
 
 internal void WaveTableWriteSamples(WaveTable* waveTable,
@@ -354,15 +378,46 @@ internal void WaveTableWriteSamples(WaveTable* waveTable,
     const float32* wave1Buffer = waveTable->waves[wave1].buffer;
     const float32* wave2Buffer = waveTable->waves[wave2].buffer;
     for (int v = 0; v < waveTable->activeVoices; v++) {
+        const EnvelopeADSR env = waveTable->envelopes[
+            waveTable->voices[v].envelope];
         for (int i = 0; i < audio->fillLength; i++) {
-            // TODO oh boy, doing this here would be very hard...
-            /*float32 tOsc1 = fmod(waveTable->tOsc1
-                + waveTable->osc1Freq * i / audio->sampleRate, 1.0f);
-            float32 sampleOsc1 = LinearSample(audio,
-                waveTable->waves[0].buffer, waveBufferLength, 0, tOsc1);
-            waveTable->waveFreq *= sampleOsc1;*/
-
-            float32 tWave = fmod(waveTable->voices[v].t
+            float32 t = waveTable->voices[v].time + (float32)i
+                / audio->sampleRate;
+            if (waveTable->voices[v].sustained) {
+                // ADS envelopes
+                float32 envAmp;
+                if (t < env.attack) {
+                    envAmp = t / env.attack;
+                }
+                else if (t < env.attack + env.decay) {
+                    // [0, 1]
+                    envAmp = (t - env.attack) / env.decay;
+                    // [1, 0]
+                    envAmp = -envAmp + 1.0f;
+                    // [1, env.sustain]
+                    envAmp = envAmp * (1.0f - env.sustain) + env.sustain;
+                }
+                else {
+                    envAmp = env.sustain;
+                }
+                waveTable->voices[v].amp = envAmp *
+                    waveTable->voices[v].maxAmp;
+            }
+            else {
+                // R envelope
+                float32 elapsed = t - waveTable->voices[v].releaseTime;
+                // [0, +inf]
+                float32 elapsedNorm = elapsed / env.release;
+                if (elapsedNorm >= 1.0f) {
+                    continue;
+                }
+                else {
+                    // [releaseAmp, 0]
+                    waveTable->voices[v].amp = (-elapsedNorm + 1.0f) *
+                        waveTable->voices[v].releaseAmp;
+                }
+            }
+            float32 tWave = fmod(waveTable->voices[v].tWave
                 + waveTable->voices[v].freq * i / audio->sampleRate, 1.0f);
             float32 sample1Wave1 = LinearSample(audio,
                 wave1Buffer, waveBufferLength, 0, tWave);
