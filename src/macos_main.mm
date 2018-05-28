@@ -756,6 +756,14 @@ int main(int argc, const char* argv[])
 			newInput->mouseButtons[buttonIndex].transitions = transitions;
 		}
 
+        // MIDI input
+        if (!macAudio.midiInBusy) {
+            macAudio.midiInBusy = true;
+            newInput->midiIn = macAudio.midiIn;
+            macAudio.midiIn.numMessages = 0;
+            macAudio.midiInBusy = false;
+        }
+
 		uint64 endTime = mach_absolute_time();
 		uint64 elapsed = endTime - startTime;
 		startTime = endTime;

@@ -1,5 +1,7 @@
 #include "macos_audio.h"
 
+#include <CoreMIDI/CoreMIDI.h>
+
 OSStatus MacOSAudioUnitCallback(void* inRefCon,
 	AudioUnitRenderActionFlags* ioActionFlags,
 	const AudioTimeStamp* inTimeStamp,
@@ -43,18 +45,52 @@ OSStatus MacOSAudioUnitCallback(void* inRefCon,
 	return noErr;
 }
 
-void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
+void ProcessMidiPacket(const MIDIPacket* packet, MidiInput* midiIn)
+{
+	if (midiIn->numMessages >= MIDI_IN_QUEUE_SIZE) {
+		return;
+	}
+	if (packet->length < 2) {
+		return;
+	}
+	MidiMessage msg;
+	msg.status = packet->data[0];
+	msg.dataByte1 = packet->data[1];
+	if (packet->length >= 3) {
+		msg.dataByte2 = packet->data[2];
+	}
+
+	midiIn->messages[midiIn->numMessages] = msg;
+	midiIn->numMessages++;
+}
+
+void MidiInputCallback(const MIDIPacketList* packetList,
+	void* readProcRefContext, void* srcConnRefContext)
+{
+	MacOSAudio* macAudio = (MacOSAudio*)readProcRefContext;
+	while (macAudio->midiInBusy) {
+		usleep(0);
+	}
+	macAudio->midiInBusy = true;
+	for (int i = 0; i < packetList->numPackets; i++) {
+		const MIDIPacket* packet = &packetList->packet[i];
+		ProcessMidiPacket(packet, &macAudio->midiIn);
+	}
+	macAudio->midiInBusy = false;
+}
+
+void MacOSInitCoreAudio(MacOSAudio* macAudio,
     int sampleRate, int channels, int bufferSizeSamples)
 {
-	macOSAudio->sampleRate = sampleRate;
-	macOSAudio->channels = channels;
-	macOSAudio->bufferSizeSamples = bufferSizeSamples;
-	macOSAudio->buffer = (int16*)mmap(0,
+	macAudio->sampleRate = sampleRate;
+	macAudio->channels = channels;
+	macAudio->bufferSizeSamples = bufferSizeSamples;
+	macAudio->buffer = (int16*)mmap(0,
 		bufferSizeSamples * channels * sizeof(int16),
 		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
-	macOSAudio->readCursor = 0;
-	macOSAudio->writeCursor = 0;
+	macAudio->readCursor = 0;
+	macAudio->writeCursor = 0;
 
 	AudioComponentDescription acd;
 	acd.componentType         = kAudioUnitType_Output;
@@ -63,24 +99,24 @@ void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
 
 	AudioComponent outputComponent = AudioComponentFindNext(NULL, &acd);
 
-	AudioComponentInstanceNew(outputComponent, &macOSAudio->audioUnit);
-	AudioUnitInitialize(macOSAudio->audioUnit);
+	AudioComponentInstanceNew(outputComponent, &macAudio->audioUnit);
+	AudioUnitInitialize(macAudio->audioUnit);
 
 #if 1 // int16
 	//AudioStreamBasicDescription asbd;
-	macOSAudio->audioDescriptor.mSampleRate       = sampleRate;
-	macOSAudio->audioDescriptor.mFormatID         = kAudioFormatLinearPCM;
-	macOSAudio->audioDescriptor.mFormatFlags      =
+	macAudio->audioDescriptor.mSampleRate       = sampleRate;
+	macAudio->audioDescriptor.mFormatID         = kAudioFormatLinearPCM;
+	macAudio->audioDescriptor.mFormatFlags      =
 		kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsNonInterleaved
 		| kAudioFormatFlagIsPacked; // TODO request float format
-	macOSAudio->audioDescriptor.mFramesPerPacket  = 1;
-	macOSAudio->audioDescriptor.mChannelsPerFrame = channels; // Stereo
-	macOSAudio->audioDescriptor.mBitsPerChannel   = sizeof(int16) * 8;
+	macAudio->audioDescriptor.mFramesPerPacket  = 1;
+	macAudio->audioDescriptor.mChannelsPerFrame = channels; // Stereo
+	macAudio->audioDescriptor.mBitsPerChannel   = sizeof(int16) * 8;
 	// don't multiply by channel count with non-interleaved!
-	macOSAudio->audioDescriptor.mBytesPerFrame    = sizeof(int16);
-	macOSAudio->audioDescriptor.mBytesPerPacket   =
-		macOSAudio->audioDescriptor.mFramesPerPacket
-		* macOSAudio->audioDescriptor.mBytesPerFrame;
+	macAudio->audioDescriptor.mBytesPerFrame    = sizeof(int16);
+	macAudio->audioDescriptor.mBytesPerPacket   =
+		macAudio->audioDescriptor.mFramesPerPacket
+		* macAudio->audioDescriptor.mBytesPerFrame;
 #else // floating point - this is the "native" format on the Mac
 	AudioStreamBasicDescription asbd;
 	SoundOutput->AudioDescriptor.mSampleRate       = SoundOutput->SamplesPerSecond;
@@ -96,19 +132,19 @@ void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
 
 	// TODO Add some error checking...
 	// But this is a mess. OSStatus is what? what is success? sigh
-	AudioUnitSetProperty(macOSAudio->audioUnit,
+	AudioUnitSetProperty(macAudio->audioUnit,
 		kAudioUnitProperty_StreamFormat,
 		kAudioUnitScope_Input,
 		0,
-		&macOSAudio->audioDescriptor,
-		sizeof(macOSAudio->audioDescriptor)
+		&macAudio->audioDescriptor,
+		sizeof(macAudio->audioDescriptor)
 	);
 
 	AURenderCallbackStruct cb;
 	cb.inputProc = MacOSAudioUnitCallback;
-	cb.inputProcRefCon = macOSAudio;
+	cb.inputProcRefCon = macAudio;
 
-	AudioUnitSetProperty(macOSAudio->audioUnit,
+	AudioUnitSetProperty(macAudio->audioUnit,
 		kAudioUnitProperty_SetRenderCallback,
 		kAudioUnitScope_Global,
 		0,
@@ -116,15 +152,34 @@ void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
 		sizeof(cb)
 	);
 
-	AudioOutputUnitStart(macOSAudio->audioUnit);
+	AudioOutputUnitStart(macAudio->audioUnit);
+
+	// Setup MIDI input
+	macAudio->midiInBusy = false;
+	OSStatus res;
+	// TODO again, error checking. but WTF IS THE SUCCESS VALUE?!
+	MIDIClientRef midiClient;
+	res = MIDIClientCreate(CFSTR("315MIDI_client"), NULL, NULL, &midiClient);
+	MIDIPortRef midiInputPort;
+	res = MIDIInputPortCreate(midiClient, CFSTR("315MIDI_input"),
+		MidiInputCallback, (void*)macAudio, &midiInputPort);
+
+	int midiSources = MIDIGetNumberOfSources();
+	DEBUG_PRINT("midi sources: %d\n", midiSources);
+	MIDIEndpointRef midiSrc;
+	for (int i = 0; i < midiSources; i++) {
+		midiSrc = MIDIGetSource(i);
+	}
+	midiSrc = MIDIGetSource(midiSources - 1);
+	res = MIDIPortConnectSource(midiInputPort, midiSrc, NULL);
 }
 
 
-void MacOSStopCoreAudio(MacOSAudio* macOSAudio)
+void MacOSStopCoreAudio(MacOSAudio* macAudio)
 {
-	AudioOutputUnitStop(macOSAudio->audioUnit);
-	AudioUnitUninitialize(macOSAudio->audioUnit);
-	AudioComponentInstanceDispose(macOSAudio->audioUnit);
+	AudioOutputUnitStop(macAudio->audioUnit);
+	AudioUnitUninitialize(macAudio->audioUnit);
+	AudioComponentInstanceDispose(macAudio->audioUnit);
 }
 
 void MacOSWriteSamples(MacOSAudio* macAudio,

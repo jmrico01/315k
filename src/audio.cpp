@@ -256,9 +256,9 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
     for (int i = 0; i < input->midiIn.numMessages; i++) {
         uint8 status = input->midiIn.messages[i].status;
         uint8 dataByte1 = input->midiIn.messages[i].dataByte1;
-        uint8 dataByte2 = input->midiIn.messages[i].dataByte2;
+        //uint8 dataByte2 = input->midiIn.messages[i].dataByte2;
         uint8 event = status >> 4;
-        uint8 channel = status & 0xf;
+        //uint8 channel = status & 0xf;
         switch (event) {
             case MIDI_EVENT_NOTEON: {
                 int midiNote = (int)dataByte1;

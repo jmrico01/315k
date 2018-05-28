@@ -23,6 +23,9 @@ struct MacOSAudio
 	int writeCursor;
 
 	int latency;
+
+	bool32 midiInBusy;
+	MidiInput midiIn;
 };
 
 void MacOSInitCoreAudio(MacOSAudio* macOSAudio,
