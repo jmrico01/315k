@@ -194,6 +194,7 @@ bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds)
     }
 
     // Setup MIDI input
+    winAudio->midiInBusy = false;
     UINT midiInDevs = midiInGetNumDevs();
     if (midiInDevs > 0) {
         int midiInDeviceID = 0;
