@@ -49,18 +49,23 @@ paths["src-hashes-old"] = paths["build"] + "/src_hashes_old"
 
 # External dependencies
 # TODO think of a better way of doing this
-paths["include-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/include"
-paths["lib-freetype-win"] = "D:/Development/Libraries/freetype-2.8.1/objs/vc2010/x64"
+paths["win32-libs"] = "D:/Development/Libraries"
+paths["include-freetype-win"] = paths["win32-libs"] + "/freetype-2.8.1/include"
+paths["lib-freetype-win"] = paths["win32-libs"] + "/freetype-2.8.1/objs/vc2010/x64"
 
-paths["include-libpng-win"] = "D:/Development/Libraries/lpng1634"
-paths["lib-libpng-win-d"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/DebugLibrary"
-paths["lib-libpng-win-r"] = "D:/Development/Libraries/lpng1634/projects/vstudio/x64/ReleaseLibrary"
+paths["include-libpng-win"] = paths["win32-libs"] + "/lpng1634"
+paths["lib-libpng-win-d"] = paths["win32-libs"] + "/lpng1634/projects/vstudio/x64/DebugLibrary"
+paths["lib-libpng-win-r"] = paths["win32-libs"] + "/lpng1634/projects/vstudio/x64/ReleaseLibrary"
 
-paths["include-freetype-mac"] = "/usr/local/include/freetype2"
-paths["lib-freetype-mac"] = "/usr/local/lib"
+paths["macos-libs"] = "/Users/legionjr/Documents/dev-libs/build"
+paths["include-freetype-mac"] = paths["macos-libs"] + "/include/freetype2"
+paths["lib-freetype-mac"] = paths["macos-libs"] + "/lib"
 
-paths["include-libpng-mac"] = "/usr/local/include/libpng16"
-paths["lib-libpng-mac"] = "/usr/local/lib"
+paths["include-libpng-mac"] = paths["macos-libs"] + "/include/libpng16"
+paths["lib-libpng-mac"] = paths["macos-libs"] + "/lib"
+
+paths["include-fftw3-mac"] = paths["macos-libs"] + "/include"
+paths["lib-fftw3-mac"] = paths["macos-libs"] + "/lib"
 
 paths["include-freetype-linux"] = "/usr/local/include/freetype2"
 paths["lib-freetype-linux"] = "/usr/local/lib"
@@ -365,7 +370,8 @@ def MacCompileDebug():
     ])
     includePaths = " ".join([
         "-I" + paths["include-freetype-mac"],
-        "-I" + paths["include-libpng-mac"]
+        "-I" + paths["include-libpng-mac"],
+        "-I" + paths["include-fftw3-mac"]
     ])
 
     frameworks = " ".join([
@@ -379,11 +385,13 @@ def MacCompileDebug():
     ])
     libPaths = " ".join([
         "-L" + paths["lib-freetype-mac"],
-        "-L" + paths["lib-libpng-mac"]
+        "-L" + paths["lib-libpng-mac"],
+        "-L" + paths["lib-fftw3-mac"]
     ])
     libs = " ".join([
         "-lfreetype",
-        "-lpng"
+        "-lpng",
+        "-lfftw3f"
     ])
 
     compileLibCommand = " ".join([

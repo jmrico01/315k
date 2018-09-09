@@ -620,9 +620,11 @@ inline Mat4 operator+(Mat4 m1, Mat4 m2)
 	Mat4 result;
 
 	// TODO this will hopefully get unrolled by the compiler
-	for (int col = 0; col < 4; col++)
-		for (int row = 0; row < 4; row++)
+	for (int col = 0; col < 4; col++) {
+		for (int row = 0; row < 4; row++) {
 			result.e[col][row] = m1.e[col][row] + m2.e[col][row];
+		}
+	}
 
 	return result;
 }

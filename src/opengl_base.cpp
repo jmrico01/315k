@@ -479,6 +479,9 @@ void DrawBox(BoxGL boxGL,
 void DrawLine(LineGL lineGL,
     Mat4 proj, Mat4 view, const LineGLData* lineData, Vec4 color)
 {
+    // TODO lines not rendered on macOS... :(
+    // try glLineWidth(GLfloat _) ?
+    glLineWidth(1.0f);
     GLint loc;
     glUseProgram(lineGL.programID);
 
@@ -496,6 +499,6 @@ void DrawLine(LineGL lineGL,
         GL_STREAM_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, lineData->count * sizeof(Vec3),
         lineData->pos);
-    glDrawArrays(GL_LINE_STRIP, 0, lineData->count);
+    glDrawArrays(GL_POINTS, 0, lineData->count);
     glBindVertexArray(0);
 }

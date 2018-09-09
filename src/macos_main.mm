@@ -440,18 +440,21 @@ void MacOSProcessPendingMessages(GameInput* input, NSWindow* window)
 	NSEvent* event;
 
 	do {
-		event = [NSApp nextEventMatchingMask:NSAnyEventMask
+		event = [NSApp nextEventMatchingMask:NSEventMaskAny
 			untilDate:nil
 			inMode:NSDefaultRunLoopMode
 			dequeue:YES];
 
 		switch ([event type]) {
-			case NSKeyDown: {
+			case NSEventTypeKeyDown: {
 				unichar ch = [[event charactersIgnoringModifiers] characterAtIndex:0];
 				int modifierFlags = [event modifierFlags];
-				int commandKeyFlag = modifierFlags & NSCommandKeyMask;
-				int ctrlKeyFlag = modifierFlags & NSControlKeyMask;
-				int altKeyFlag = modifierFlags & NSAlternateKeyMask;
+				int commandKeyFlag = modifierFlags
+                    & NSEventModifierFlagCommand;
+				int ctrlKeyFlag = modifierFlags
+                    & NSEventModifierFlagControl;
+				int altKeyFlag = modifierFlags
+                    & NSEventModifierFlagOption;
 
 				int keyDownFlag = 1;
 
@@ -460,12 +463,15 @@ void MacOSProcessPendingMessages(GameInput* input, NSWindow* window)
 					input, window);
 			} break;
 
-			case NSKeyUp: {
+			case NSEventTypeKeyUp: {
 				unichar ch = [[event charactersIgnoringModifiers] characterAtIndex:0];
 				int modifierFlags = [event modifierFlags];
-				int commandKeyFlag = modifierFlags & NSCommandKeyMask;
-				int ctrlKeyFlag = modifierFlags & NSControlKeyMask;
-				int altKeyFlag = modifierFlags & NSAlternateKeyMask;
+                int commandKeyFlag = modifierFlags
+                    & NSEventModifierFlagCommand;
+                int ctrlKeyFlag = modifierFlags
+                    & NSEventModifierFlagControl;
+                int altKeyFlag = modifierFlags
+                    & NSEventModifierFlagOption;
 
 				int keyDownFlag = 0;
 
@@ -607,10 +613,10 @@ int main(int argc, const char* argv[])
 	);
 
 	NSWindow* window = [[NSWindow alloc] initWithContentRect:initialFrame
-		styleMask:NSTitledWindowMask
-			| NSClosableWindowMask
-			| NSMiniaturizableWindowMask
-			| NSResizableWindowMask
+		styleMask:NSWindowStyleMaskTitled
+			| NSWindowStyleMaskClosable
+			| NSWindowStyleMaskMiniaturizable
+			| NSWindowStyleMaskResizable
 		backing:NSBackingStoreBuffered
 		defer:NO];
 

@@ -300,7 +300,9 @@ typedef ptrdiff_t   GLintptr;
     FUNC(void,  glFramebufferTexture2D, GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) \
 \
     FUNC(GLenum, glGetError) \
-    FUNC(GLenum, glCheckFramebufferStatus, GLenum target)
+    FUNC(GLenum, glCheckFramebufferStatus, GLenum target) \
+\
+    FUNC(void,  glLineWidth, GLfloat width)
 
 // Generate function declarations
 #define FUNC(returntype, name, ...) \

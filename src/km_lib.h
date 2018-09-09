@@ -23,7 +23,6 @@ struct DynamicArray
     void Clear();
     void Free();
 
-    // TODO make inline
     inline T& operator[](int index) const {
 #if GAME_SLOW
         DEBUG_ASSERT(0 <= index && index < (int)size);

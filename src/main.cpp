@@ -3,6 +3,7 @@
 #undef internal
 #include <random>
 #define internal static
+#include <fftw3.h>
 
 #include "main_platform.h"
 #include "km_debug.h"
@@ -592,6 +593,28 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             nullptr, 0, nullptr, 0, nullptr, 0, nullptr, 0,
             InitParticleDeath, gameState->pTexBase
         );
+
+        // Testing FFTW3
+        const int N = 1e5;
+        DEBUG_PRINT("testing FFTW3 with N = %d\n", N);
+
+        fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
+            sizeof(fftwf_complex) * N);
+        fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
+            sizeof(fftwf_complex) * N);
+        fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
+            FFTW_FORWARD, FFTW_ESTIMATE);
+
+        // initialize in and out arrays
+
+        fftwf_execute(p);
+
+        fftwf_destroy_plan(p);
+        fftwf_free(in);
+        fftwf_free(out);
+
+        DEBUG_PRINT("...done!\n");
+        DEBUG_PRINT("damn, that was fast. good thing we're in the West\n");
 
 		memory->isInitialized = true;
 	}
