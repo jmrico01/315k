@@ -17,6 +17,23 @@ inline bool32 WasKeyReleased(const GameInput* input, KeyInputCode keyCode)
         && input->keyboard[keyCode].transitions > 0;
 }
 
+void ClearInput(GameInput* input)
+{
+    for (int i = 0; i < 5; i++) {
+        input->mouseButtons[i].isDown = false;
+        input->mouseButtons[i].transitions = 0;
+    }
+    input->mousePos = Vec2Int::zero;
+    input->mouseWheel = 0;
+
+    for (int i = 0; i < KM_KEY_LAST; i++) {
+        input->keyboard[i].isDown = false;
+        input->keyboard[i].transitions = 0;
+    }
+    input->keyboardString[0] = '\0';
+    input->keyboardStringLen = 0;
+}
+
 void ClearInput(GameInput* input, GameInput* inputPrev)
 {
     for (int i = 0; i < 5; i++) {

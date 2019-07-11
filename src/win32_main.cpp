@@ -9,34 +9,25 @@
 #include "opengl.h"
 #include "km_debug.h"
 #include "km_input.h"
+#include "km_log.h"
 #include "km_string.h"
 
-/*
-    TODO
 
-    - WINDOWS 7 VIRTUAL MACHINE
+// TODO
+// - WINDOWS 7 VIRTUAL MACHINE
+// 
+// - Getting a handle to our own exe file
+// - Asset loading path
+// - Threading (launch a thread)
+// - Sleep/timeBeginPeriod (don't melt the processor)
+// - ClipCursor() (multimonitor support)
+// - WM_SETCURSOR (control cursor visibility)
+// - QueryCancelAutoplay
+// - WM_ACTIVATEAPP (for when we are not the active app)
 
-    - Saved game locations
-    - Getting a handle to our own exe file
-    - Asset loading path
-    - Threading (launch a thread)
-    - Sleep/timeBeginPeriod (don't melt the processor)
-    - ClipCursor() (multimonitor support)
-    - WM_SETCURSOR (control cursor visibility)
-    - QueryCancelAutoplay
-    - WM_ACTIVATEAPP (for when we are not the active app)
-*/
-
-/*
-.clang_complete, can it make do without this?
--IC:/Program Files (x86)/Microsoft Visual Studio 14.0/VC/include
--IC:/Program Files (x86)/Windows Kits/10/Include/10.0.15063.0/ucrt
--IC:/Program Files (x86)/Windows Kits/10/Include/10.0.15063.0/um
--IC:/Program Files (x86)/Windows Kits/10/Include/10.0.15063.0/shared
-*/
 
 #define START_WIDTH 1280
-#define START_HEIGHT 800
+#define START_HEIGHT 720
 
 // TODO this is a global for now
 global_var char pathToApp_[MAX_PATH];
@@ -44,8 +35,8 @@ global_var bool32 running_ = true;
 global_var GameInput* input_ = nullptr;             // for WndProc WM_CHAR
 global_var glViewportFunc* glViewport_ = nullptr;   // for WndProc WM_SIZE
 global_var ScreenInfo* screenInfo_ = nullptr;       // for WndProc WM_SIZE
+global_var FixedArray<char, MAX_PATH> logFilePath_;
 
-global_var bool32 DEBUGshowCursor_;
 global_var WINDOWPLACEMENT DEBUGwpPrev = { sizeof(DEBUGwpPrev) };
 
 // XInput functions
@@ -146,11 +137,11 @@ internal void RemoveFileNameFromPath(
 
 internal void Win32GetExeFilePath(Win32State* state)
 {
-    // NOTE
-    // Never use MAX_PATH in code that is user-facing, because it is
-    // dangerous and can lead to bad results
     DWORD size = GetModuleFileName(NULL,
         state->exeFilePath, sizeof(state->exeFilePath));
+    if (size == 0) {
+        LOG_ERROR("Failed to get EXE file path\n");
+    }
     state->exeOnePastLastSlash = state->exeFilePath;
     for (char* scan = state->exeFilePath; *scan; scan++) {
         if (*scan == '\\') {
@@ -230,40 +221,7 @@ internal inline uint32 SafeTruncateUInt64(uint64 value)
     return result;
 }
 
-#if GAME_INTERNAL
-
-DEBUG_PLATFORM_PRINT_FUNC(DEBUGPlatformPrint)
-{
-    const int MSG_MAX_LENGTH = 1024;
-    const char* MSG_PREFIX = "";
-    const char* MSG_SUFFIX = "";
-    char msg[MSG_MAX_LENGTH];
-
-    int cx1 = snprintf(msg, MSG_MAX_LENGTH, "%s", MSG_PREFIX);
-    if (cx1 < 0) {
-        return;
-    }
-
-    va_list args;
-    va_start(args, format);
-    int cx2 = vsnprintf(msg + cx1, MSG_MAX_LENGTH - cx1, format, args);
-    va_end(args);
-    if (cx2 < 0) {
-        return;
-    }
-
-    int cx3 = snprintf(msg + cx1 + cx2, MSG_MAX_LENGTH - cx1 - cx2,
-        "%s", MSG_SUFFIX);
-    if (cx3 < 0) {
-        return;
-    }
-
-    if ((cx1 + cx2 + cx3) >= MSG_MAX_LENGTH) {
-        // error message too long. warn? ignore for now
-    }
-
-    OutputDebugString(msg);
-}
+//#if GAME_INTERNAL
 
 DEBUG_PLATFORM_FREE_FILE_MEMORY_FUNC(DEBUGPlatformFreeFileMemory)
 {
@@ -317,14 +275,21 @@ DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFile)
 DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFile)
 {
     HANDLE hFile = CreateFile(fileName, GENERIC_WRITE, NULL,
-        NULL, CREATE_ALWAYS, NULL, NULL);
+        NULL, OPEN_ALWAYS, NULL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         // TODO log
         return false;
     }
 
+    if (!overwrite) {
+        DWORD dwPos = SetFilePointer(hFile, 0, NULL, FILE_END);
+        if (dwPos == INVALID_SET_FILE_POINTER) {
+            // TODO GetLastError to make sure it's an error... ugh
+        }
+    }
+
     DWORD bytesWritten;
-    if (!WriteFile(hFile, memory, memorySize, &bytesWritten, NULL)) {
+    if (!WriteFile(hFile, memory, (DWORD)memorySize, &bytesWritten, NULL)) {
         // TODO log
         return false;
     }
@@ -333,7 +298,73 @@ DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFile)
     return bytesWritten == memorySize;
 }
 
+//#endif
+
+void LogString(const char* string, uint64 n)
+{
+#if GAME_SLOW
+    const int LOG_STRING_BUFFER_SIZE = 1024;
+    char buffer[LOG_STRING_BUFFER_SIZE];
+    uint64 remaining = n;
+    while (remaining > 0) {
+        uint64 copySize = remaining;
+        if (copySize > LOG_STRING_BUFFER_SIZE - 1) {
+            copySize = LOG_STRING_BUFFER_SIZE - 1;
+        }
+        MemCopy(buffer, string, copySize);
+        buffer[copySize] = '\0';
+        OutputDebugString(buffer);
+        remaining -= copySize;
+    }
 #endif
+
+    if (!DEBUGPlatformWriteFile(nullptr, logFilePath_.array.data, n, string, false)) {
+        DEBUG_PANIC("failed to write to log file");
+    }
+}
+
+PLATFORM_FLUSH_LOGS_FUNC(FlushLogs)
+{
+    // TODO fix this
+    for (uint64 i = 0; i < logState->eventCount; i++) {
+        uint64 eventIndex = (logState->eventFirst + i) % LOG_EVENTS_MAX;
+        const LogEvent& event = logState->logEvents[eventIndex];
+        uint64 bufferStart = event.logStart;
+        uint64 bufferEnd = event.logStart + event.logSize;
+        if (bufferEnd >= LOG_BUFFER_SIZE) {
+            bufferEnd -= LOG_BUFFER_SIZE;
+        }
+        if (bufferEnd >= bufferStart) {
+            LogString(logState->buffer + bufferStart, event.logSize);
+        }
+        else {
+            LogString(logState->buffer + bufferStart, LOG_BUFFER_SIZE - bufferStart);
+            LogString(logState->buffer, bufferEnd);
+        }
+    }
+
+    logState->eventFirst = (logState->eventFirst + logState->eventCount) % LOG_EVENTS_MAX;
+    logState->eventCount = 0;
+    // uint64 toRead1, toRead2;
+    // if (logState->readIndex <= logState->writeIndex) {
+    //  toRead1 = logState->writeIndex - logState->readIndex;
+    //  toRead2 = 0;
+    // }
+    // else {
+    //  toRead1 = LOG_BUFFER_SIZE - logState->readIndex;
+    //  toRead2 = logState->writeIndex;
+    // }
+    // if (toRead1 != 0) {
+    //  LogString(logState->buffer + logState->readIndex, toRead1);
+    // }
+    // if (toRead2 != 0) {
+    //  LogString(logState->buffer, toRead2);
+    // }
+    // logState->readIndex += toRead1 + toRead2;
+    // if (logState->readIndex >= LOG_BUFFER_SIZE) {
+    //  logState->readIndex -= LOG_BUFFER_SIZE;
+    // }
+}
 
 internal void Win32LoadXInput()
 {
@@ -384,13 +415,6 @@ LRESULT CALLBACK WndProc(
                 screenInfo_->size.y = height;
                 screenInfo_->changed = true;
             }
-        } break;
-
-        case WM_SETCURSOR: {
-            if (DEBUGshowCursor_)
-                result = DefWindowProc(hWnd, message, wParam, lParam);
-            else
-                SetCursor(0);
         } break;
 
         case WM_SYSKEYDOWN: {
@@ -627,7 +651,7 @@ internal void Win32RecordInputBegin(Win32State* state, int inputRecordingIndex)
         state->recordingHandle = CreateFile(filePath, GENERIC_WRITE,
             0, NULL, CREATE_ALWAYS, 0, NULL);
 
-        CopyMemory(replayBuffer->gameMemoryBlock,
+        MemCopy(replayBuffer->gameMemoryBlock,
             state->gameMemoryBlock, state->gameMemorySize);
     }
 }
@@ -658,7 +682,7 @@ internal void Win32PlaybackBegin(Win32State* state, int inputPlayingIndex)
         state->playbackHandle = CreateFile(filePath, GENERIC_READ,
             0, NULL, OPEN_EXISTING, 0, NULL);
 
-        CopyMemory(state->gameMemoryBlock, replayBuffer->gameMemoryBlock, state->gameMemorySize);
+        MemCopy(state->gameMemoryBlock, replayBuffer->gameMemoryBlock, state->gameMemorySize);
     }
 }
 internal void Win32PlaybackEnd(Win32State* state)
@@ -684,7 +708,7 @@ internal void Win32PlayInput(Win32State* state, GameInput* input)
     if (!glFuncs->name) { \
         glFuncs->name = (name##Func*)GetProcAddress(oglLib, #name); \
         if (!glFuncs->name) { \
-            DEBUG_PRINT("OpenGL function load failed: %s", #name); \
+            LOG_ERROR("OpenGL function load failed: %s", #name); \
         } \
     }
 
@@ -715,7 +739,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 {
     HMODULE oglLib = LoadLibrary("opengl32.dll");
     if (!oglLib) {
-        DEBUG_PRINT("Failed to load opengl32.dll\n");
+        LOG_ERROR("Failed to load opengl32.dll\n");
         return false;
     }
 
@@ -742,11 +766,11 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
     }
 
     const GLubyte* vendorString = glFuncs->glGetString(GL_VENDOR);
-    DEBUG_PRINT("GL_VENDOR: %s\n", vendorString);
+    LOG_INFO("GL_VENDOR: %s\n", vendorString);
     const GLubyte* rendererString = glFuncs->glGetString(GL_RENDERER);
-    DEBUG_PRINT("GL_RENDERER: %s\n", rendererString);
+    LOG_INFO("GL_RENDERER: %s\n", rendererString);
     const GLubyte* versionString = glFuncs->glGetString(GL_VERSION);
-    DEBUG_PRINT("GL_VERSION: %s\n", versionString);
+    LOG_INFO("GL_VERSION: %s\n", versionString);
 
     int32 majorVersion = versionString[0] - '0';
     int32 minorVersion = versionString[2] - '0';
@@ -763,7 +787,7 @@ internal bool Win32InitOpenGL(OpenGLFunctions* glFuncs,
 
     const GLubyte* glslString =
         glFuncs->glGetString(GL_SHADING_LANGUAGE_VERSION);
-    DEBUG_PRINT("GL_SHADING_LANGUAGE_VERSION: %s\n", glslString);
+    LOG_INFO("GL_SHADING_LANGUAGE_VERSION: %s\n", glslString);
 
     return true;
 }
@@ -793,29 +817,29 @@ internal bool Win32CreateRC(HWND hWnd,
     desiredPFD.iLayerType = PFD_MAIN_PLANE;
     int pixelFormat = ChoosePixelFormat(hDC, &desiredPFD);
     if (!pixelFormat) {
-        // TODO log
         DWORD error = GetLastError();
+        LOG_ERROR("ChoosePixelFormat error, code %d\n", error);
         return false;
     }
 
     PIXELFORMATDESCRIPTOR suggestedPFD = {};
     DescribePixelFormat(hDC, pixelFormat, sizeof(suggestedPFD), &suggestedPFD);
     if (!SetPixelFormat(hDC, pixelFormat, &suggestedPFD)) {
-        // TODO log
         DWORD error = GetLastError();
+        LOG_ERROR("SetPixelFormat error, code %d\n", error);
         return false;
     }
 
     // Create and attach OpenGL rendering context to this thread
     HGLRC hGLRC = wglCreateContext(hDC);
     if (!hGLRC) {
-        // TODO log
         DWORD error = GetLastError();
+        LOG_ERROR("wglCreateContext error, code %d\n", error);
         return false;
     }
     if (!wglMakeCurrent(hDC, hGLRC)) {
-        // TODO log
         DWORD error = GetLastError();
+        LOG_ERROR("wglMakeCurrent error, code %d\n", error);
         return false;
     }
 
@@ -878,25 +902,43 @@ int CALLBACK WinMain(
     HINSTANCE hInstance, HINSTANCE hPrevInst,
     LPSTR cmdline, int cmd_show)
 {
-    #if GAME_SLOW
-    debugPrint_ = DEBUGPlatformPrint;
-    #endif
+    logFilePath_.Init();
+    SYSTEMTIME systemTime;
+    GetLocalTime(&systemTime);
+    int n = snprintf(logFilePath_.array.data, MAX_PATH,
+        "logs/log%04d-%02d-%02d_%02d-%02d-%02d.txt",
+        systemTime.wYear, systemTime.wMonth, systemTime.wDay,
+        systemTime.wHour, systemTime.wMinute, systemTime.wSecond);
+    logFilePath_.array.size += n;
+
+    LogState* logState = (LogState*)VirtualAlloc(0, sizeof(LogState),
+        MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (!logState) {
+        LOG_ERROR("Log state memory allocation failed\n");
+        FlushLogs(logState);
+        return 1;
+    }
+    logState->eventFirst = 0;
+    logState->eventCount = 0;
+    logState_ = logState;
 
     Win32State state = {};
     Win32GetExeFilePath(&state);
     RemoveFileNameFromPath(state.exeFilePath, pathToApp_, MAX_PATH);
-    DEBUG_PRINT("Path to executable: %s\n", pathToApp_);
+    LOG_INFO("Path to executable: %s\n", pathToApp_);
 
     Win32LoadXInput();
 
     // Create window
     HWND hWnd = Win32CreateWindow(hInstance,
-        "OpenGLWindowClass", "315K",
+        "OpenGLWindowClass", "kid",
         100, 100, START_WIDTH, START_HEIGHT);
     if (!hWnd) {
+        LOG_ERROR("Win32 create window failed\n");
+        FlushLogs(logState);
         return 1;
     }
-    DEBUG_PRINT("Created Win32 window\n");
+    LOG_INFO("Created Win32 window\n");
 
     RECT clientRect;
     GetClientRect(hWnd, &clientRect);
@@ -914,12 +956,14 @@ int CALLBACK WinMain(
     // Create and attach rendering context for OpenGL
     if (!Win32CreateRC(hWnd, screenInfo.colorBits, screenInfo.alphaBits,
     screenInfo.depthBits, screenInfo.stencilBits)) {
+        LOG_ERROR("Win32 create RC failed\n");
+        FlushLogs(logState);
         return 1;
     }
-    DEBUG_PRINT("Created Win32 OpenGL rendering context\n");
+    LOG_INFO("Created Win32 OpenGL rendering context\n");
 
     PlatformFunctions platformFuncs = {};
-    platformFuncs.DEBUGPlatformPrint = DEBUGPlatformPrint;
+    platformFuncs.flushLogs = FlushLogs;
     platformFuncs.DEBUGPlatformFreeFileMemory = DEBUGPlatformFreeFileMemory;
     platformFuncs.DEBUGPlatformReadFile = DEBUGPlatformReadFile;
     platformFuncs.DEBUGPlatformWriteFile = DEBUGPlatformWriteFile;
@@ -927,9 +971,11 @@ int CALLBACK WinMain(
     // Initialize OpenGL
     if (!Win32InitOpenGL(&platformFuncs.glFunctions,
     screenInfo.size.x, screenInfo.size.y)) {
+        LOG_ERROR("Win32 OpenGL init failed\n");
+        FlushLogs(logState);
         return 1;
     }
-    DEBUG_PRINT("Initialized Win32 OpenGL\n");
+    LOG_INFO("Initialized Win32 OpenGL\n");
 
     // Try to get monitor refresh rate
     // TODO test how reliable this is
@@ -938,11 +984,13 @@ int CALLBACK WinMain(
     devmode.dmDriverExtra = 0;
     EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devmode);
     int monitorRefreshHz = (int)devmode.dmDisplayFrequency;
-    DEBUG_PRINT("Refresh rate: %d\n", monitorRefreshHz);
+    LOG_INFO("Refresh rate: %d\n", monitorRefreshHz);
 
     // Initialize audio
     Win32Audio winAudio = {};
     if (!Win32InitAudio(&winAudio, AUDIO_DEFAULT_BUFFER_SIZE_MILLISECONDS)) {
+        LOG_ERROR("Win32 audio init failed\n");
+        FlushLogs(logState);
         return 1;
     }
     winAudio.latency = winAudio.sampleRate / monitorRefreshHz * 2;
@@ -956,13 +1004,13 @@ int CALLBACK WinMain(
         * gameAudio.channels * sizeof(float32);
     gameAudio.buffer = (float32*)VirtualAlloc(0, (size_t)bufferSizeBytes,
         MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (!gameAudio.buffer) {
+        LOG_ERROR("Win32 audio memory allocation failed\n");
+        FlushLogs(logState);
+        return 1;
+    }
     gameAudio.sampleDelta = 0; // TODO revise this
-    DEBUG_PRINT("Initialized Win32 audio\n");
-
-    // TODO probably remove this later
-#if GAME_INTERNAL
-    DEBUGshowCursor_ = true;
-#endif
+    LOG_INFO("Initialized Win32 audio\n");
 
 #if GAME_INTERNAL
     LPVOID baseAddress = (LPVOID)TERABYTES((uint64)2);;
@@ -971,7 +1019,7 @@ int CALLBACK WinMain(
 #endif
 
     GameMemory gameMemory = {};
-    gameMemory.DEBUGShouldInitGlobalFuncs = true;
+    gameMemory.shouldInitGlobalVariables = true;
 
     gameMemory.permanent.size = MEGABYTES(64);
     gameMemory.transient.size = GIGABYTES(1);
@@ -982,17 +1030,20 @@ int CALLBACK WinMain(
     // TODO check allocation fail?
     gameMemory.permanent.memory = VirtualAlloc(baseAddress, (size_t)totalSize,
         MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (!gameMemory.permanent.memory) {
+        LOG_ERROR("Win32 memory allocation failed\n");
+        FlushLogs(logState);
+        return 1;
+    }
     gameMemory.transient.memory = ((uint8*)gameMemory.permanent.memory +
         gameMemory.permanent.size);
 
     state.gameMemorySize = totalSize;
     state.gameMemoryBlock = gameMemory.permanent.memory;
-    if (!gameMemory.permanent.memory || !gameMemory.transient.memory) {
-        // TODO log
-        return 1;
-    }
-    DEBUG_PRINT("Initialized game memory\n");
+    LOG_INFO("Initialized game memory\n");
 
+#if 0
+#if GAME_INTERNAL
     for (int replayIndex = 0;
     replayIndex < ARRAY_COUNT(state.replayBuffers);
     replayIndex++) {
@@ -1016,13 +1067,15 @@ int CALLBACK WinMain(
         // TODO possibly check if this memory block "allocation" fails
         // Debug, so not really that important
     }
-    DEBUG_PRINT("Initialized input replay system\n");
+    LOG_INFO("Initialized input replay system\n");
+#endif
+#endif
 
     char gameCodeDLLPath[MAX_PATH];
-    Win32BuildExePathFileName(&state, "315k_game.dll",
+    Win32BuildExePathFileName(&state, "kid_game.dll",
         MAX_PATH, gameCodeDLLPath);
     char tempCodeDLLPath[MAX_PATH];
-    Win32BuildExePathFileName(&state, "315k_game_temp.dll",
+    Win32BuildExePathFileName(&state, "kid_game_temp.dll",
         MAX_PATH, tempCodeDLLPath);
 
     GameInput input[2] = {};
@@ -1048,8 +1101,8 @@ int CALLBACK WinMain(
     Win32GameCode gameCode =
         Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
 
+    FlushLogs(logState);
     running_ = true;
-
     while (running_) {
         // TODO this gets called twice very quickly in succession
         FILETIME newDLLWriteTime = Win32GetLastWriteTime(gameCodeDLLPath);
@@ -1057,7 +1110,7 @@ int CALLBACK WinMain(
         &gameCode.lastDLLWriteTime) > 0) {
             Win32UnloadGameCode(&gameCode);
             gameCode = Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
-            gameMemory.DEBUGShouldInitGlobalFuncs = true;
+            gameMemory.shouldInitGlobalVariables = true;
         }
 
         // Process keyboard input & other messages
@@ -1106,8 +1159,7 @@ int CALLBACK WinMain(
             // TODO the get state function has a really bad performance bug
             // which causes it to stall for a couple ms if a controller
             // isn't connected
-            if (XInputGetState(controllerInd, &controllerState)
-            == ERROR_SUCCESS) {
+            if (XInputGetState(controllerInd, &controllerState) == ERROR_SUCCESS) {
                 newController->isConnected = true;
 
                 // TODO check controller_state.dwPacketNumber
@@ -1141,9 +1193,9 @@ int CALLBACK WinMain(
                 newController->leftEnd.y = Win32ProcessXInputStickValue(
                     pad->sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
                 newController->rightEnd.x = Win32ProcessXInputStickValue(
-                    pad->sThumbRX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+                    pad->sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
                 newController->rightEnd.y = Win32ProcessXInputStickValue(
-                    pad->sThumbRY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
+                    pad->sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
 
 #if 0
                 XINPUT_VIBRATION vibration;
@@ -1157,6 +1209,7 @@ int CALLBACK WinMain(
             }
         }
 
+#if 0
 #if GAME_INTERNAL
         // Recording game input
         if (newInput->controllers[0].lShoulder.isDown
@@ -1164,11 +1217,11 @@ int CALLBACK WinMain(
         && state.inputPlayingIndex == 0) {
             if (state.inputRecordingIndex == 0) {
                 Win32RecordInputBegin(&state, 1);
-                DEBUG_PRINT("RECORDING - START\n");
+                LOG_INFO("RECORDING - START\n");
             }
             else {
                 Win32RecordInputEnd(&state);
-                DEBUG_PRINT("RECORDING - STOP\n");
+                LOG_INFO("RECORDING - STOP\n");
             }
         }
         if (newInput->controllers[0].rShoulder.isDown
@@ -1176,11 +1229,11 @@ int CALLBACK WinMain(
         && state.inputRecordingIndex == 0) {
             if (state.inputPlayingIndex == 0) {
                 Win32PlaybackBegin(&state, 1);
-                DEBUG_PRINT("-> PLAYING - START\n");
+                LOG_INFO("-> PLAYING - START\n");
             }
             else {
                 Win32PlaybackEnd(&state);
-                DEBUG_PRINT("-> PLAYING - STOP\n");
+                LOG_INFO("-> PLAYING - STOP\n");
             }
         }
 
@@ -1195,6 +1248,7 @@ int CALLBACK WinMain(
         && newInput->controllers[0].y.transitions > 0) {
             gameMemory.isInitialized = false;
         }
+#endif
 #endif
 
         /*HRESULT hr;
@@ -1218,7 +1272,7 @@ int CALLBACK WinMain(
         /*float64 totalElapsedSound = secondsPlayed - soundBegin;
         int64 timerTotal = timerEnd.QuadPart - timerBegin.QuadPart;
         float64 totalElapsedTime = (float64)timerTotal / timerFreq;
-        DEBUG_PRINT("sound time sync offset (real minus sound): %f\n",
+        LOG_INFO("sound time sync offset (real minus sound): %f\n",
             totalElapsedTime - totalElapsedSound);*/
 
         if (gameCode.gameUpdateAndRender) {
@@ -1226,7 +1280,7 @@ int CALLBACK WinMain(
             gameAudio.fillLength = winAudio.latency;
             gameCode.gameUpdateAndRender(&thread, &platformFuncs,
                 newInput, screenInfo, elapsed,
-                &gameMemory, &gameAudio);
+                &gameMemory, &gameAudio, logState);
             screenInfo.changed = false;
         }
         else {
@@ -1252,6 +1306,8 @@ int CALLBACK WinMain(
             }
         }
 
+        FlushLogs(logState);
+
         // NOTE
         // SwapBuffers seems to effectively stall for vsync target time
         // It's probably more complicated than that under the hood,
@@ -1269,12 +1325,15 @@ int CALLBACK WinMain(
 
     Win32StopAudio(&winAudio);
 
+    FlushLogs(logState);
+
     return 0;
 }
 
 #include "win32_audio.cpp"
 
-// TODO temporary! this is a bad idea! probably already compiled in main.cpp
+// TODO temporary! this is a bad idea! already compiled in main.cpp
 #include "km_input.cpp"
 #include "km_string.cpp"
 #include "km_lib.cpp"
+#include "km_log.cpp"

@@ -209,14 +209,14 @@ internal void WaveTableInit(const GameAudio* audio, WaveTable* waveTable)
     // Meh, nevermind. Need a good loudness function for this.
     /*float32 loudness[WAVETABLE_MAX_WAVES];
     float32 minLoudness = 1e9;
-    DEBUG_PRINT("loudness values:\n");
+    LOG_INFO("loudness values:\n");
     for (int i = 0; i < waveTable->numWaves; i++) {
         loudness[i] = CalcWaveLoudness(audio,
             waveTable->waves[i].buffer, waveBufferLength);
         if (loudness[i] < minLoudness) {
             minLoudness = loudness[i];
         }
-        DEBUG_PRINT("%d - %f\n", i, loudness[i]);
+        LOG_INFO("%d - %f\n", i, loudness[i]);
     }
     for (int w = 0; w < waveTable->numWaves; w++) {
         for (int i = 0; i < waveBufferLength; i++) {

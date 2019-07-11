@@ -1,6 +1,7 @@
 #pragma once
 
 #include "km_math.h"
+#include "load_png.h"
 #include "opengl.h"
 #include "opengl_base.h"
 #include "text.h"
@@ -92,7 +93,7 @@ struct GameState
     GLuint grainTexture;
     GLuint fxaaShader;
 
-    GLuint pTexBase;
+    TextureGL pTexBase;
     ParticleSystem ps;
 };
 

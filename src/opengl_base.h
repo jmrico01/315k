@@ -50,8 +50,8 @@ struct RectCoordsNDC
 
 struct LineGLData
 {
-    Vec3 pos[MAX_LINE_POINTS];
     int count;
+    Vec3 pos[MAX_LINE_POINTS];
 };
 
 RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size,
@@ -81,10 +81,11 @@ BoxGL InitBoxGL(const ThreadContext* thread,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 
 // TODO this API is unrealistic and dumb. I need a batch draw function?
+// TODO actually, is it? this is pretty useful for debug stuff...
 void DrawRect(RectGL rectGL, ScreenInfo screenInfo,
     Vec2Int pos, Vec2 anchor, Vec2Int size, Vec4 color);
 void DrawTexturedRect(TexturedRectGL texturedRectGL, ScreenInfo screenInfo,
-    Vec2Int pos, Vec2 anchor, Vec2Int size, GLuint texture);
+    Vec2Int pos, Vec2 anchor, Vec2Int size, bool32 flipHorizontal, GLuint texture);
 void DrawPlane(PlaneGL,
     Mat4 vp, Vec3 point, Vec3 normal, Vec4 color);
 void DrawBox(BoxGL boxGL,

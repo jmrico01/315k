@@ -3,12 +3,13 @@
 #undef internal
 #include <random>
 #define internal static
-#include <fftw3.h>
+//#include <fftw3.h>
 
 #include "main_platform.h"
 #include "km_debug.h"
 #include "km_defines.h"
 #include "km_input.h"
+#include "km_log.h"
 #include "km_math.h"
 #include "km_string.h"
 #include "opengl.h"
@@ -310,10 +311,10 @@ internal void LoadLevel(const ThreadContext* thread, const char* filePath,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
     // Read shader code from files.
-    DEBUG_PRINT("Reading level file: %s\n", filePath);
+    LOG_INFO("Reading level file: %s\n", filePath);
     DEBUGReadFileResult levelFile = DEBUGPlatformReadFile(thread, filePath);
     if (levelFile.size == 0) {
-        DEBUG_PRINT("Failed to read level file\n");
+        LOG_ERROR("Failed to read level file\n");
         return;
     }
 
@@ -404,18 +405,19 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 	DEBUG_ASSERT(sizeof(GameState) <= memory->permanent.size);
 
 	GameState *gameState = (GameState*)memory->permanent.memory;
-    if (memory->DEBUGShouldInitGlobalFuncs) {
-	    // Initialize global function names
-#if GAME_SLOW
-        debugPrint_ = platformFuncs->DEBUGPlatformPrint;
-#endif
+    if (memory->shouldInitGlobalVariables) {
+        // Initialize global function names
+        logState_ = logState;
+        flushLogs_ = platformFuncs->flushLogs;
+        
         #define FUNC(returntype, name, ...) name = \
         platformFuncs->glFunctions.name;
             GL_FUNCTIONS_BASE
             GL_FUNCTIONS_ALL
         #undef FUNC
 
-        memory->DEBUGShouldInitGlobalFuncs = false;
+        memory->shouldInitGlobalVariables = false;
+        LOG_INFO("Initialized global variables\n");
     }
 	if (!memory->isInitialized) {
         // Very explicit depth testing setup (DEFAULT VALUES)
@@ -490,7 +492,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
         FT_Error error = FT_Init_FreeType(&gameState->ftLibrary);
         if (error) {
-            DEBUG_PRINT("FreeType init error: %d\n", error);
+            LOG_ERROR("FreeType init error: %d\n", error);
         }
         gameState->fontFaceSmall = LoadFontFace(thread, gameState->ftLibrary,
             "data/fonts/ibm-plex-mono/regular.ttf", 18,
@@ -582,39 +584,43 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
             platformFuncs->DEBUGPlatformReadFile,
             platformFuncs->DEBUGPlatformFreeFileMemory);
 
-        gameState->pTexBase = LoadPNGOpenGL(thread,
-            "data/textures/base.png",
-            platformFuncs->DEBUGPlatformReadFile,
-            platformFuncs->DEBUGPlatformFreeFileMemory);
+        if (!LoadPNGOpenGL(thread,
+        "data/textures/base.png",
+        GL_LINEAR, GL_LINEAR, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE,
+        gameState->pTexBase, memory->transient,
+        platformFuncs->DEBUGPlatformReadFile,
+        platformFuncs->DEBUGPlatformFreeFileMemory)) {
+            DEBUG_PANIC("Failed to load base texture\n");
+        }
 
         CreateParticleSystem(&gameState->ps, 10000, 0, 1.5f,
             Vec3::zero,
             0.05f, 0.02f,
             nullptr, 0, nullptr, 0, nullptr, 0, nullptr, 0,
-            InitParticleDeath, gameState->pTexBase
+            InitParticleDeath, gameState->pTexBase.textureID
         );
 
         // Testing FFTW3
-        const int N = 1e5;
-        DEBUG_PRINT("testing FFTW3 with N = %d\n", N);
+        // const int N = 1e5;
+        // LOG_INFO("testing FFTW3 with N = %d\n", N);
 
-        fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
-            sizeof(fftwf_complex) * N);
-        fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
-            sizeof(fftwf_complex) * N);
-        fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
-            FFTW_FORWARD, FFTW_ESTIMATE);
+        // fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
+        //     sizeof(fftwf_complex) * N);
+        // fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
+        //     sizeof(fftwf_complex) * N);
+        // fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
+        //     FFTW_FORWARD, FFTW_ESTIMATE);
 
-        // initialize in and out arrays
+        // // initialize in and out arrays
 
-        fftwf_execute(p);
+        // fftwf_execute(p);
 
-        fftwf_destroy_plan(p);
-        fftwf_free(in);
-        fftwf_free(out);
+        // fftwf_destroy_plan(p);
+        // fftwf_free(in);
+        // fftwf_free(out);
 
-        DEBUG_PRINT("...done!\n");
-        DEBUG_PRINT("damn, that was fast. good thing we're in the West\n");
+        // LOG_INFO("...done!\n");
+        // LOG_INFO("damn, that was fast. good thing we're in the West\n");
 
 		memory->isInitialized = true;
 	}
@@ -643,13 +649,13 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #if GAME_SLOW
             GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
             if (fbStatus != GL_FRAMEBUFFER_COMPLETE) {
-                DEBUG_PRINT("Incomplete framebuffer (%d), status %x\n",
+                LOG_ERROR("Incomplete framebuffer (%d), status %x\n",
                     i, fbStatus);
             }
 #endif
         }
 
-        DEBUG_PRINT("Updated screen-size dependent info\n");
+        LOG_INFO("Updated screen-size dependent info\n");
     }
 
     // Level loading
@@ -693,7 +699,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     float32 beatDuration = 60.0f / (float32)gameState->bpm;
     float32 halfBeatDuration = 60.0f / (float32)gameState->bpm / 2.0f;
     if (gameState->lastHalfBeat >= halfBeatDuration) {
-        //DEBUG_PRINT("half beat\n");
+        //LOG_INFO("half beat\n");
         gameState->lastHalfBeat -= halfBeatDuration;
         HalfBeat(gameState, screenInfo);
     }
@@ -1073,14 +1079,16 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     // Catch-all site for OpenGL errors
     GLenum err;
     while ((err = glGetError()) != GL_NO_ERROR) {
-        DEBUG_PRINT("OpenGL error: %x\n", err);
+        LOG_ERROR("OpenGL error: %x\n", err);
     }
 #endif
 }
 
+#include "km_debug.cpp"
 #include "km_input.cpp"
 #include "km_string.cpp"
 #include "km_lib.cpp"
+#include "km_log.cpp"
 #include "opengl_base.cpp"
 #include "text.cpp"
 #include "load_png.cpp"
