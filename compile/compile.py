@@ -94,6 +94,10 @@ if platform.system() == "Windows":
 	paths["lib-libpng-win-d"] = paths["win32-libs"] + "/lpng1634/lib-d"
 	paths["lib-libpng-win-r"] = paths["win32-libs"] + "/lpng1634/lib-r"
 
+	paths["include-fftw-win"] = paths["win32-libs"] + "/fftw-3.3.5/include"
+	paths["lib-fftw-win-d"] = paths["win32-libs"] + "/fftw-3.3.5/lib-d"
+	paths["lib-fftw-win-r"] = paths["win32-libs"] + "/fftw-3.3.5/lib-r"
+
 if platform.system() == "Darwin":
 	paths["include-freetype-mac"] = paths["macos-libs"] + "/include/freetype2"
 	paths["lib-freetype-mac"] = paths["macos-libs"] + "/lib"
@@ -191,7 +195,8 @@ def WinCompile(compileMode, debugger):
 
 	includePaths = " ".join([
 		"/I" + paths["include-freetype-win"],
-		"/I" + paths["include-libpng-win"]
+		"/I" + paths["include-libpng-win"],
+		"/I" + paths["include-fftw-win"]
 	])
 
 	linkerFlags = " ".join([
@@ -212,23 +217,27 @@ def WinCompile(compileMode, debugger):
 
 	libPathsGame = " ".join([
 		"/LIBPATH:" + paths["lib-freetype-win-d"],
-		"/LIBPATH:" + paths["lib-libpng-win-d"]
+		"/LIBPATH:" + paths["lib-libpng-win-d"],
+		"/LIBPATH:" + paths["lib-fftw-win-d"]
 	])
 	if compileMode == CompileMode.INTERNAL or compileMode == CompileMode.RELEASE:
 		libPathsGame = " ".join([
 			"/LIBPATH:" + paths["lib-freetype-win-r"],
-			"/LIBPATH:" + paths["lib-libpng-win-r"]
+			"/LIBPATH:" + paths["lib-libpng-win-r"],
+			"/LIBPATH:" + paths["lib-fftw-win-r"]
 		])
 
 	libsGame = " ".join([
 		"freetype281MTd.lib",
 		"libpng16.lib",
+		"libfftw3f-3.lib",
 		"zlib.lib"
 	])
 	if compileMode == CompileMode.INTERNAL or compileMode == CompileMode.RELEASE:
 		libsGame = " ".join([
 			"freetype281MT.lib",
 			"libpng16.lib",
+			"libfftw3f-3.lib",
 			"zlib.lib"
 		])
 

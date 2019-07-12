@@ -931,7 +931,7 @@ int CALLBACK WinMain(
 
     // Create window
     HWND hWnd = Win32CreateWindow(hInstance,
-        "OpenGLWindowClass", "kid",
+        "OpenGLWindowClass", "315k",
         100, 100, START_WIDTH, START_HEIGHT);
     if (!hWnd) {
         LOG_ERROR("Win32 create window failed\n");
@@ -1072,10 +1072,10 @@ int CALLBACK WinMain(
 #endif
 
     char gameCodeDLLPath[MAX_PATH];
-    Win32BuildExePathFileName(&state, "kid_game.dll",
+    Win32BuildExePathFileName(&state, "315k_game.dll",
         MAX_PATH, gameCodeDLLPath);
     char tempCodeDLLPath[MAX_PATH];
-    Win32BuildExePathFileName(&state, "kid_game_temp.dll",
+    Win32BuildExePathFileName(&state, "315k_game_temp.dll",
         MAX_PATH, tempCodeDLLPath);
 
     GameInput input[2] = {};

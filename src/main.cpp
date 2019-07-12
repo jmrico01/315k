@@ -3,7 +3,7 @@
 #undef internal
 #include <random>
 #define internal static
-//#include <fftw3.h>
+#include <fftw3.h>
 
 #include "main_platform.h"
 #include "km_debug.h"
@@ -601,26 +601,26 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         );
 
         // Testing FFTW3
-        // const int N = 1e5;
-        // LOG_INFO("testing FFTW3 with N = %d\n", N);
+        const int N = 10000;
+        LOG_INFO("testing FFTW3 with N = %d\n", N);
 
-        // fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
-        //     sizeof(fftwf_complex) * N);
-        // fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
-        //     sizeof(fftwf_complex) * N);
-        // fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
-        //     FFTW_FORWARD, FFTW_ESTIMATE);
+        fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
+            sizeof(fftwf_complex) * N);
+        fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
+            sizeof(fftwf_complex) * N);
+        fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
+            FFTW_FORWARD, FFTW_ESTIMATE);
 
-        // // initialize in and out arrays
+        // initialize in and out arrays
 
-        // fftwf_execute(p);
+        fftwf_execute(p);
 
-        // fftwf_destroy_plan(p);
-        // fftwf_free(in);
-        // fftwf_free(out);
+        fftwf_destroy_plan(p);
+        fftwf_free(in);
+        fftwf_free(out);
 
-        // LOG_INFO("...done!\n");
-        // LOG_INFO("damn, that was fast. good thing we're in the West\n");
+        LOG_INFO("...done!\n");
+        LOG_INFO("damn, that was fast. good thing we're in the West\n");
 
 		memory->isInitialized = true;
 	}
