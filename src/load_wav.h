@@ -10,9 +10,9 @@
 
 struct AudioBuffer
 {
-    int sampleRate;
-    int channels;
-    int bufferSizeSamples;
+    uint32 sampleRate;
+    uint8 channels;
+    uint64 bufferSizeSamples;
     float32 buffer[AUDIO_MAX_SAMPLES * AUDIO_MAX_CHANNELS];
 };
 
@@ -23,5 +23,5 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 
 float32 LinearSample(const GameAudio* audio,
-    const float32* buffer, int bufferLengthSamples,
+    const float32* buffer, uint64 bufferLengthSamples,
     int channel, float32 t);

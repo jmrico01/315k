@@ -90,13 +90,13 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
 
     void* data = (void*)(header + 1);
     int bytesPerSample = format->bitsPerSample / 8;
-    int lengthSamples = header->dataSize / bytesPerSample / format->channels;
+    uint64 lengthSamples = header->dataSize / bytesPerSample / format->channels;
     if (lengthSamples > AUDIO_MAX_SAMPLES) {
         LOG_ERROR("WAV file too long: %s\n", filePath);
         return false;
     }
 
-    if (format->sampleRate != audio->sampleRate) {
+    if ((uint32)format->sampleRate != audio->sampleRate) {
         DEBUG_ASSERT(transient->size >= sizeof(AudioBuffer));
         AudioBuffer* origBuffer = (AudioBuffer*)transient->memory;
         MemCopy(origBuffer->buffer, data, header->dataSize);
@@ -130,7 +130,7 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
 }
 
 float32 LinearSample(const GameAudio* audio,
-    const float32* buffer, int bufferLengthSamples,
+    const float32* buffer, uint64 bufferLengthSamples,
     int channel, float32 t)
 {
     float32 iFloat = t * bufferLengthSamples;

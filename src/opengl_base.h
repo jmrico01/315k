@@ -50,7 +50,7 @@ struct RectCoordsNDC
 
 struct LineGLData
 {
-    int count;
+    uint64 count;
     Vec3 pos[MAX_LINE_POINTS];
 };
 

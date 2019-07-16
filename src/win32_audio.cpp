@@ -42,7 +42,7 @@ void CALLBACK MidiInputCallback(
     winAudio->midiInBusy = false;
 }
 
-bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds)
+bool32 Win32InitAudio(Win32Audio* winAudio, uint64 bufferSizeMilliseconds)
 {
     // TODO release/CoTaskMemFree on failure
     // and in general
@@ -90,7 +90,7 @@ bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds)
         case WAVE_FORMAT_PCM: {
             LOG_INFO("Format: PCM\n");
             winAudio->format = AUDIO_FORMAT_PCM_INT16;
-            winAudio->bitsPerSample = (int)format->wBitsPerSample;
+            winAudio->bitsPerSample = format->wBitsPerSample;
         } break;
         case WAVE_FORMAT_EXTENSIBLE: {
             if (sizeof(WAVEFORMATEX) + format->cbSize
@@ -180,9 +180,9 @@ bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds)
         return false;
     }
 
-    winAudio->sampleRate = (int)format->nSamplesPerSec;
-    winAudio->channels = (int)format->nChannels;
-    winAudio->bufferSizeSamples = (int)bufferSizeFrames;
+    winAudio->sampleRate = format->nSamplesPerSec;
+    winAudio->channels = (uint8)format->nChannels;
+    winAudio->bufferSizeSamples = bufferSizeFrames;
 
     winAudio->audioClient = audioClient;
     winAudio->renderClient = renderClient;
@@ -249,7 +249,7 @@ void Win32StopAudio(Win32Audio* winAudio)
 }
 
 void Win32WriteAudioSamples(const Win32Audio* winAudio,
-    const GameAudio* gameAudio, int numSamples)
+    const GameAudio* gameAudio, uint64 numSamples)
 {
     DEBUG_ASSERT(numSamples <= winAudio->bufferSizeSamples);
 
@@ -260,7 +260,7 @@ void Win32WriteAudioSamples(const Win32Audio* winAudio,
         switch (winAudio->format) {
             case AUDIO_FORMAT_PCM_FLOAT32: {
                 float32* winBuffer = (float32*)audioBuffer;
-                for (int i = 0; i < numSamples; i++) {
+                for (uint64 i = 0; i < numSamples; i++) {
                     winBuffer[i * winAudio->channels] =
                         gameAudio->buffer[i * gameAudio->channels];
                     winBuffer[i * winAudio->channels + 1] =
@@ -276,7 +276,7 @@ void Win32WriteAudioSamples(const Win32Audio* winAudio,
             } break;
             case AUDIO_FORMAT_PCM_INT16: {
                 int16* winBuffer = (int16*)audioBuffer;
-                for (int i = 0; i < numSamples; i++) {
+                for (uint64 i = 0; i < numSamples; i++) {
                     winBuffer[i * winAudio->channels] = (int16)(
                         INT16_MAXVAL *
                         gameAudio->buffer[i * gameAudio->channels]);
