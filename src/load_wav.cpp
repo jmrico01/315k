@@ -28,7 +28,7 @@ struct WaveFormat
 
 bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     const GameAudio* audio, AudioBuffer* audioBuffer,
-    MemoryBlock* transient,
+    const MemoryBlock& transient,
     DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
     DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
@@ -97,8 +97,8 @@ bool32 LoadWAV(const ThreadContext* thread, const char* filePath,
     }
 
     if ((uint32)format->sampleRate != audio->sampleRate) {
-        DEBUG_ASSERT(transient->size >= sizeof(AudioBuffer));
-        AudioBuffer* origBuffer = (AudioBuffer*)transient->memory;
+        DEBUG_ASSERT(transient.size >= sizeof(AudioBuffer));
+        AudioBuffer* origBuffer = (AudioBuffer*)transient.memory;
         MemCopy(origBuffer->buffer, data, header->dataSize);
         int targetLengthSamples = (int)((float32)lengthSamples /
             format->sampleRate * audio->sampleRate);
