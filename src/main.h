@@ -64,7 +64,8 @@ struct GameState
     // ------------------------------------
 
     RectGL rectGL;
-    TexturedRectGL texturedRectGL;
+    RectPixelGL rectPixelGL;
+    TexturedRectPixelGL texturedRectPixelGL;
     LineGL lineGL;
     TextGL textGL;
     ParticleSystemGL psGL;

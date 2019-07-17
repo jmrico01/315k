@@ -145,12 +145,10 @@ GLuint LoadShaders(const ThreadContext* thread,
 	return programID;
 }
 
-RectGL InitRectGL(const ThreadContext* thread,
+void RectGL::Init(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-	// TODO I don't even need this stupid shit. Jeez, I'm dumb...
-	RectGL rectGL;
 	const GLfloat vertices[] = {
 		0.0f, 0.0f,
 		1.0f, 0.0f,
@@ -160,13 +158,12 @@ RectGL InitRectGL(const ThreadContext* thread,
 		0.0f, 0.0f
 	};
 
-	glGenVertexArrays(1, &rectGL.vertexArray);
-	glBindVertexArray(rectGL.vertexArray);
+	glGenVertexArrays(1, &vertexArray);
+	glBindVertexArray(vertexArray);
 
-	glGenBuffers(1, &rectGL.vertexBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, rectGL.vertexBuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
-		GL_STATIC_DRAW);
+	glGenBuffers(1, &vertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(
 		0, // match shader layout location
@@ -179,18 +176,69 @@ RectGL InitRectGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	rectGL.programID = LoadShaders(thread,
+	programID = LoadShaders(thread,
 		"shaders/rect.vert", "shaders/rect.frag",
 		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
-	
-	return rectGL;
 }
 
-TexturedRectGL InitTexturedRectGL(const ThreadContext* thread,
+void RectGL::Draw(Mat4 transform, Vec4 color) const
+{
+	GLint loc;
+	glUseProgram(programID);
+	loc = glGetUniformLocation(programID, "transform");
+	glUniformMatrix4fv(loc, 1, GL_FALSE, &transform.e[0][0]);
+	loc = glGetUniformLocation(programID, "color");
+	glUniform4fv(loc, 1, &color.e[0]);
+
+	glBindVertexArray(vertexArray);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
+	glBindVertexArray(0);
+}
+
+RectPixelGL InitRectPixelGL(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-	TexturedRectGL texturedRectGL;
+	RectPixelGL rectPixelGL;
+	const GLfloat vertices[] = {
+		0.0f, 0.0f,
+		1.0f, 0.0f,
+		1.0f, 1.0f,
+		1.0f, 1.0f,
+		0.0f, 1.0f,
+		0.0f, 0.0f
+	};
+
+	glGenVertexArrays(1, &rectPixelGL.vertexArray);
+	glBindVertexArray(rectPixelGL.vertexArray);
+
+	glGenBuffers(1, &rectPixelGL.vertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, rectPixelGL.vertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(
+		0, // match shader layout location
+		2, // size (vec2)
+		GL_FLOAT, // type
+		GL_FALSE, // normalized?
+		0, // stride
+		(void*)0 // array buffer offset
+	);
+
+	glBindVertexArray(0);
+
+	rectPixelGL.programID = LoadShaders(thread,
+		"shaders/rectPixel.vert", "shaders/rectPixel.frag",
+		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	
+	return rectPixelGL;
+}
+
+TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread,
+	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+{
+	TexturedRectPixelGL texturedRectPixelGL;
 	// TODO probably use indexing for this
 	const GLfloat vertices[] = {
 		0.0f, 0.0f,
@@ -209,11 +257,11 @@ TexturedRectGL InitTexturedRectGL(const ThreadContext* thread,
 		0.0f, 0.0f
 	};
 
-	glGenVertexArrays(1, &texturedRectGL.vertexArray);
-	glBindVertexArray(texturedRectGL.vertexArray);
+	glGenVertexArrays(1, &texturedRectPixelGL.vertexArray);
+	glBindVertexArray(texturedRectPixelGL.vertexArray);
 
-	glGenBuffers(1, &texturedRectGL.vertexBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, texturedRectGL.vertexBuffer);
+	glGenBuffers(1, &texturedRectPixelGL.vertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, texturedRectPixelGL.vertexBuffer);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
 		GL_STATIC_DRAW);
 	glEnableVertexAttribArray(0);
@@ -226,8 +274,8 @@ TexturedRectGL InitTexturedRectGL(const ThreadContext* thread,
 		(void*)0 // array buffer offset
 	);
 
-	glGenBuffers(1, &texturedRectGL.uvBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, texturedRectGL.uvBuffer);
+	glGenBuffers(1, &texturedRectPixelGL.uvBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, texturedRectPixelGL.uvBuffer);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(uvs), uvs, GL_STATIC_DRAW);
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(
@@ -241,11 +289,11 @@ TexturedRectGL InitTexturedRectGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	texturedRectGL.programID = LoadShaders(thread,
+	texturedRectPixelGL.programID = LoadShaders(thread,
 		"shaders/texturedRect.vert", "shaders/texturedRect.frag",
 		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
 	
-	return texturedRectGL;
+	return texturedRectPixelGL;
 }
 
 LineGL InitLineGL(const ThreadContext* thread,
@@ -395,46 +443,48 @@ BoxGL InitBoxGL(const ThreadContext* thread,
 	return boxGL;
 }
 
-void DrawRect(RectGL rectGL, ScreenInfo screenInfo,
+void DrawRectPixel(const RectPixelGL& rectPixelGL,
+	const ScreenInfo& screenInfo,
 	Vec2Int pos, Vec2 anchor, Vec2Int size, Vec4 color)
 {
 	RectCoordsNDC ndc = ToRectCoordsNDC(pos, size, anchor, screenInfo);
 
 	GLint loc;
-	glUseProgram(rectGL.programID);
-	loc = glGetUniformLocation(rectGL.programID, "posBottomLeft");
+	glUseProgram(rectPixelGL.programID);
+	loc = glGetUniformLocation(rectPixelGL.programID, "posBottomLeft");
 	glUniform3fv(loc, 1, &ndc.pos.e[0]);
-	loc = glGetUniformLocation(rectGL.programID, "size");
+	loc = glGetUniformLocation(rectPixelGL.programID, "size");
 	glUniform2fv(loc, 1, &ndc.size.e[0]);
-	loc = glGetUniformLocation(rectGL.programID, "color");
+	loc = glGetUniformLocation(rectPixelGL.programID, "color");
 	glUniform4fv(loc, 1, &color.e[0]);
 
-	glBindVertexArray(rectGL.vertexArray);
+	glBindVertexArray(rectPixelGL.vertexArray);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 }
 
-void DrawTexturedRect(TexturedRectGL texturedRectGL, ScreenInfo screenInfo,
+void DrawTexturedRectPixel(const TexturedRectPixelGL& texturedRectPixelGL,
+	const ScreenInfo& screenInfo,
 	Vec2Int pos, Vec2 anchor, Vec2Int size, bool32 flipHorizontal, GLuint texture)
 {
 	RectCoordsNDC ndc = ToRectCoordsNDC(pos, size, anchor, screenInfo);
 
 	GLint loc;
-	glUseProgram(texturedRectGL.programID);
+	glUseProgram(texturedRectPixelGL.programID);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	loc = glGetUniformLocation(texturedRectGL.programID, "textureSampler");
+	loc = glGetUniformLocation(texturedRectPixelGL.programID, "textureSampler");
 	glUniform1i(loc, 0);
 
-	loc = glGetUniformLocation(texturedRectGL.programID, "posBottomLeft");
+	loc = glGetUniformLocation(texturedRectPixelGL.programID, "posBottomLeft");
 	glUniform3fv(loc, 1, &ndc.pos.e[0]);
-	loc = glGetUniformLocation(texturedRectGL.programID, "size");
+	loc = glGetUniformLocation(texturedRectPixelGL.programID, "size");
 	glUniform2fv(loc, 1, &ndc.size.e[0]);
-	loc = glGetUniformLocation(texturedRectGL.programID, "flipHorizontal");
+	loc = glGetUniformLocation(texturedRectPixelGL.programID, "flipHorizontal");
 	glUniform1i(loc, flipHorizontal);
 
-	glBindVertexArray(texturedRectGL.vertexArray);
+	glBindVertexArray(texturedRectPixelGL.vertexArray);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 }

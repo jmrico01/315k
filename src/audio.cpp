@@ -523,31 +523,31 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 
     audioState.waveTable.WriteSamples(audio);
 
-    float32 lowPassFrequency = MaxFloat32((float32)input->mousePos.x, 0.0f);
-    float32 a = 2.0f * PI_F * lowPassFrequency / (float32)audio->sampleRate;
-    float32 alpha = a / (a + 1.0f);
-    for (uint64 i = 1; i < audio->fillLength; i++) {
-        audio->buffer[i * audio->channels] *= alpha;
-        audio->buffer[i * audio->channels] += (1.0f - alpha)
-            * audio->buffer[(i - 1) * audio->channels];
-        audio->buffer[i * audio->channels + 1] *= alpha;
-        audio->buffer[i * audio->channels + 1] += (1.0f - alpha)
-            * audio->buffer[(i - 1) * audio->channels + 1];
-    }
-
-    // float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
-    // float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
-    // float32 alpha = 1.0f / (a + 1.0f);
-    // float32 prevChannel0 = audio->buffer[0];
-    // float32 prevChannel1 = audio->buffer[1];
+    // float32 lowPassFrequency = MaxFloat32((float32)input->mousePos.x, 0.0f);
+    // float32 a = 2.0f * PI_F * lowPassFrequency / (float32)audio->sampleRate;
+    // float32 alpha = a / (a + 1.0f);
     // for (uint64 i = 1; i < audio->fillLength; i++) {
-    //     float32 channel0 = audio->buffer[i * audio->channels];
-    //     audio->buffer[i * audio->channels] = alpha * (audio->buffer[(i - 1) * audio->channels] + channel0 - prevChannel0);
-    //     prevChannel0 = channel0;
-    //     float32 channel1 = audio->buffer[i * audio->channels + 1];
-    //     audio->buffer[i * audio->channels + 1] = alpha * (audio->buffer[(i - 1) * audio->channels + 1] + channel1 - prevChannel1);
-    //     prevChannel1 = channel1;
+    //     audio->buffer[i * audio->channels] *= alpha;
+    //     audio->buffer[i * audio->channels] += (1.0f - alpha)
+    //         * audio->buffer[(i - 1) * audio->channels];
+    //     audio->buffer[i * audio->channels + 1] *= alpha;
+    //     audio->buffer[i * audio->channels + 1] += (1.0f - alpha)
+    //         * audio->buffer[(i - 1) * audio->channels + 1];
     // }
+
+    float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
+    float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
+    float32 alpha = 1.0f / (a + 1.0f);
+    float32 prevChannel0 = audio->buffer[0];
+    float32 prevChannel1 = audio->buffer[1];
+    for (uint64 i = 1; i < audio->fillLength; i++) {
+        float32 channel0 = audio->buffer[i * audio->channels];
+        audio->buffer[i * audio->channels] = alpha * (audio->buffer[(i - 1) * audio->channels] + channel0 - prevChannel0);
+        prevChannel0 = channel0;
+        float32 channel1 = audio->buffer[i * audio->channels + 1];
+        audio->buffer[i * audio->channels + 1] = alpha * (audio->buffer[(i - 1) * audio->channels + 1] + channel1 - prevChannel1);
+        prevChannel1 = channel1;
+    }
 
 #if GAME_INTERNAL
     if (WasKeyPressed(input, KM_KEY_G)) {

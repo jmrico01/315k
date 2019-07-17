@@ -11,9 +11,21 @@ struct RectGL
 	GLuint vertexArray;
 	GLuint vertexBuffer;
 	GLuint programID;
+
+	void Init(const ThreadContext* thread,
+		DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+		DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+	void Draw(Mat4 transform, Vec4 color) const;
 };
 
-struct TexturedRectGL
+struct RectPixelGL
+{
+	GLuint vertexArray;
+	GLuint vertexBuffer;
+	GLuint programID;
+};
+
+struct TexturedRectPixelGL
 {
 	GLuint vertexArray;
 	GLuint vertexBuffer;
@@ -64,10 +76,10 @@ GLuint LoadShaders(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 
-RectGL InitRectGL(const ThreadContext* thread,
+RectPixelGL InitRectPixelGL(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
-TexturedRectGL InitTexturedRectGL(const ThreadContext* thread,
+TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 LineGL InitLineGL(const ThreadContext* thread,
@@ -80,11 +92,11 @@ BoxGL InitBoxGL(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
 
-// TODO this API is unrealistic and dumb. I need a batch draw function?
-// TODO actually, is it? this is pretty useful for debug stuff...
-void DrawRect(RectGL rectGL, ScreenInfo screenInfo,
+void DrawRectPixel(const RectPixelGL& rectPixelGL,
+	const ScreenInfo& screenInfo,
 	Vec2Int pos, Vec2 anchor, Vec2Int size, Vec4 color);
-void DrawTexturedRect(TexturedRectGL texturedRectGL, ScreenInfo screenInfo,
+void DrawTexturedRectPixel(const TexturedRectPixelGL& texturedRectPixelGL,
+	const ScreenInfo& screenInfo,
 	Vec2Int pos, Vec2 anchor, Vec2Int size, bool32 flipHorizontal, GLuint texture);
 void DrawPlane(PlaneGL,
 	Mat4 vp, Vec3 point, Vec3 normal, Vec4 color);

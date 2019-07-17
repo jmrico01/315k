@@ -12,52 +12,179 @@ void BufferView::SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor)
 }
 
 void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenInfo,
-	const RectGL& rectGL, const LineGL& lineGL, const MemoryBlock& transient)
+	const RectGL& rectGL, const RectPixelGL& rectPixelGL, const LineGL& lineGL,
+	const TextGL& textGL, const FontFace& fontFace,
+	uint64 sampleRate, const MemoryBlock& transient)
 {
-	DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
+	const Vec3 COLOR_BACKGROUND = Vec3 { 0.1f, 0.4f, 1.0f };
+	const Vec3 COLOR_SELECTION = Vec3 { 1.0f, 0.4f, 0.1f };
+	const Vec3 COLOR_INFO_TEXT = Vec3 { 0.5f, 1.0f, 0.5f };
+	const float32 ALPHA_BACKGROUND = 0.2f;
+
+	if (IsKeyPressed(&input, KM_KEY_P)) {
+		tOffset = 0.0f;
+		tSize = Vec2::one;
+		drawMode = BUFFERVIEW_DRAW_BOTH;
+		selectStart = 0;
+		selectEnd = 0;
+	}
 
 	Vec2Int mousePosToOrigin = input.mousePos - origin;
-	float32 tMouse = (float32)mousePosToOrigin.x / size.x;
-	if (input.mouseButtons[0].isDown) {
-		tCenter += input.mouseDelta.x * 0.001f;
+	float32 tMouseNorm = (float32)mousePosToOrigin.x / size.x;
+	float32 tMouse = tMouseNorm / tSize.x - tOffset;
+	float32 timeMouse = tMouse * numSamples / sampleRate * 1000.0f;
+	uint64 sampleMouse = ClampInt((int)(tMouse * numSamples), 0, (int)numSamples);
+
+	if (input.mouseButtons[1].isDown) {
+		if (input.mouseButtons[1].transitions == 1) {
+			selectStart = sampleMouse;
+		}
+		selectEnd = sampleMouse;
+	}
+	if (input.mouseButtons[2].isDown && input.mouseButtons[2].transitions == 1) {
+		drawMode = (BufferViewDrawMode)(((int)drawMode + 1) % (int)BUFFERVIEW_LAST);
 	}
 
 	float32 deltaZoom = input.mouseWheelDelta * 0.001f;
-	if (IsKeyPressed(&input, KM_KEY_CTRL)) {
-		tZoom.y += deltaZoom * 2.0f;
-	}
-	else {
-		tZoom.x += deltaZoom;
+	if (input.mouseWheelDelta != 0) {
+		if (IsKeyPressed(&input, KM_KEY_CTRL)) {
+			tSize.y *= exp(deltaZoom * 2.0f);
+		}
+		else {
+			float32 tSizeXPrev = tSize.x;
+			tSize.x *= exp(deltaZoom);
+			tOffset += tMouseNorm * (1.0f / tSize.x - 1.0f / tSizeXPrev);
+		}
 	}
 
-	DrawRect(rectGL, screenInfo, origin, Vec2::zero, size, Vec4 { 0.1f, 0.4f, 1.0f, 0.2f });
+	if (input.mouseButtons[0].isDown) {
+		tOffset += (float32)input.mouseDelta.x / size.x / tSize.x;
+	}
 
-	Vec2 tSize = Vec2 { exp(tZoom.x), exp(tZoom.y) };
-	LineGLData* lineData = (LineGLData*)transient.memory;
-	Mat4 transformBox = Translate(Vec3 { -1.0f, -1.0f, 0.0f })
+	Mat4 transform = Translate(Vec3 { -1.0f, -1.0f, 0.0f })
 		* Scale(Vec3 { 2.0f / screenInfo.size.x, 2.0f / screenInfo.size.y, 1.0f })
 		* Translate(Vec3 { (float32)origin.x, (float32)origin.y + size.y / 2.0f, 0.0f })
-		* Scale(Vec3 { (float32)size.x, (float32)size.y / 2.0f, 1.0f });
-	Mat4 transformBuffer = Translate(Vec3 { (tCenter - tSize.x / 2.0f), 0.0f, 0.0f })
-		* Scale(Vec3 { tSize.x, tSize.y, 1.0f });
-	
+		* Scale(Vec3 { (float32)size.x, (float32)size.y / 2.0f, 1.0f })
+		* Scale(Vec3 { tSize.x, tSize.y, 1.0f })
+		* Translate(Vec3 { tOffset, 0.0f, 0.0f });
+
+	DrawRectPixel(rectPixelGL, screenInfo, origin, Vec2::zero, size,
+		ToVec4(COLOR_BACKGROUND, ALPHA_BACKGROUND));
+	if (selectStart < selectEnd) {
+		Vec3 selectOrigin = {
+			(float32)selectStart / numSamples,
+			-1.0f,
+			0.0f
+		};
+		Vec3 selectScale = {
+			(float32)(selectEnd - selectStart) / numSamples,
+			2.0f,
+			1.0f
+		};
+		Mat4 selectTransform = Translate(selectOrigin) * Scale(selectScale);
+		rectGL.Draw(transform * selectTransform, ToVec4(COLOR_SELECTION, ALPHA_BACKGROUND));
+	}
+
+	DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
+	LineGLData* lineData = (LineGLData*)transient.memory;
+
 	lineData->count = numSamples;
 	if (lineData->count > MAX_LINE_POINTS) {
 		lineData->count = MAX_LINE_POINTS;
 	}
 	for (uint64 i = 0; i < lineData->count; i++) {
 		float32 t = (float32)i / (lineData->count - 1);
-		lineData->pos[i] = { t, buffer[i * channels/* + channel*/], 0.0f };
+		uint8 channel = 0;
+		if (drawMode == BUFFERVIEW_DRAW_1) {
+			channel = 1;
+		}
+		lineData->pos[i] = { t, buffer[i * channels + channel], 0.0f };
 	}
-	Vec4 color = Vec4::one;
-	DrawLine(lineGL, transformBox * transformBuffer, lineData, color);
+	Vec4 color = Vec4::one; // TODO maybe factor this color
+	if (drawMode == BUFFERVIEW_DRAW_BOTH) {
+		color = Vec4 { 1.0f, 0.0f, 0.0f, 1.0f };
+	}
+	DrawLine(lineGL, transform, lineData, color);
+
+	if (drawMode == BUFFERVIEW_DRAW_BOTH) {
+		for (uint64 i = 0; i < lineData->count; i++) {
+			float32 t = (float32)i / (lineData->count - 1);
+			lineData->pos[i] = { t, buffer[i * channels + 1], 0.0f };
+		}
+		DrawLine(lineGL, transform, lineData, Vec4 { 0.0f, 1.0f, 0.0f, 1.0f }); // and this one
+	}
 
 	if (0.0f <= tMouse && tMouse <= 1.0f) {
 		lineData->count = 2;
-		float32 tMousePos = tMouse;
-		lineData->pos[0] = Vec3 { tMousePos, -1.0f, 0.0f };
-		lineData->pos[1] = Vec3 { tMousePos, 1.0f, 0.0f };
-		Vec4 markColor = Vec4 { 1.0f, 0.4f, 0.1f, 0.8f };
-		DrawLine(lineGL, transformBox, lineData, markColor);
+		lineData->pos[0] = Vec3 { tMouse, -1.0f, 0.0f };
+		lineData->pos[1] = Vec3 { tMouse, 1.0f, 0.0f };
+		DrawLine(lineGL, transform, lineData, ToVec4(COLOR_SELECTION, 1.0f));
 	}
+
+	const uint64 BUFFERVIEW_STRING_MAX_LENGTH = 256;
+	const int BUFFERVIEW_TEXT_MARGIN = 10;
+	char buf[BUFFERVIEW_STRING_MAX_LENGTH];
+
+	snprintf(buf, BUFFERVIEW_STRING_MAX_LENGTH, "t %.03f | time %.03f ms | sample %llu",
+		tMouse, timeMouse, sampleMouse);
+	DrawText(textGL, fontFace, screenInfo, buf,
+		Vec2Int { origin.x, origin.y + size.y + BUFFERVIEW_TEXT_MARGIN },
+		ToVec4(COLOR_INFO_TEXT, 1.0f),
+		transient
+	);
+
+	if (selectStart < selectEnd) {
+		Vec2Int selectTextOrigin = {
+			origin.x + size.x,
+			origin.y + size.y + (int)fontFace.height * 2 + BUFFERVIEW_TEXT_MARGIN * 3
+		};
+
+		float32 selectStartMS = (float32)selectStart / sampleRate * 1000.0f;
+		float32 selectEndMS = (float32)selectEnd / sampleRate * 1000.0f;
+		snprintf(buf, BUFFERVIEW_STRING_MAX_LENGTH, "delta %.03f ms",
+			selectEndMS - selectStartMS);
+		DrawText(textGL, fontFace, screenInfo, buf,
+			selectTextOrigin, Vec2 { 1.0f, 0.0f },
+			ToVec4(COLOR_SELECTION, 1.0f),
+			transient
+		);
+
+		selectTextOrigin.y -= fontFace.height + BUFFERVIEW_TEXT_MARGIN;
+		snprintf(buf, BUFFERVIEW_STRING_MAX_LENGTH, "time %.03f - %.03f ms",
+			selectStartMS, selectEndMS);
+		DrawText(textGL, fontFace, screenInfo, buf,
+			selectTextOrigin, Vec2 { 1.0f, 0.0f },
+			ToVec4(COLOR_SELECTION, 1.0f),
+			transient
+		);
+
+		selectTextOrigin.y -= fontFace.height + BUFFERVIEW_TEXT_MARGIN;
+		snprintf(buf, BUFFERVIEW_STRING_MAX_LENGTH, "samples %llu - %llu",
+			selectStart, selectEnd);
+		DrawText(textGL, fontFace, screenInfo, buf,
+			selectTextOrigin, Vec2 { 1.0f, 0.0f },
+			ToVec4(COLOR_SELECTION, 1.0f),
+			transient
+		);
+	}
+
+	snprintf(buf, BUFFERVIEW_STRING_MAX_LENGTH, "sample rate %llu Hz | channels %u",
+		sampleRate, channels);
+	DrawText(textGL, fontFace, screenInfo, buf,
+		Vec2Int { origin.x, origin.y - BUFFERVIEW_TEXT_MARGIN }, Vec2 { 0.0f, 1.0f },
+		Vec4::one,
+		transient
+	);
+
+	const char* drawModeNames[] = {
+		"CHANNELS 0+1",
+		"CHANNEL  0  ",
+		"CHANNEL  1  "
+	};
+	snprintf(buf, BUFFERVIEW_STRING_MAX_LENGTH, "draw mode %s", drawModeNames[drawMode]);
+	DrawText(textGL, fontFace, screenInfo, buf,
+		Vec2Int { origin.x + size.x, origin.y - BUFFERVIEW_TEXT_MARGIN }, Vec2 { 1.0f, 1.0f },
+		Vec4::one,
+		transient
+	);
 }
