@@ -63,9 +63,6 @@ struct GameState
     int killerHalfBeat;
     // ------------------------------------
 
-    Vec3 debugCamPos;
-    float32 debugZoom;
-
     RectGL rectGL;
     TexturedRectGL texturedRectGL;
     LineGL lineGL;

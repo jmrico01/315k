@@ -478,15 +478,13 @@ void DrawBox(BoxGL boxGL,
 	glBindVertexArray(0);
 }
 
-void DrawLine(LineGL lineGL,
-	Mat4 proj, Mat4 view, const LineGLData* lineData, Vec4 color)
+void DrawLine(LineGL lineGL, Mat4 transform, const LineGLData* lineData, Vec4 color)
 {
 	GLint loc;
 	glUseProgram(lineGL.programID);
 
-	Mat4 mvp = proj * view;
 	loc = glGetUniformLocation(lineGL.programID, "mvp");
-	glUniformMatrix4fv(loc, 1, GL_FALSE, &mvp.e[0][0]);
+	glUniformMatrix4fv(loc, 1, GL_FALSE, &transform.e[0][0]);
 	loc = glGetUniformLocation(lineGL.programID, "color");
 	glUniform4fv(loc, 1, &color.e[0]);
 
@@ -498,6 +496,6 @@ void DrawLine(LineGL lineGL,
 		GL_STREAM_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, lineData->count * sizeof(Vec3),
 		lineData->pos);
-	glDrawArrays(GL_LINE_STRIP, 0, lineData->count);
+	glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)lineData->count);
 	glBindVertexArray(0);
 }

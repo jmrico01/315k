@@ -4,7 +4,7 @@
 #include "opengl.h"
 #include "km_math.h"
 
-#define MAX_LINE_POINTS 100000
+#define MAX_LINE_POINTS 1048576
 
 struct RectGL
 {
@@ -50,7 +50,7 @@ struct RectCoordsNDC
 
 struct LineGLData
 {
-	int count;
+	uint64 count;
 	Vec3 pos[MAX_LINE_POINTS];
 };
 
@@ -92,5 +92,4 @@ void DrawBox(BoxGL boxGL,
 	Mat4 vp, Vec3 min, Vec3 max, Vec4 color);
 
 // Batch functions
-void DrawLine(LineGL lineGL,
-	Mat4 proj, Mat4 view, const LineGLData* lineData, Vec4 color);
+void DrawLine(LineGL lineGL, Mat4 transform, const LineGLData* lineData, Vec4 color);

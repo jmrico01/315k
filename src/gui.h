@@ -4,17 +4,17 @@
 
 struct BufferView
 {
-    Vec2Int origin;
-    Vec2Int size;
+	Vec2Int origin;
+	Vec2Int size;
 
-    uint8 channels;
-    uint64 numSamples;
-    float32* buffer;
+	uint8 channels;
+	uint64 numSamples;
+	float32* buffer;
 
-    uint64 sampleStart;
-    uint64 sampleEnd;
+	float32 tCenter;
+	Vec2 tZoom;
 
-    void Init(Vec2Int pos, Vec2Int size, Vec2 anchor, uint64 numSamples, const float32* buffer);
-    void Update(const GameInput& input, float32 deltaTime);
-    void Draw();
+	void SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor);
+	void UpdateAndDraw(const GameInput& input, const ScreenInfo& screenInfo,
+		const RectGL& rectGL, const LineGL& lineGL, const MemoryBlock& transient);
 };

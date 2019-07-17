@@ -463,10 +463,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
         gameState->dead = false;
 
-        // Debug
-		gameState->debugCamPos = Vec3::zero;
-        gameState->debugZoom = 0.0f;
-
         // Rendering stuff
         gameState->rectGL = InitRectGL(thread,
             platformFuncs->DEBUGPlatformReadFile,
@@ -706,29 +702,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     }
     float32 beatProgress = gameState->lastBeat / beatDuration;
     float32 halfBeatProgress = gameState->lastHalfBeat / halfBeatDuration;
-
-    // Debug camera position control
-	float32 speed = 1.0f;
-	Vec3 vel = Vec3::zero;
-	if (IsKeyPressed(input, KM_KEY_I)) {
-		vel += Vec3::unitY * speed;
-	}
-	if (IsKeyPressed(input, KM_KEY_K)) {
-		vel -= Vec3::unitY * speed;
-	}
-    if (IsKeyPressed(input, KM_KEY_J)) {
-        vel -= Vec3::unitX * speed;
-    }
-    if (IsKeyPressed(input, KM_KEY_L)) {
-        vel += Vec3::unitX * speed;
-    }
-	gameState->debugCamPos += vel * deltaTime;
-    if (IsKeyPressed(input, KM_KEY_O)) {
-        gameState->debugZoom += speed * deltaTime;
-    }
-    if (IsKeyPressed(input, KM_KEY_U)) {
-        gameState->debugZoom -= speed * deltaTime;
-    }
 
     int lineWidth = screenInfo.size.y / 140;
     float32 slotWidthPix = screenInfo.size.x / 12.0f;
@@ -1022,6 +995,47 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     // -------------------------- End Rendering --------------------------
+
+#if GAME_INTERNAL
+    { // DEBUG recording logic
+        AudioState& audioState = gameState->audioState;
+        if (WasKeyPressed(input, KM_KEY_R)) {
+            audioState.debugRecording = !audioState.debugRecording;
+            if (audioState.debugRecording) {
+                audioState.debugBufferSamples = 0;
+                audioState.debugBufferView.tCenter = 0.5f;
+                audioState.debugBufferView.tZoom = Vec2::zero;
+            }
+        }
+        if (WasKeyPressed(input, KM_KEY_V)) {
+            audioState.debugViewRecording = !audioState.debugViewRecording;
+            if (audioState.debugViewRecording) {
+                audioState.debugBufferView.SetPosition(
+                    Vec2Int { 50, screenInfo.size.y / 2 },
+                    Vec2Int { screenInfo.size.x - 100, 400 },
+                    Vec2 { 0.0f, 0.5f }
+                );
+                audioState.debugBufferView.channels = audio->channels;
+                audioState.debugBufferView.buffer = audioState.debugBuffer;
+                audioState.debugBufferView.tCenter = 0.5f;
+                audioState.debugBufferView.tZoom = Vec2::zero;
+            }
+        }
+        if (audioState.debugRecording) {
+            if (audio->sampleDelta > 0
+            && (audioState.debugBufferSamples + audio->sampleDelta) * audio->channels <= DEBUG_BUFFER_SAMPLES) {
+                MemCopy(audioState.debugBuffer + audioState.debugBufferSamples * audio->channels,
+                    audio->buffer, audio->sampleDelta * audio->channels * sizeof(float32));
+                audioState.debugBufferSamples += audio->sampleDelta;
+            }
+        }
+        if (audioState.debugViewRecording) {
+            audioState.debugBufferView.numSamples = audioState.debugBufferSamples;
+            audioState.debugBufferView.UpdateAndDraw(*input, screenInfo,
+                gameState->rectGL, gameState->lineGL, memory->transient);
+        }
+    }
+#endif
 
     OutputAudio(audio, gameState, input, memory->transient);
 

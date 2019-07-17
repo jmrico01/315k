@@ -41,13 +41,6 @@ internal void DrawAudioBuffer(
     DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
     DEBUG_ASSERT(bufferSizeSamples <= MAX_LINE_POINTS);
     LineGLData* lineData = (LineGLData*)transient.memory;
-    Mat4 proj = Mat4::one;
-    Vec3 zoomScale = {
-        1.0f + gameState->debugZoom,
-        1.0f + gameState->debugZoom,
-        1.0f
-    };
-    Mat4 view = Scale(zoomScale) * Translate(gameState->debugCamPos);
     
     lineData->count = bufferSizeSamples;
     for (uint64 i = 0; i < bufferSizeSamples; i++) {
@@ -59,8 +52,7 @@ internal void DrawAudioBuffer(
             origin.z
         };
     }
-    DrawLine(gameState->lineGL, proj, view,
-        lineData, color);
+    DrawLine(gameState->lineGL, Mat4::one, lineData, color);
 
     lineData->count = 2;
     for (int i = 0; i < numMarks; i++) {
@@ -75,8 +67,7 @@ internal void DrawAudioBuffer(
             origin.y + size.y,
             origin.z
         };
-        DrawLine(gameState->lineGL, proj, view,
-            lineData, markColors[i]);
+        DrawLine(gameState->lineGL, Mat4::one, lineData, markColors[i]);
     }
 }
 
@@ -503,44 +494,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 {
     DEBUG_ASSERT(audio->channels == 2); // Stereo support only
     AudioState& audioState = gameState->audioState;
-
-#if GAME_INTERNAL
-    // DEBUG recording logic
-    if (WasKeyPressed(input, KM_KEY_R)) {
-        audioState.debugRecording = !audioState.debugRecording;
-        if (audioState.debugRecording) {
-            audioState.debugBufferSamples = 0;
-        }
-    }
-    if (WasKeyPressed(input, KM_KEY_V)) {
-        audioState.debugViewRecording = !audioState.debugViewRecording;
-    }
-    if (audioState.debugRecording) {
-        if (audio->sampleDelta > 0
-        && (audioState.debugBufferSamples + audio->sampleDelta) * audio->channels <= DEBUG_BUFFER_SAMPLES) {
-            MemCopy(audioState.debugBuffer + audioState.debugBufferSamples * audio->channels,
-                audio->buffer, audio->sampleDelta * audio->channels * sizeof(float32));
-            audioState.debugBufferSamples += audio->sampleDelta;
-        }
-    }
-    if (audioState.debugViewRecording) {
-        uint64 samples = MinUInt64(audioState.debugBufferSamples, MAX_LINE_POINTS);
-        DrawAudioBuffer(gameState, audio,
-            audioState.debugBuffer, samples, 0,
-            nullptr, nullptr, 0,
-            Vec3 { -1.0f, 0.5f, 0.0f }, Vec2 { 2.0f, 1.0f },
-            Vec4::one,
-            transient
-        );
-        DrawAudioBuffer(gameState, audio,
-            audioState.debugBuffer, samples, 1,
-            nullptr, nullptr, 0,
-            Vec3 { -1.0f, -0.5f, 0.0f }, Vec2 { 2.0f, 1.0f },
-            Vec4::one,
-            transient
-        );
-    }
-#endif
 
     audioState.soundKick.Update(audio);
     audioState.soundSnare.Update(audio);

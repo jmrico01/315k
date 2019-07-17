@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui.h"
 #include "km_defines.h"
 #include "load_wav.h"
 
@@ -100,6 +101,7 @@ struct AudioState
     bool32 debugViewRecording;
     uint64 debugBufferSamples;
     float32 debugBuffer[DEBUG_BUFFER_SAMPLES];
+    BufferView debugBufferView;
 #endif
 };
 
