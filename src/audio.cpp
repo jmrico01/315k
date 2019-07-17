@@ -309,6 +309,9 @@ internal void WaveTableUpdate(const GameAudio* audio, const GameInput* input,
                     }
                 }
             } break;
+            default: {
+                LOG_INFO("Unknown MIDI event: %d\n", event);
+            } break;
         }
     }
 
