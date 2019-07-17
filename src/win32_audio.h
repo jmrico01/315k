@@ -20,20 +20,20 @@ struct Win32Audio
     IAudioRenderClient* renderClient;
     IAudioClock* audioClock;
     AudioFormat format;
-    int bitsPerSample;
+    uint16 bitsPerSample;
 
-    int sampleRate;
-    int channels;
-    int bufferSizeSamples;
+    uint32 sampleRate;
+    uint8 channels;
+    uint64 bufferSizeSamples;
     
-    int latency;
+    uint64 latency;
 
     bool32 midiInBusy;
     MidiInput midiIn;
 };
 
-bool32 Win32InitAudio(Win32Audio* winAudio, int bufferSizeMilliseconds);
+bool32 Win32InitAudio(Win32Audio* winAudio, uint64 bufferSizeMilliseconds);
 void Win32StopAudio(Win32Audio* winAudio);
 
 void Win32WriteAudioSamples(const Win32Audio* winAudio,
-    const GameAudio* gameAudio, int numSamples);
+    const GameAudio* gameAudio, uint64 numSamples);

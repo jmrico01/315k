@@ -1,5 +1,7 @@
 build
+deploy
 
 .DS_Store
 .clang_complete
 *~
+compile/env_settings.json

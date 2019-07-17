@@ -3,7 +3,7 @@
 #undef internal
 #include <random>
 #define internal static
-#include <fftw3.h>
+// #include <fftw3.h>
 
 #include "main_platform.h"
 #include "km_debug.h"
@@ -402,9 +402,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
     // This function is expected to update the state of the game
     // and draw the frame that will be displayed, ideally, some constant
     // amount of time in the future.
-	DEBUG_ASSERT(sizeof(GameState) <= memory->permanent.size);
-
-	GameState *gameState = (GameState*)memory->permanent.memory;
     if (memory->shouldInitGlobalVariables) {
         // Initialize global function names
         logState_ = logState;
@@ -419,6 +416,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         memory->shouldInitGlobalVariables = false;
         LOG_INFO("Initialized global variables\n");
     }
+
+	DEBUG_ASSERT(sizeof(GameState) <= memory->permanent.size);
+	GameState *gameState = (GameState*)memory->permanent.memory;
+
 	if (!memory->isInitialized) {
         // Very explicit depth testing setup (DEFAULT VALUES)
         // NDC is left-handed with this setup
@@ -601,26 +602,26 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         );
 
         // Testing FFTW3
-        const int N = 10000;
-        LOG_INFO("testing FFTW3 with N = %d\n", N);
+        // const int N = 10000;
+        // LOG_INFO("testing FFTW3 with N = %d\n", N);
 
-        fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
-            sizeof(fftwf_complex) * N);
-        fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
-            sizeof(fftwf_complex) * N);
-        fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
-            FFTW_FORWARD, FFTW_ESTIMATE);
+        // fftwf_complex* in = (fftwf_complex*)fftwf_malloc(
+        //     sizeof(fftwf_complex) * N);
+        // fftwf_complex* out = (fftwf_complex*)fftwf_malloc(
+        //     sizeof(fftwf_complex) * N);
+        // fftwf_plan p = fftwf_plan_dft_1d(N, in, out,
+        //     FFTW_FORWARD, FFTW_ESTIMATE);
 
-        // initialize in and out arrays
+        // // initialize in and out arrays
 
-        fftwf_execute(p);
+        // fftwf_execute(p);
 
-        fftwf_destroy_plan(p);
-        fftwf_free(in);
-        fftwf_free(out);
+        // fftwf_destroy_plan(p);
+        // fftwf_free(in);
+        // fftwf_free(out);
 
-        LOG_INFO("...done!\n");
-        LOG_INFO("damn, that was fast. good thing we're in the West\n");
+        // LOG_INFO("...done!\n");
+        // LOG_INFO("damn, that was fast. good thing we're in the West\n");
 
 		memory->isInitialized = true;
 	}
@@ -1022,6 +1023,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
     // -------------------------- End Rendering --------------------------
 
+    OutputAudio(audio, gameState, input, memory->transient);
+
     {
         char fpsStr[128];
         sprintf(fpsStr, "FPS: %f", 1.0f / deltaTime);
@@ -1032,8 +1035,6 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
         DrawText(gameState->textGL, gameState->fontFaceMedium, screenInfo,
             fpsStr, fpsPos, Vec2 { 1.0f, 1.0f }, Vec4::one, memory->transient);
     }
-
-    OutputAudio(audio, gameState, input, memory->transient);
 
 #if GAME_INTERNAL
     if (gameState->audioState.debugView) {

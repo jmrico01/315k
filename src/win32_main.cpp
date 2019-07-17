@@ -1000,7 +1000,7 @@ int CALLBACK WinMain(
     //gameAudio.channels = winAudio.channels;
     gameAudio.channels = 2;
     gameAudio.bufferSizeSamples = winAudio.bufferSizeSamples;
-    int bufferSizeBytes = gameAudio.bufferSizeSamples
+    uint64 bufferSizeBytes = gameAudio.bufferSizeSamples
         * gameAudio.channels * sizeof(float32);
     gameAudio.buffer = (float32*)VirtualAlloc(0, (size_t)bufferSizeBytes,
         MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -1021,7 +1021,7 @@ int CALLBACK WinMain(
     GameMemory gameMemory = {};
     gameMemory.shouldInitGlobalVariables = true;
 
-    gameMemory.permanent.size = MEGABYTES(64);
+    gameMemory.permanent.size = MEGABYTES(256);
     gameMemory.transient.size = GIGABYTES(1);
 
     // TODO Look into using large virtual pages for this
@@ -1291,11 +1291,11 @@ int CALLBACK WinMain(
         HRESULT hr = winAudio.audioClient->GetCurrentPadding(&audioPadding);
         // TODO check for invalid device and stuff
         if (SUCCEEDED(hr)) {
-            int samplesQueued = (int)audioPadding;
+            uint64 samplesQueued = audioPadding;
             if (samplesQueued < winAudio.latency) {
                 // Write enough samples so that the number of queued samples
                 // is enough for one latency interval
-                int samplesToWrite = winAudio.latency - samplesQueued;
+                uint64 samplesToWrite = winAudio.latency - samplesQueued;
                 if (samplesToWrite > gameAudio.fillLength) {
                     // Don't write more samples than the game generated
                     samplesToWrite = gameAudio.fillLength;

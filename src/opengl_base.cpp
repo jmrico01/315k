@@ -498,6 +498,6 @@ void DrawLine(LineGL lineGL,
         GL_STREAM_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, lineData->count * sizeof(Vec3),
         lineData->pos);
-    glDrawArrays(GL_LINE_STRIP, 0, lineData->count);
+    glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)lineData->count);
     glBindVertexArray(0);
 }

@@ -111,13 +111,13 @@ struct GameInput
 
 struct GameAudio
 {
-    int sampleRate;
-    int channels;
-    int bufferSizeSamples;
+    uint32 sampleRate;
+    uint8 channels;
+    uint64 bufferSizeSamples;
     float32* buffer;
 
-    int sampleDelta; // Samples elapsed/written since last update
-    int fillLength;
+    uint64 sampleDelta; // Samples elapsed/written since last update
+    uint64 fillLength;
 };
 
 struct PlatformFunctions

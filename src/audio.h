@@ -12,13 +12,18 @@
 #define WAVETABLE_OSCILLATORS 16
 #define WAVETABLE_ENVELOPES 4
 
+#define DEBUG_BUFFER_SAMPLES (MEGABYTES(32))
+
 struct Sound
 {
     bool32 play;
     bool32 playing;
-    int sampleIndex;
+    uint64 sampleIndex;
 
     AudioBuffer buffer;
+
+    void Update(const GameAudio* audio);
+    void WriteSamples(float32 amplitude, GameAudio* audio) const;
 };
 
 struct Voice
@@ -72,6 +77,8 @@ struct WaveTable
     Oscillator oscillators[WAVETABLE_OSCILLATORS];
 
     EnvelopeADSR envelopes[WAVETABLE_ENVELOPES];
+
+    void WriteSamples(GameAudio* audio);
 };
 
 struct AudioState
@@ -88,6 +95,11 @@ struct AudioState
 
 #if GAME_INTERNAL
     bool32 debugView;
+
+    bool32 debugRecording;
+    bool32 debugViewRecording;
+    uint64 debugBufferSamples;
+    float32 debugBuffer[DEBUG_BUFFER_SAMPLES];
 #endif
 };
 
