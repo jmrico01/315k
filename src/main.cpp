@@ -1085,14 +1085,15 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #endif
 }
 
+#include "audio.cpp"
+#include "gui.cpp"
 #include "km_debug.cpp"
 #include "km_input.cpp"
-#include "km_string.cpp"
 #include "km_lib.cpp"
 #include "km_log.cpp"
-#include "opengl_base.cpp"
-#include "text.cpp"
+#include "km_string.cpp"
 #include "load_png.cpp"
-#include "particles.cpp"
 #include "load_wav.cpp"
-#include "audio.cpp"
+#include "opengl_base.cpp"
+#include "particles.cpp"
+#include "text.cpp"
