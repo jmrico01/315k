@@ -2,6 +2,8 @@
 
 #include "km_defines.h"
 
+const uint64 BUFFERVIEW_MAX_MARKS = 1024;
+
 enum BufferViewDrawMode
 {
 	BUFFERVIEW_DRAW_BOTH,
@@ -20,6 +22,8 @@ struct BufferView
 	uint64 numSamples;
 	float32* buffer;
 
+	FixedArray<uint64, BUFFERVIEW_MAX_MARKS> marks;
+
 	BufferViewDrawMode drawMode;
 	float32 tOffset;
 	Vec2 tSize;
@@ -28,8 +32,12 @@ struct BufferView
 	uint64 selectEnd;
 
 	void SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor);
+	void ResetControls();
 	void UpdateAndDraw(const GameInput& input, const ScreenInfo& screenInfo,
 		const RectGL& rectGL, const RectPixelGL& rectPixelGL, const LineGL& lineGL,
 		const TextGL& textGL, const FontFace& fontFace,
 		uint64 sampleRate, const MemoryBlock& transient);
 };
+
+void FillNormalizedLineGLDataFromBuffer(const float32* buffer, uint64 numSamples,
+	uint8 channels, uint8 channel, LineGLData* lineData);

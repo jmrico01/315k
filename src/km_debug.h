@@ -38,5 +38,3 @@
 #define DEBUG_ASSERT(expression)
 #define DEBUG_PANIC(format, ...)
 #endif
-
-#define INPUT_BUFFER_SIZE 2048

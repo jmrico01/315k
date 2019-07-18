@@ -44,11 +44,10 @@ inline float32 RandFloat32(float32 min, float32 max)
 	return RandFloat32() * (max - min) + min;
 }
 
-internal MarkerGL InitMarkerGL(const ThreadContext* thread,
+void MarkerGL::Init(const ThreadContext* thread,
 	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
-	MarkerGL markerGL;
 	const GLfloat vertices[] = {
 		-0.5f, -0.5f,
 		0.5f, -0.5f,
@@ -58,11 +57,11 @@ internal MarkerGL InitMarkerGL(const ThreadContext* thread,
 		-0.5f, -0.5f
 	};
 
-	glGenVertexArrays(1, &markerGL.vertexArray);
-	glBindVertexArray(markerGL.vertexArray);
+	glGenVertexArrays(1, &vertexArray);
+	glBindVertexArray(vertexArray);
 
-	glGenBuffers(1, &markerGL.vertexBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, markerGL.vertexBuffer);
+	glGenBuffers(1, &vertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
 		GL_STATIC_DRAW);
 	glEnableVertexAttribArray(0);
@@ -77,87 +76,80 @@ internal MarkerGL InitMarkerGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	markerGL.programID = LoadShaders(thread,
+	programID = LoadShaders(thread,
 		"shaders/marker.vert", "shaders/marker.frag",
 		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
-	
-	return markerGL;
 }
 
-internal CircleGL InitCircleGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
-{
-	CircleGL circleGL;
-	const GLfloat vertices[] = {
-		-0.5f, -0.5f,
-		0.5f, -0.5f,
-		0.5f, 0.5f,
-		0.5f, 0.5f,
-		-0.5f, 0.5f,
-		-0.5f, -0.5f
-	};
-
-	glGenVertexArrays(1, &circleGL.vertexArray);
-	glBindVertexArray(circleGL.vertexArray);
-
-	glGenBuffers(1, &circleGL.vertexBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, circleGL.vertexBuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
-		GL_STATIC_DRAW);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(
-		0, // match shader layout location
-		2, // size (vec2)
-		GL_FLOAT, // type
-		GL_FALSE, // normalized?
-		0, // stride
-		(void*)0 // array buffer offset
-	);
-
-	glBindVertexArray(0);
-
-	circleGL.programID = LoadShaders(thread,
-		"shaders/circle.vert", "shaders/circle.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
-	
-	return circleGL;
-}
-
-internal void DrawMarker(MarkerGL markerGL, ScreenInfo screenInfo,
-	Vec2Int pos, Vec2Int size, Vec4 color)
+void MarkerGL::Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color)
 {
 	RectCoordsNDC ndc = ToRectCoordsNDC(pos, size, screenInfo);
 
 	GLint loc;
-	glUseProgram(markerGL.programID);
-	loc = glGetUniformLocation(markerGL.programID, "posCenter");
+	glUseProgram(programID);
+	loc = glGetUniformLocation(programID, "posCenter");
 	glUniform3fv(loc, 1, &ndc.pos.e[0]);
-	loc = glGetUniformLocation(markerGL.programID, "size");
+	loc = glGetUniformLocation(programID, "size");
 	glUniform2fv(loc, 1, &ndc.size.e[0]);
-	loc = glGetUniformLocation(markerGL.programID, "color");
+	loc = glGetUniformLocation(programID, "color");
 	glUniform4fv(loc, 1, &color.e[0]);
 
-	glBindVertexArray(markerGL.vertexArray);
+	glBindVertexArray(vertexArray);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 }
 
-internal void DrawCircle(CircleGL circleGL, ScreenInfo screenInfo,
-	Vec2Int pos, Vec2Int size, Vec4 color)
+void CircleGL::Init(const ThreadContext* thread,
+	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
+	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+{
+	const GLfloat vertices[] = {
+		-0.5f, -0.5f,
+		0.5f, -0.5f,
+		0.5f, 0.5f,
+		0.5f, 0.5f,
+		-0.5f, 0.5f,
+		-0.5f, -0.5f
+	};
+
+	glGenVertexArrays(1, &vertexArray);
+	glBindVertexArray(vertexArray);
+
+	glGenBuffers(1, &vertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices,
+		GL_STATIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(
+		0, // match shader layout location
+		2, // size (vec2)
+		GL_FLOAT, // type
+		GL_FALSE, // normalized?
+		0, // stride
+		(void*)0 // array buffer offset
+	);
+
+	glBindVertexArray(0);
+
+	programID = LoadShaders(thread,
+		"shaders/circle.vert", "shaders/circle.frag",
+		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+}
+
+void CircleGL::Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color)
 {
 	RectCoordsNDC ndc = ToRectCoordsNDC(pos, size, screenInfo);
 
 	GLint loc;
-	glUseProgram(circleGL.programID);
-	loc = glGetUniformLocation(circleGL.programID, "posCenter");
+	glUseProgram(programID);
+	loc = glGetUniformLocation(programID, "posCenter");
 	glUniform3fv(loc, 1, &ndc.pos.e[0]);
-	loc = glGetUniformLocation(circleGL.programID, "size");
+	loc = glGetUniformLocation(programID, "size");
 	glUniform2fv(loc, 1, &ndc.size.e[0]);
-	loc = glGetUniformLocation(circleGL.programID, "color");
+	loc = glGetUniformLocation(programID, "color");
 	glUniform4fv(loc, 1, &color.e[0]);
 
-	glBindVertexArray(circleGL.vertexArray);
+	glBindVertexArray(vertexArray);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
 }
@@ -483,10 +475,10 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			platformFuncs->DEBUGPlatformReadFile,
 			platformFuncs->DEBUGPlatformFreeFileMemory);
 
-		gameState->markerGL = InitMarkerGL(thread,
+		gameState->markerGL.Init(thread,
 			platformFuncs->DEBUGPlatformReadFile,
 			platformFuncs->DEBUGPlatformFreeFileMemory);
-		gameState->circleGL = InitCircleGL(thread,
+		gameState->circleGL.Init(thread,
 			platformFuncs->DEBUGPlatformReadFile,
 			platformFuncs->DEBUGPlatformFreeFileMemory);
 
@@ -749,7 +741,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			(int)(slotWidthPix * i),
 			screenInfo.size.y / 2
 		};
-		DrawMarker(gameState->markerGL, screenInfo,
+		gameState->markerGL.Draw(screenInfo,
 			markerPos,
 			Vec2Int { lineWidth, lineWidth * 6 },
 			lineColor_
@@ -760,7 +752,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 		(int)(slotWidthPix * gameState->circlePos + slotWidthPix / 2),
 		screenInfo.size.y / 2
 	};
-	DrawCircle(gameState->circleGL, screenInfo,
+	gameState->circleGL.Draw(screenInfo,
 		circlePos,
 		Vec2Int { circleDiameter, circleDiameter },
 		circleSelectedColor_
@@ -1006,30 +998,30 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			audioState.debugRecording = !audioState.debugRecording;
 			if (audioState.debugRecording) {
 				audioState.debugBufferSamples = 0;
-				audioState.debugBufferView.tOffset = 0.0f;
-				audioState.debugBufferView.tSize = Vec2::one;
+				audioState.debugBufferView.marks.Init();
+				audioState.debugBufferView.marks.array.size = 0;
+				audioState.debugBufferView.ResetControls();
 			}
 		}
 		if (WasKeyPressed(input, KM_KEY_V)) {
 			audioState.debugViewRecording = !audioState.debugViewRecording;
 			if (audioState.debugViewRecording) {
+				audioState.debugBufferView.channels = audio->channels;
+				audioState.debugBufferView.buffer = audioState.debugBuffer;
 				audioState.debugBufferView.SetPosition(
 					Vec2Int { 50, 50 },
 					Vec2Int { screenInfo.size.x - 100, 400 },
 					Vec2 { 0.0f, 0.0f }
 				);
-				audioState.debugBufferView.channels = audio->channels;
-				audioState.debugBufferView.buffer = audioState.debugBuffer;
-				audioState.debugBufferView.tOffset = 0.0f;
-				audioState.debugBufferView.tSize = Vec2::one;
-				audioState.debugBufferView.drawMode = BUFFERVIEW_DRAW_BOTH;
-				audioState.debugBufferView.selectStart = 0;
-				audioState.debugBufferView.selectEnd = 0;
+				audioState.debugBufferView.ResetControls();
 			}
 		}
 		if (audioState.debugRecording) {
 			if (audio->sampleDelta > 0 && (audioState.debugBufferSamples + audio->sampleDelta)
 			* audio->channels <= DEBUG_BUFFER_SAMPLES) {
+				if (audioState.debugBufferView.marks.array.size < BUFFERVIEW_MAX_MARKS) {
+					audioState.debugBufferView.marks.Append(audioState.debugBufferSamples);
+				}
 				MemCopy(audioState.debugBuffer + audioState.debugBufferSamples * audio->channels,
 					audio->buffer, audio->sampleDelta * audio->channels * sizeof(float32));
 				audioState.debugBufferSamples += audio->sampleDelta;
