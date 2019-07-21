@@ -225,11 +225,22 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 		oscillators[i].tWave = fmod(oscillators[i].tWave, 1.0f);
 	}
 
-	float32 tWaveTablePixRange = 600.0f;
-	float32 tWaveTablePixOffset = 200.0f;
-	float32 tWaveTableT = (input->mousePos.y - tWaveTablePixOffset) / tWaveTablePixRange;
-	tWaveTable = Lerp(0.0f, 1.0f, tWaveTableT);
-	tWaveTable = ClampFloat32(tWaveTable, 0.0f, 1.0f);
+	if (input->arduinoIn.connected) {
+		const ArduinoInput& arduinoInput = input->arduinoIn;
+		tWaveTable = arduinoInput.analogValues[0][0];
+		oscillators[WAVETABLE_OSCILLATORS - 1].amp = arduinoInput.analogValues[0][2];
+		oscillators[WAVETABLE_OSCILLATORS - 1].freq = arduinoInput.analogValues[0][3] * 20.0f;
+
+		envelopes[0].attack = arduinoInput.analogValues[0][4] * 5.0f;
+		envelopes[0].release = arduinoInput.analogValues[0][5] * 5.0f;
+	}
+	else {
+		float32 tWaveTablePixRange = 600.0f;
+		float32 tWaveTablePixOffset = 200.0f;
+		float32 tWaveTableT = (input->mousePos.y - tWaveTablePixOffset) / tWaveTablePixRange;
+		tWaveTable = Lerp(0.0f, 1.0f, tWaveTableT);
+		tWaveTable = ClampFloat32(tWaveTable, 0.0f, 1.0f);
+	}
 
 	// Drive WaveTable voices with MIDI input
 	for (int i = 0; i < input->midiIn.numMessages; i++) {
@@ -244,6 +255,7 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 				int vInd = -1;
 
 				// Try to find an existing voice with matching MIDI note
+				// TODO need to rethink this a bit maybe. don't wanna hard-reset voice
 				bool32 overwroteVoice = false;
 				for (int v = 0; v < activeVoices; v++) {
 					if (voices[v].midiNote == midiNote) {
@@ -262,7 +274,7 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 					if (activeVoices >= WAVETABLE_MAX_VOICES) {
 						continue;
 					}
-					vInd = activeVoices;
+					vInd = activeVoices++;
 				}
 
 				voices[vInd].time = 0.0f;
@@ -271,7 +283,6 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 				voices[vInd].midiNote = midiNote;
 				voices[vInd].sustained = true;
 				voices[vInd].envelope = 0;
-				activeVoices++;
 			} break;
 			case MIDI_EVENT_NOTEOFF: {
 				int midiNote = (int)dataByte1;
@@ -305,13 +316,13 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 			oscillators[i].amp = ClampFloat32(oscillators[i].amp, 0.0f, 1.0f);
 		}
 	}
-	float32 sampleOsc0 = oscillators[0].amp * LinearSample(audio,
-		waves[0].buffer, bufferLengthSamples, 0, oscillators[0].tWave);
+	float32 sampleOsc0 = oscillators[WAVETABLE_OSCILLATORS - 1].amp * LinearSample(audio,
+		waves[0].buffer, bufferLengthSamples, 0, oscillators[WAVETABLE_OSCILLATORS - 1].tWave);
 	tWaveTable = ClampFloat32(tWaveTable + sampleOsc0, 0.0f, 1.0f);
 
 	for (int i = 0; i < activeVoices; i++) {
-		float32 sampleOsc = oscillators[i].amp * LinearSample(audio,
-			waves[0].buffer, bufferLengthSamples, 0, oscillators[i].tWave);
+		float32 sampleOsc = oscillators[0].amp * LinearSample(audio,
+			waves[0].buffer, bufferLengthSamples, 0, oscillators[0].tWave);
 		voices[i].freq = voices[i].baseFreq * (1.0f + sampleOsc);
 	}
 
@@ -489,18 +500,26 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	//         * audio->buffer[(i - 1) * audio->channels + 1];
 	// }
 
-	float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
-	float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
-	float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
-	float32 prevChannel0 = audio->buffer[0];
-	float32 prevChannel1 = audio->buffer[1];
-	for (uint64 i = 1; i < audio->fillLength; i++) {
-		float32 channel0 = audio->buffer[i * audio->channels];
-		audio->buffer[i * audio->channels] = alpha * (audio->buffer[(i - 1) * audio->channels] + channel0 - prevChannel0);
-		prevChannel0 = channel0;
-		float32 channel1 = audio->buffer[i * audio->channels + 1];
-		audio->buffer[i * audio->channels + 1] = alpha * (audio->buffer[(i - 1) * audio->channels + 1] + channel1 - prevChannel1);
-		prevChannel1 = channel1;
+	// float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
+	// float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
+	// float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
+	// float32 prevChannel0 = audio->buffer[0];
+	// float32 prevChannel1 = audio->buffer[1];
+	// for (uint64 i = 1; i < audio->fillLength; i++) {
+	// 	float32 channel0 = audio->buffer[i * audio->channels];
+	// 	audio->buffer[i * audio->channels] = alpha * (audio->buffer[(i - 1) * audio->channels] + channel0 - prevChannel0);
+	// 	prevChannel0 = channel0;
+	// 	float32 channel1 = audio->buffer[i * audio->channels + 1];
+	// 	audio->buffer[i * audio->channels + 1] = alpha * (audio->buffer[(i - 1) * audio->channels + 1] + channel1 - prevChannel1);
+	// 	prevChannel1 = channel1;
+	// }
+
+	if (input->arduinoIn.connected) {
+		float32 volume = input->arduinoIn.analogValues[0][1];
+		for (uint64 i = 0; i < audio->fillLength; i++) {
+			audio->buffer[i * audio->channels] *= volume;
+			audio->buffer[i * audio->channels + 1] *= volume;
+		}
 	}
 
 #if GAME_INTERNAL

@@ -457,7 +457,7 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 
 		gameState->circlePos = 0;
 
-		LoadLevel(thread, "data/levels/level0", gameState,
+		LoadLevel(thread, "data/levels/level9", gameState,
 			platformFuncs->DEBUGPlatformReadFile,
 			platformFuncs->DEBUGPlatformFreeFileMemory);
 
@@ -1091,14 +1091,17 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			Vec4::one,
 			memory->transient
 		);
-		snprintf(strBuf, STRING_BUFFER_MAX_LENGTH,
-			"tWaveTable: %f", gameState->audioState.waveTable.tWaveTable);
-		audioInfoPos += audioInfoStride;
-		DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
-			strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
-			Vec4::one,
-			memory->transient
-		);
+
+		if (input->arduinoIn.connected) {
+			snprintf(strBuf, STRING_BUFFER_MAX_LENGTH,
+				"Arduino Channel: %u", input->arduinoIn.activeChannel);
+			audioInfoPos += audioInfoStride * 2;
+			DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
+				strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
+				Vec4::one,
+				memory->transient
+			);
+		}
 	}
 #endif
 

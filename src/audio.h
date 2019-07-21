@@ -9,7 +9,7 @@
 	* WAVE_BUFFER_LENGTH_SECONDS)
 
 #define WAVETABLE_MAX_WAVES 16
-#define WAVETABLE_MAX_VOICES 16
+#define WAVETABLE_MAX_VOICES 128
 #define WAVETABLE_OSCILLATORS 16
 #define WAVETABLE_ENVELOPES 4
 
@@ -108,6 +108,8 @@ struct AudioState
 	uint64 debugBufferSamples;
 	float32 debugBuffer[DEBUG_BUFFER_SAMPLES];
 	BufferView debugBufferView;
+
+	uint8 arduinoChannel;
 #endif
 
 	void Init(const ThreadContext* thread,

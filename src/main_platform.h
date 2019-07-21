@@ -7,6 +7,8 @@
 #include "opengl.h"
 
 #define MIDI_IN_QUEUE_SIZE 256
+#define ARDUINO_CHANNELS 4
+#define ARDUINO_ANALOG_INPUTS 6
 
 struct ThreadContext
 {
@@ -92,6 +94,14 @@ struct MidiInput
     MidiMessage messages[MIDI_IN_QUEUE_SIZE];
 };
 
+struct ArduinoInput
+{
+    bool connected;
+
+    uint8 activeChannel;
+    float32 analogValues[ARDUINO_CHANNELS][ARDUINO_ANALOG_INPUTS];
+};
+
 struct GameInput
 {
     GameButtonState mouseButtons[5];
@@ -107,6 +117,7 @@ struct GameInput
     GameControllerInput controllers[4];
 
     MidiInput midiIn;
+    ArduinoInput arduinoIn;
 };
 
 struct GameAudio

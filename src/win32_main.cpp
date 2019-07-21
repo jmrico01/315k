@@ -5,13 +5,13 @@
 #include <Xinput.h>
 #include <intrin.h> // __rdtsc
 
+#include "win32_arduino.h"
 #include "win32_audio.h"
 #include "opengl.h"
 #include "km_debug.h"
 #include "km_input.h"
 #include "km_log.h"
 #include "km_string.h"
-
 
 // TODO
 // - WINDOWS 7 VIRTUAL MACHINE
@@ -24,7 +24,6 @@
 // - WM_SETCURSOR (control cursor visibility)
 // - QueryCancelAutoplay
 // - WM_ACTIVATEAPP (for when we are not the active app)
-
 
 #define START_WIDTH 1280
 #define START_HEIGHT 720
@@ -1082,6 +1081,21 @@ int CALLBACK WinMain(
     GameInput *newInput = &input[0];
     GameInput *oldInput = &input[1];
 
+    Win32Arduino arduino;
+    bool arduinoConnected = arduino.Init(Win32Arduino::ARDUINO_PORT_NAME);
+    if (!arduinoConnected) {
+        LOG_ERROR("Win32 arduino init failed\n");
+    }
+    else {
+        LOG_ERROR("Initialized Win32 arduino controller\n");
+        for (int c = 0; c < ARDUINO_CHANNELS; c++) {
+            for (int i = 0; i < ARDUINO_ANALOG_INPUTS; i++) {
+                input[0].arduinoIn.analogValues[c][i] = 0.0f;
+                input[1].arduinoIn.analogValues[c][i] = 0.0f;
+            }
+        }
+    }
+
     // Initialize timing information
     int64 timerFreq;
     {
@@ -1098,8 +1112,7 @@ int CALLBACK WinMain(
     QueryPerformanceCounter(&timerLast);
     uint64 cyclesLast = __rdtsc();
 
-    Win32GameCode gameCode =
-        Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
+    Win32GameCode gameCode = Win32LoadGameCode(gameCodeDLLPath, tempCodeDLLPath);
 
     FlushLogs(logState);
     running_ = true;
@@ -1140,6 +1153,30 @@ int CALLBACK WinMain(
             newInput->midiIn = winAudio.midiIn;
             winAudio.midiIn.numMessages = 0;
             winAudio.midiInBusy = false;
+        }
+
+        if (arduinoConnected) {
+            MemCopy(&newInput->arduinoIn, &oldInput->arduinoIn, sizeof(ArduinoInput));
+
+            newInput->arduinoIn.connected = true;
+
+            // Arduino serial data
+            uint8 activeChannel;
+            Win32ArduinoPacket packets[32];
+            uint64 packetsRead = arduino.ReadPackets(&activeChannel, packets, 32);
+            if (packetsRead > 0) {
+                newInput->arduinoIn.activeChannel = activeChannel;
+                for (uint64 i = 0; i < packetsRead; i++) {
+                    if (packets[i].inputNumber >= ARDUINO_ANALOG_INPUTS) {
+                        LOG_ERROR("Arduino packet input number over %u (%u)\n",
+                            ARDUINO_ANALOG_INPUTS, packets[i].inputNumber);
+                        continue;
+                    }
+                    // TODO check that inputNumber is in range
+                    newInput->arduinoIn.analogValues[activeChannel][packets[i].inputNumber] =
+                        packets[i].value;
+                }
+            }
         }
 
         DWORD maxControllerCount = XUSER_MAX_COUNT;
@@ -1330,6 +1367,7 @@ int CALLBACK WinMain(
     return 0;
 }
 
+#include "win32_arduino.cpp"
 #include "win32_audio.cpp"
 
 // TODO temporary! this is a bad idea! already compiled in main.cpp
