@@ -1084,10 +1084,19 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 			memory->transient
 		);
 
+		snprintf(strBuf, STRING_BUFFER_MAX_LENGTH,
+			"Active Voices: %d", gameState->audioState.waveTable.activeVoices);
+		audioInfoPos += audioInfoStride * 2;
+		DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
+			strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
+			Vec4::one,
+			memory->transient
+		);
+
 		if (input->arduinoIn.connected) {
 			snprintf(strBuf, STRING_BUFFER_MAX_LENGTH,
 				"Arduino Channel: %u", input->arduinoIn.activeChannel);
-			audioInfoPos += audioInfoStride * 2;
+			audioInfoPos += audioInfoStride;
 			DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
 				strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
 				Vec4::one,

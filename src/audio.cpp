@@ -439,24 +439,24 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	// 	prevSampleFiltered1 = audio->buffer[sampleInd + 1];
 	// }
 
-	float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
-	float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
-	float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
-	float32 prevSampleRaw0 = audioState.lastSamplesRaw[0];
-	float32 prevSampleRaw1 = audioState.lastSamplesRaw[1];
-	float32 prevSampleFiltered0 = audioState.lastSamplesFiltered[0];
-	float32 prevSampleFiltered1 = audioState.lastSamplesFiltered[1];
-	for (uint64 i = 0; i < audio->fillLength; i++) {
-		uint64 sampleInd = i * audio->channels;
-		float32 sampleRaw0 = audio->buffer[sampleInd];
-		float32 sampleRaw1 = audio->buffer[sampleInd + 1];
-		audio->buffer[sampleInd]     = alpha * (prevSampleFiltered0 + sampleRaw0 - prevSampleRaw0);
-		audio->buffer[sampleInd + 1] = alpha * (prevSampleFiltered1 + sampleRaw1 - prevSampleRaw1);
-		prevSampleRaw0 = sampleRaw0;
-		prevSampleRaw1 = sampleRaw1;
-		prevSampleFiltered0 = audio->buffer[sampleInd];
-		prevSampleFiltered1 = audio->buffer[sampleInd + 1];
-	}
+	// float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
+	// float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
+	// float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
+	// float32 prevSampleRaw0 = audioState.lastSamplesRaw[0];
+	// float32 prevSampleRaw1 = audioState.lastSamplesRaw[1];
+	// float32 prevSampleFiltered0 = audioState.lastSamplesFiltered[0];
+	// float32 prevSampleFiltered1 = audioState.lastSamplesFiltered[1];
+	// for (uint64 i = 0; i < audio->fillLength; i++) {
+	// 	uint64 sampleInd = i * audio->channels;
+	// 	float32 sampleRaw0 = audio->buffer[sampleInd];
+	// 	float32 sampleRaw1 = audio->buffer[sampleInd + 1];
+	// 	audio->buffer[sampleInd]     = alpha * (prevSampleFiltered0 + sampleRaw0 - prevSampleRaw0);
+	// 	audio->buffer[sampleInd + 1] = alpha * (prevSampleFiltered1 + sampleRaw1 - prevSampleRaw1);
+	// 	prevSampleRaw0 = sampleRaw0;
+	// 	prevSampleRaw1 = sampleRaw1;
+	// 	prevSampleFiltered0 = audio->buffer[sampleInd];
+	// 	prevSampleFiltered1 = audio->buffer[sampleInd + 1];
+	// }
 
 	for (uint8 c = 0; c < audio->channels; c++) {
 		audioState.lastSamplesRaw[c] = lastSamplesRaw[c];
