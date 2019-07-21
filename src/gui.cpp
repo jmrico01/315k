@@ -11,6 +11,15 @@ void BufferView::SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor)
 	this->size = size;
 }
 
+void BufferView::ResetControls()
+{
+	tOffset = 0.0f;
+	tSize = Vec2::one;
+	drawMode = BUFFERVIEW_DRAW_BOTH;
+	selectStart = 0;
+	selectEnd = 0;
+}
+
 void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenInfo,
 	const RectGL& rectGL, const RectPixelGL& rectPixelGL, const LineGL& lineGL,
 	const TextGL& textGL, const FontFace& fontFace,
@@ -22,11 +31,7 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 	const float32 ALPHA_BACKGROUND = 0.2f;
 
 	if (IsKeyPressed(&input, KM_KEY_P)) {
-		tOffset = 0.0f;
-		tSize = Vec2::one;
-		drawMode = BUFFERVIEW_DRAW_BOTH;
-		selectStart = 0;
-		selectEnd = 0;
+		ResetControls();
 	}
 
 	Vec2Int mousePosToOrigin = input.mousePos - origin;
@@ -88,18 +93,11 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 	DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
 	LineGLData* lineData = (LineGLData*)transient.memory;
 
-	lineData->count = numSamples;
-	if (lineData->count > MAX_LINE_POINTS) {
-		lineData->count = MAX_LINE_POINTS;
+	uint8 channel = 0;
+	if (drawMode == BUFFERVIEW_DRAW_1) {
+		channel = 1;
 	}
-	for (uint64 i = 0; i < lineData->count; i++) {
-		float32 t = (float32)i / (lineData->count - 1);
-		uint8 channel = 0;
-		if (drawMode == BUFFERVIEW_DRAW_1) {
-			channel = 1;
-		}
-		lineData->pos[i] = { t, buffer[i * channels + channel], 0.0f };
-	}
+	FillNormalizedLineGLDataFromBuffer(buffer, numSamples, channels, channel, lineData);
 	Vec4 color = Vec4::one; // TODO maybe factor this color
 	if (drawMode == BUFFERVIEW_DRAW_BOTH) {
 		color = Vec4 { 1.0f, 0.0f, 0.0f, 1.0f };
@@ -107,12 +105,18 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 	DrawLine(lineGL, transform, lineData, color);
 
 	if (drawMode == BUFFERVIEW_DRAW_BOTH) {
-		for (uint64 i = 0; i < lineData->count; i++) {
-			float32 t = (float32)i / (lineData->count - 1);
-			lineData->pos[i] = { t, buffer[i * channels + 1], 0.0f };
-		}
+		FillNormalizedLineGLDataFromBuffer(buffer, numSamples, channels, 1, lineData);
 		DrawLine(lineGL, transform, lineData, Vec4 { 0.0f, 1.0f, 0.0f, 1.0f }); // and this one
 	}
+
+	lineData->count = marks.array.size * 3;
+	for (uint64 i = 0; i < marks.array.size; i++) {
+		float32 tMark = (float32)marks[i] / (numSamples - 1);
+		lineData->pos[i * 3]     = Vec3 { tMark, -1.0f, 0.0f };
+		lineData->pos[i * 3 + 1] = Vec3 { tMark,  1.0f, 0.0f };
+		lineData->pos[i * 3 + 2] = Vec3 { tMark, -1.0f, 0.0f };
+	}
+	DrawLine(lineGL, transform, lineData, ToVec4(COLOR_INFO_TEXT, 0.2f));
 
 	if (0.0f <= tMouse && tMouse <= 1.0f) {
 		lineData->count = 2;
@@ -187,4 +191,17 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 		Vec4::one,
 		transient
 	);
+}
+
+void FillNormalizedLineGLDataFromBuffer(const float32* buffer, uint64 numSamples,
+	uint8 channels, uint8 channel, LineGLData* lineData)
+{
+	lineData->count = numSamples;
+	if (lineData->count > MAX_LINE_POINTS) {
+		lineData->count = MAX_LINE_POINTS;
+	}
+	for (uint64 i = 0; i < lineData->count; i++) {
+		float32 t = (float32)i / (numSamples - 1);
+		lineData->pos[i] = { t, buffer[i * channels + channel], 0.0f };
+	}
 }

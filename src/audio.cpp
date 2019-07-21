@@ -3,72 +3,12 @@
 #include "main.h"
 #include "km_debug.h"
 
-#define MIDI_EVENT_NOTEON 0x9
-#define MIDI_EVENT_NOTEOFF 0x8
-
-#if 0
-internal float32 CalcWaveLoudness(const GameAudio* audio,
-	const float32* buffer, int bufferLengthSamples)
-{
-	float32 loudness = 0.0f;
-	float32 prevVal1 = buffer[0];
-	float32 prevVal2 = buffer[1];
-	for (int i = 1; i < bufferLengthSamples; i++) {
-		float32 val1 = buffer[i * audio->channels];
-		float32 val2 = buffer[i * audio->channels + 1];
-		loudness += (val1 - prevVal1) * (val1 - prevVal1)
-			+ (val2 - prevVal2) * (val2 - prevVal2);
-		prevVal1 = val1;
-		prevVal2 = val2;
-	}
-
-	return loudness;
-}
-#endif
+const uint8 MIDI_EVENT_NOTEON  = 0x9;
+const uint8 MIDI_EVENT_NOTEOFF = 0x8;
 
 internal inline float32 MidiNoteToFreq(int midiNote)
 {
 	return 261.625565f * powf(2.0f, (midiNote - 60.0f) / 12.0f);
-}
-
-internal void DrawAudioBuffer(
-	const GameState* gameState, const GameAudio* audio,
-	const float32* buffer, uint64 bufferSizeSamples, uint8 channel,
-	const int marks[], const Vec4 markColors[], int numMarks,
-	Vec3 origin, Vec2 size, Vec4 color,
-	MemoryBlock transient)
-{
-	DEBUG_ASSERT(transient.size >= sizeof(LineGLData));
-	DEBUG_ASSERT(bufferSizeSamples <= MAX_LINE_POINTS);
-	LineGLData* lineData = (LineGLData*)transient.memory;
-	
-	lineData->count = bufferSizeSamples;
-	for (uint64 i = 0; i < bufferSizeSamples; i++) {
-		float32 val = buffer[i * audio->channels + channel];
-		float32 t = (float32)i / (bufferSizeSamples - 1);
-		lineData->pos[i] = {
-			origin.x + t * size.x,
-			origin.y + size.y * val,
-			origin.z
-		};
-	}
-	DrawLine(gameState->lineGL, Mat4::one, lineData, color);
-
-	lineData->count = 2;
-	for (int i = 0; i < numMarks; i++) {
-		float32 tMark = (float32)marks[i] / (bufferSizeSamples - 1);
-		lineData->pos[0] = Vec3 {
-			origin.x + tMark * size.x,
-			origin.y,
-			origin.z
-		};
-		lineData->pos[1] = Vec3 {
-			origin.x + tMark * size.x,
-			origin.y + size.y,
-			origin.z
-		};
-		DrawLine(gameState->lineGL, Mat4::one, lineData, markColors[i]);
-	}
 }
 
 internal float32 SquareWave(float32 t)
@@ -190,27 +130,6 @@ void WaveTable::Init(const GameAudio* audio)
 	envelopes[0].decay = 0.05f;
 	envelopes[0].sustain = 0.8f;
 	envelopes[0].release = 0.1f;
-
-	// Very rough normalization
-	// Meh, nevermind. Need a good loudness function for this.
-	/*float32 loudness[WAVETABLE_MAX_WAVES];
-	float32 minLoudness = 1e9;
-	LOG_INFO("loudness values:\n");
-	for (int i = 0; i < numWaves; i++) {
-		loudness[i] = CalcWaveLoudness(audio, waves[i].buffer, waveBufferLength);
-		if (loudness[i] < minLoudness) {
-			minLoudness = loudness[i];
-		}
-		LOG_INFO("%d - %f\n", i, loudness[i]);
-	}
-	for (int w = 0; w < numWaves; w++) {
-		for (int i = 0; i < waveBufferLength; i++) {
-			int ind1 = i * audio->channels;
-			int ind2 = i * audio->channels + 1;
-			waves[w].buffer[ind1] *= minLoudness / loudness[w];
-			waves[w].buffer[ind2] *= minLoudness / loudness[w];
-		}
-	}*/
 }
 
 void WaveTable::Update(const GameAudio* audio, const GameInput* input)
@@ -355,7 +274,6 @@ void WaveTable::WriteSamples(GameAudio* audio)
 	int wave1 = ClampInt((int)floorf(indexWaveTable), 0, numWaves - 1);
 	int wave2 = ClampInt((int)ceilf(indexWaveTable), 0, numWaves - 1);
 
-	int waveBufferLength = bufferLengthSamples;
 	const float32* wave1Buffer = waves[wave1].buffer;
 	const float32* wave2Buffer = waves[wave2].buffer;
 	for (int v = 0; v < activeVoices; v++) {
@@ -396,10 +314,10 @@ void WaveTable::WriteSamples(GameAudio* audio)
 				}
 			}
 			float32 tWave = fmod(voices[v].tWave + voices[v].freq * i / audio->sampleRate, 1.0f);
-			float32 sample1Wave1 = LinearSample(audio, wave1Buffer, waveBufferLength, 0, tWave);
-			float32 sample1Wave2 = LinearSample(audio, wave2Buffer, waveBufferLength, 0, tWave);
-			float32 sample2Wave1 = LinearSample(audio, wave1Buffer, waveBufferLength, 1, tWave);
-			float32 sample2Wave2 = LinearSample(audio, wave2Buffer, waveBufferLength, 1, tWave);
+			float32 sample1Wave1 = LinearSample(audio, wave1Buffer, bufferLengthSamples, 0, tWave);
+			float32 sample1Wave2 = LinearSample(audio, wave2Buffer, bufferLengthSamples, 0, tWave);
+			float32 sample2Wave1 = LinearSample(audio, wave1Buffer, bufferLengthSamples, 1, tWave);
+			float32 sample2Wave2 = LinearSample(audio, wave2Buffer, bufferLengthSamples, 1, tWave);
 
 			audio->buffer[i * audio->channels] += voices[v].amp
 				* Lerp(sample1Wave1, sample1Wave2, tMix);
@@ -415,6 +333,11 @@ void AudioState::Init(const ThreadContext* thread,
 	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
 {
 	globalMute = false;
+
+	for (int c = 0; c < AUDIO_MAX_CHANNELS; c++) {
+		lastSamplesRaw[c] = 0.0;
+		lastSamplesFiltered[c] = 0.0;
+	}
 
 	const int KICK_VARIATIONS = 1;
 	const char* kickSoundFiles[KICK_VARIATIONS] = {
@@ -460,6 +383,12 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	DEBUG_ASSERT(audio->channels == 2); // Stereo support only
 	AudioState& audioState = gameState->audioState;
 
+	static float32 lastWrittenSample0, lastWrittenSample1;
+	if (audio->sampleDelta > 0) {
+		lastWrittenSample0 = audio->buffer[(audio->sampleDelta - 1) * audio->channels];
+		lastWrittenSample1 = audio->buffer[(audio->sampleDelta - 1) * audio->channels + 1];
+	}
+
 	audioState.soundKick.Update(audio);
 	audioState.soundSnare.Update(audio);
 	audioState.soundDeath.Update(audio);
@@ -488,31 +417,51 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 
 	audioState.waveTable.WriteSamples(audio);
 
+	const uint64 lastSampleInd = (audio->fillLength - 1) * audio->channels;
+
+	float32 lastSamplesRaw[AUDIO_MAX_CHANNELS];
+	for (uint8 c = 0; c < audio->channels; c++) {
+		lastSamplesRaw[c] = audio->buffer[lastSampleInd + c];
+	}
+
 	// float32 lowPassFrequency = MaxFloat32((float32)input->mousePos.x, 0.0f);
 	// float32 a = 2.0f * PI_F * lowPassFrequency / (float32)audio->sampleRate;
 	// float32 alpha = a / (a + 1.0f);
-	// for (uint64 i = 1; i < audio->fillLength; i++) {
-	//     audio->buffer[i * audio->channels] *= alpha;
-	//     audio->buffer[i * audio->channels] += (1.0f - alpha)
-	//         * audio->buffer[(i - 1) * audio->channels];
-	//     audio->buffer[i * audio->channels + 1] *= alpha;
-	//     audio->buffer[i * audio->channels + 1] += (1.0f - alpha)
-	//         * audio->buffer[(i - 1) * audio->channels + 1];
+	// float32 prevSampleFiltered0 = audioState.lastSamplesFiltered[0];
+	// float32 prevSampleFiltered1 = audioState.lastSamplesFiltered[1];
+	// for (uint64 i = 0; i < audio->fillLength; i++) {
+	// 	uint64 sampleInd = i * audio->channels;
+	// 	audio->buffer[sampleInd]     *= alpha;
+	// 	audio->buffer[sampleInd]     += (1.0f - alpha) * prevSampleFiltered0;
+	// 	audio->buffer[sampleInd + 1] *= alpha;
+	// 	audio->buffer[sampleInd + 1] += (1.0f - alpha) * prevSampleFiltered1;
+	// 	prevSampleFiltered0 = audio->buffer[sampleInd];
+	// 	prevSampleFiltered1 = audio->buffer[sampleInd + 1];
 	// }
 
-	// float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
-	// float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
-	// float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
-	// float32 prevChannel0 = audio->buffer[0];
-	// float32 prevChannel1 = audio->buffer[1];
-	// for (uint64 i = 1; i < audio->fillLength; i++) {
-	// 	float32 channel0 = audio->buffer[i * audio->channels];
-	// 	audio->buffer[i * audio->channels] = alpha * (audio->buffer[(i - 1) * audio->channels] + channel0 - prevChannel0);
-	// 	prevChannel0 = channel0;
-	// 	float32 channel1 = audio->buffer[i * audio->channels + 1];
-	// 	audio->buffer[i * audio->channels + 1] = alpha * (audio->buffer[(i - 1) * audio->channels + 1] + channel1 - prevChannel1);
-	// 	prevChannel1 = channel1;
-	// }
+	float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
+	float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
+	float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
+	float32 prevSampleRaw0 = audioState.lastSamplesRaw[0];
+	float32 prevSampleRaw1 = audioState.lastSamplesRaw[1];
+	float32 prevSampleFiltered0 = audioState.lastSamplesFiltered[0];
+	float32 prevSampleFiltered1 = audioState.lastSamplesFiltered[1];
+	for (uint64 i = 0; i < audio->fillLength; i++) {
+		uint64 sampleInd = i * audio->channels;
+		float32 sampleRaw0 = audio->buffer[sampleInd];
+		float32 sampleRaw1 = audio->buffer[sampleInd + 1];
+		audio->buffer[sampleInd]     = alpha * (prevSampleFiltered0 + sampleRaw0 - prevSampleRaw0);
+		audio->buffer[sampleInd + 1] = alpha * (prevSampleFiltered1 + sampleRaw1 - prevSampleRaw1);
+		prevSampleRaw0 = sampleRaw0;
+		prevSampleRaw1 = sampleRaw1;
+		prevSampleFiltered0 = audio->buffer[sampleInd];
+		prevSampleFiltered1 = audio->buffer[sampleInd + 1];
+	}
+
+	for (uint8 c = 0; c < audio->channels; c++) {
+		audioState.lastSamplesRaw[c] = lastSamplesRaw[c];
+		audioState.lastSamplesFiltered[c] = audio->buffer[lastSampleInd + c];
+	}
 
 	if (input->arduinoIn.connected) {
 		float32 volume = input->arduinoIn.analogValues[0][1];
@@ -525,22 +474,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 #if GAME_INTERNAL
 	if (WasKeyPressed(input, KM_KEY_G)) {
 		audioState.debugView = !audioState.debugView;
-	}
-	if (audioState.debugView) {
-		DrawAudioBuffer(gameState, audio,
-			audio->buffer, audio->fillLength, 0,
-			nullptr, nullptr, 0,
-			Vec3 { -1.0f, 0.5f, 0.0f }, Vec2 { 2.0f, 1.0f },
-			Vec4::one,
-			transient
-		);
-		DrawAudioBuffer(gameState, audio,
-			audio->buffer, audio->fillLength, 1,
-			nullptr, nullptr, 0,
-			Vec3 { -1.0f, -0.5f, 0.0f }, Vec2 { 2.0f, 1.0f },
-			Vec4::one,
-			transient
-		);
 	}
 #endif
 }
