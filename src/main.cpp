@@ -994,7 +994,8 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #if GAME_INTERNAL
 	{ // DEBUG recording logic
 		AudioState& audioState = gameState->audioState;
-		if (WasKeyPressed(input, KM_KEY_R)) {
+		if (WasKeyPressed(input, KM_KEY_R)
+		|| (input->arduinoIn.connected && input->arduinoIn.pedal.transitions == 1)) {
 			audioState.debugRecording = !audioState.debugRecording;
 			if (audioState.debugRecording) {
 				audioState.debugBufferSamples = 0;

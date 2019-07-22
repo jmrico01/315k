@@ -54,12 +54,12 @@ struct ScreenInfo
 struct GameButtonState
 {
     int transitions;
-    bool32 isDown;
+    bool isDown;
 };
 
 struct GameControllerInput
 {
-    bool32 isConnected;
+    bool isConnected;
 
     Vec2 leftStart;
     Vec2 leftEnd;
@@ -99,6 +99,7 @@ struct ArduinoInput
     bool connected;
 
     uint8 activeChannel;
+    GameButtonState pedal;
     float32 analogValues[ARDUINO_CHANNELS][ARDUINO_ANALOG_INPUTS];
 };
 

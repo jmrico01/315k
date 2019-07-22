@@ -58,7 +58,7 @@ bool Win32Arduino::Init(const char* portName)
         return false;
     }
 
-    dcbSerialParameters.BaudRate = CBR_9600;
+    dcbSerialParameters.BaudRate = CBR_57600;
     dcbSerialParameters.ByteSize = 8;
     dcbSerialParameters.StopBits = ONESTOPBIT;
     dcbSerialParameters.Parity = NOPARITY;
@@ -83,8 +83,7 @@ bool Win32Arduino::Init(const char* portName)
     return true;
 }
 
-uint64 Win32Arduino::ReadPackets(uint8* outActiveChannel,
-    Win32ArduinoPacket* packetBuffer, uint64 packetBufferSize)
+void Win32Arduino::UpdateInput(ArduinoInput* arduinoIn)
 {
     if (!ClearCommError(handle, &errors, &status)) {
         LOG_ERROR("Failed call to ClearCommError\n");
@@ -138,11 +137,11 @@ uint64 Win32Arduino::ReadPackets(uint8* outActiveChannel,
 
     uint64 afterPrefix1 = FindPacketPrefix(bufferRead, bufferWrite, buffer, ARDUINO_BUFFER_SIZE);
     if (afterPrefix1 == bufferRead) {
-        return 0;
+        return;
     }
     uint64 afterPrefix2 = FindPacketPrefix(afterPrefix1, bufferWrite, buffer, ARDUINO_BUFFER_SIZE);
     if (afterPrefix2 == afterPrefix1) {
-        return 0;
+        return;
     }
 
     uint64 beforePrefix2;
@@ -155,11 +154,17 @@ uint64 Win32Arduino::ReadPackets(uint8* outActiveChannel,
 
     if (afterPrefix1 == beforePrefix2) {
         LOG_ERROR("Arduino prefixes with no payload data in between\n");
-        return 0;
+        return;
     }
 
-    // Read active channel byte
-    *outActiveChannel = buffer[afterPrefix1];
+    uint8 activeChannel = buffer[afterPrefix1];
+    if (++afterPrefix1 >= ARDUINO_BUFFER_SIZE) {
+        afterPrefix1 -= ARDUINO_BUFFER_SIZE;
+    }
+
+    bool pedalOn = buffer[afterPrefix1] != 0;
+    arduinoIn->pedal.transitions = arduinoIn->pedal.isDown == pedalOn ? 0 : 1;
+    arduinoIn->pedal.isDown = pedalOn;
     if (++afterPrefix1 >= ARDUINO_BUFFER_SIZE) {
         afterPrefix1 -= ARDUINO_BUFFER_SIZE;
     }
@@ -176,14 +181,14 @@ uint64 Win32Arduino::ReadPackets(uint8* outActiveChannel,
     if (payloadBytes % ARDUINO_DATA_PACKET_SIZE != 0) {
         LOG_ERROR("Data payload not a multiple of packet size: %llu\n", payloadBytes);
         bufferRead = beforePrefix2;
-        return 0;
+        return;
     }
 
     uint64 numPackets = payloadBytes / ARDUINO_DATA_PACKET_SIZE;
     uint64 packet = 0;
     uint64 index = afterPrefix1;
     while (packet < numPackets) {
-        packetBuffer[packet].inputNumber = buffer[index];
+        uint8 inputNumber = buffer[index];
         if (++index >= ARDUINO_BUFFER_SIZE) {
             index -= ARDUINO_BUFFER_SIZE;
         }
@@ -195,11 +200,12 @@ uint64 Win32Arduino::ReadPackets(uint8* outActiveChannel,
                 index -= ARDUINO_BUFFER_SIZE;
             }
         }
-        MemCopy(&packetBuffer[packet].value, valueBytes, 4);
+        float32 value;
+        MemCopy(&value, valueBytes, 4);
+
+        arduinoIn->analogValues[activeChannel][inputNumber] = value;
         packet++;
     }
 
     bufferRead = beforePrefix2;
-
-    return numPackets;
 }

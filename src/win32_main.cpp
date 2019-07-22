@@ -516,8 +516,8 @@ internal void Win32ProcessMessages(
         } break;
         case WM_KEYDOWN: {
             uint32 vkCode = (uint32)msg.wParam;
-            bool32 wasDown = ((msg.lParam & (1 << 30)) != 0);
-            bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
+            bool wasDown = ((msg.lParam & (1 << 30)) != 0);
+            bool isDown = ((msg.lParam & (1 << 31)) == 0);
             int transitions = (wasDown != isDown) ? 1 : 0;
             DEBUG_ASSERT(isDown);
 
@@ -542,8 +542,8 @@ internal void Win32ProcessMessages(
         } break;
         case WM_KEYUP: {
             uint32 vkCode = (uint32)msg.wParam;
-            bool32 wasDown = ((msg.lParam & (1 << 30)) != 0);
-            bool32 isDown = ((msg.lParam & (1 << 31)) == 0);
+            bool wasDown = ((msg.lParam & (1 << 30)) != 0);
+            bool isDown = ((msg.lParam & (1 << 31)) == 0);
             int transitions = (wasDown != isDown) ? 1 : 0;
             DEBUG_ASSERT(!isDown);
 
@@ -1155,28 +1155,11 @@ int CALLBACK WinMain(
             winAudio.midiInBusy = false;
         }
 
+        // Arduino controller input
         if (arduinoConnected) {
             MemCopy(&newInput->arduinoIn, &oldInput->arduinoIn, sizeof(ArduinoInput));
-
             newInput->arduinoIn.connected = true;
-
-            // Arduino serial data
-            uint8 activeChannel;
-            Win32ArduinoPacket packets[32];
-            uint64 packetsRead = arduino.ReadPackets(&activeChannel, packets, 32);
-            if (packetsRead > 0) {
-                newInput->arduinoIn.activeChannel = activeChannel;
-                for (uint64 i = 0; i < packetsRead; i++) {
-                    if (packets[i].inputNumber >= ARDUINO_ANALOG_INPUTS) {
-                        LOG_ERROR("Arduino packet input number over %u (%u)\n",
-                            ARDUINO_ANALOG_INPUTS, packets[i].inputNumber);
-                        continue;
-                    }
-                    // TODO check that inputNumber is in range
-                    newInput->arduinoIn.analogValues[activeChannel][packets[i].inputNumber] =
-                        packets[i].value;
-                }
-            }
+            arduino.UpdateInput(&newInput->arduinoIn);
         }
 
         DWORD maxControllerCount = XUSER_MAX_COUNT;

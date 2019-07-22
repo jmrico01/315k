@@ -20,6 +20,5 @@ struct Win32Arduino
     uint8 buffer[ARDUINO_BUFFER_SIZE];
 
     bool Init(const char* portName);
-    uint64 ReadPackets(uint8* outActiveChannel,
-        Win32ArduinoPacket* packetBuffer, uint64 packetBufferSize);
+    void UpdateInput(ArduinoInput* arduinoIn);
 };
