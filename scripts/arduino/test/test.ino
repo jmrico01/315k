@@ -63,6 +63,11 @@ void loop()
   byte buffer[DATA_PAYLOAD_MAX_SIZE];
   int bufferSize = 0;
 
+  memset(buffer, 0xff, DATA_PACKET_SIZE);
+  buffer[DATA_PACKET_SIZE] = getActiveChannel();
+  buffer[DATA_PACKET_SIZE + 1] = digitalRead(DIGITAL_INPUT_PINS[0]) == HIGH ? 0 : 1;
+  bufferSize = DATA_PACKET_SIZE + 2;
+
   if (Serial.available() > 0) {
     byte in = Serial.read();
     if (in == 0xff) {
@@ -78,24 +83,15 @@ void loop()
     if (abs(value - analogLastValues[i]) >= VALUE_DIFF_THRESHOLD || analogLastValues[i] == -1) {
       analogLastValues[i] = value;
       float valueNormalized = constrain((float)value / (float)ANALOG_INPUT_MAX_VALUE, 0.0f, 1.0f);
-
-      if (bufferSize == 0) {
-        memset(buffer, 0xff, DATA_PACKET_SIZE);
-        bufferSize += DATA_PACKET_SIZE;
-        buffer[bufferSize++] = getActiveChannel();
-        buffer[bufferSize++] = digitalRead(DIGITAL_INPUT_PINS[0]) == HIGH ? 0 : 1;
-      }
       buffer[bufferSize] = i;
       memcpy(&buffer[bufferSize + 1], &valueNormalized, 4);
       bufferSize += DATA_PACKET_SIZE;
     }
   }
 
-  if (bufferSize > 0) {
-    digitalWrite(PIN_SERIAL_WRITE, HIGH);
-    Serial.write(buffer, bufferSize);
-    digitalWrite(PIN_SERIAL_WRITE, LOW);
-  }
+  digitalWrite(PIN_SERIAL_WRITE, HIGH);
+  Serial.write(buffer, bufferSize);
+  digitalWrite(PIN_SERIAL_WRITE, LOW);
 
   delay(1);
 }

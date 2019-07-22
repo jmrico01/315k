@@ -45,7 +45,7 @@ bool Win32Arduino::Init(const char* portName)
         0,
         NULL,
         OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
+        FILE_FLAG_NO_BUFFERING, // FILE_ATTRIBUTE_NORMAL,
         NULL);
     if (handle == INVALID_HANDLE_VALUE) {
         LOG_ERROR("Failed to open Arduino file handle for port %s\n", portName);
