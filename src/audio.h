@@ -4,8 +4,10 @@
 #include "km_defines.h"
 #include "load_wav.h"
 
-const uint64 WAVE_BUFFER_LENGTH_SECONDS = 1;
-const uint64 WAVE_BUFFER_MAX_SAMPLES = AUDIO_MAX_SAMPLERATE * WAVE_BUFFER_LENGTH_SECONDS;
+#define MAX_LOOP_BUFFERS 8
+
+#define WAVE_BUFFER_LENGTH_SECONDS 1
+#define WAVE_BUFFER_MAX_SAMPLES (AUDIO_MAX_SAMPLERATE * WAVE_BUFFER_LENGTH_SECONDS)
 
 #define WAVETABLE_MAX_WAVES 16
 #define WAVETABLE_MAX_VOICES 128
@@ -96,6 +98,9 @@ struct AudioState
 	Sound soundNotes[12];
 
 	WaveTable waveTable;
+
+	uint64 activeLoopBuffers;
+	Sound loopBuffers[MAX_LOOP_BUFFERS];
 
 	float32 lastSamplesRaw[AUDIO_MAX_CHANNELS];
 	float32 lastSamplesFiltered[AUDIO_MAX_CHANNELS];

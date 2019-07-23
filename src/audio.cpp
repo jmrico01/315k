@@ -217,7 +217,7 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 				}
 			} break;
 			default: {
-				LOG_INFO("Unknown MIDI event: %d\n", event);
+				// LOG_INFO("Unknown MIDI event: %d\n", event);
 			} break;
 		}
 	}
@@ -339,6 +339,8 @@ void AudioState::Init(const ThreadContext* thread,
 		lastSamplesFiltered[c] = 0.0;
 	}
 
+	activeLoopBuffers = 0;
+
 	const int KICK_VARIATIONS = 1;
 	const char* kickSoundFiles[KICK_VARIATIONS] = {
 		"data/audio/kick.wav"
@@ -389,6 +391,8 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		lastWrittenSample1 = audio->buffer[(audio->sampleDelta - 1) * audio->channels + 1];
 	}
 
+	audioState.waveTable.Update(audio, input);
+
 	audioState.soundKick.Update(audio);
 	audioState.soundSnare.Update(audio);
 	audioState.soundDeath.Update(audio);
@@ -396,7 +400,12 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		audioState.soundNotes[i].Update(audio);
 	}
 
-	audioState.waveTable.Update(audio, input);
+	for (uint64 i = 0; i < audioState.activeLoopBuffers; i++) {
+		if (!audioState.loopBuffers[i].playing) {
+			audioState.loopBuffers[i].play = true;
+		}
+		audioState.loopBuffers[i].Update(audio);
+	}
 
 	for (uint64 i = 0; i < audio->fillLength; i++) {
 		audio->buffer[i * audio->channels] = 0.0f;
@@ -409,12 +418,43 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 
 	audioState.waveTable.WriteSamples(audio);
 
+	if (input->arduinoIn.connected && audioState.activeLoopBuffers < MAX_LOOP_BUFFERS) {
+		Sound& loopBuffer = audioState.loopBuffers[audioState.activeLoopBuffers];
+		if (input->arduinoIn.pedal.transitions == 1) {
+			if (input->arduinoIn.pedal.isDown) {
+				LOG_INFO("Loop buffer recording start\n");
+				loopBuffer.play = false;
+				loopBuffer.playing = false;
+				loopBuffer.sampleIndex = 0;
+				loopBuffer.buffer.sampleRate = audio->sampleRate;
+				loopBuffer.buffer.channels = audio->channels;
+				loopBuffer.buffer.bufferSizeSamples = 0;
+			}
+			else {
+				LOG_INFO("Loop buffer recording end\n");
+				audioState.activeLoopBuffers++;
+			}
+		}
+		if (input->arduinoIn.pedal.isDown) {
+			AudioBuffer& loopData = loopBuffer.buffer;
+			if (loopData.bufferSizeSamples + audio->fillLength < AUDIO_MAX_SAMPLES) {
+				MemCopy(&loopData.buffer[loopData.bufferSizeSamples * audio->channels],
+					audio->buffer, audio->fillLength * audio->channels * sizeof(float32));
+				loopData.bufferSizeSamples += audio->fillLength;
+			}
+		}
+	}
+
 	// TODO wow, so many last minute decisions here
 	audioState.soundKick.WriteSamples(1.0f, audio);
 	audioState.soundSnare.WriteSamples(0.7f, audio);
 	audioState.soundDeath.WriteSamples(0.5f, audio);
 	for (int i = 0; i < 12; i++) {
 		audioState.soundNotes[i].WriteSamples(0.2f, audio);
+	}
+
+	for (uint64 i = 0; i < audioState.activeLoopBuffers; i++) {
+		audioState.loopBuffers[i].WriteSamples(1.0f, audio);
 	}
 
 	const uint64 lastSampleInd = (audio->fillLength - 1) * audio->channels;

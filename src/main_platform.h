@@ -36,8 +36,6 @@ typedef DEBUG_PLATFORM_READ_FILE_FUNC(DEBUGPlatformReadFileFunc);
         uint64 memorySize, const void* memory, bool overwrite)
 typedef DEBUG_PLATFORM_WRITE_FILE_FUNC(DEBUGPlatformWriteFileFunc);
 
-//#endif
-
 #define MAX_KEYS_PER_FRAME 256
 
 struct ScreenInfo
