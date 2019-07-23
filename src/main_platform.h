@@ -8,7 +8,8 @@
 
 #define MIDI_IN_QUEUE_SIZE 256
 #define ARDUINO_CHANNELS 4
-#define ARDUINO_ANALOG_INPUTS 6
+#define ARDUINO_ANALOG_INPUTS  6
+#define ARDUINO_DIGITAL_INPUTS 1
 
 struct ThreadContext
 {

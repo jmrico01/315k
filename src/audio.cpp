@@ -407,6 +407,8 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		return;
 	}
 
+	audioState.waveTable.WriteSamples(audio);
+
 	// TODO wow, so many last minute decisions here
 	audioState.soundKick.WriteSamples(1.0f, audio);
 	audioState.soundSnare.WriteSamples(0.7f, audio);
@@ -414,8 +416,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	for (int i = 0; i < 12; i++) {
 		audioState.soundNotes[i].WriteSamples(0.2f, audio);
 	}
-
-	audioState.waveTable.WriteSamples(audio);
 
 	const uint64 lastSampleInd = (audio->fillLength - 1) * audio->channels;
 

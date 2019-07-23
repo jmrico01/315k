@@ -20,5 +20,6 @@ struct Win32Arduino
     uint8 buffer[ARDUINO_BUFFER_SIZE];
 
     bool Init(const char* portName);
+    void ReadSerialBytes();
     void UpdateInput(ArduinoInput* arduinoIn);
 };

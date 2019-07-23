@@ -1,24 +1,22 @@
-#define NUM_ANALOG_INPUTS  6
-#define NUM_DIGITAL_INPUTS 1
+#define SERIAL_BITRATE 57600
 
-// Send (input number + float value) for every analog input
-#define DATA_PACKET_SIZE (1 + 4)
-// Max data payload: packet for every input, plus prefix packet and header msgs
-#define DATA_PAYLOAD_MAX_SIZE (DATA_PACKET_SIZE * (NUM_ANALOG_INPUTS + 1) + 2)
+#define PIN_SERIAL_WRITE 5
+#define PIN_CHANNEL_BIT0 2
+#define PIN_CHANNEL_BIT1 3
 
 #define ANALOG_INPUT_MAX_VALUE 1023
 
-#define VALUE_DIFF_THRESHOLD 3
+#define NUM_ANALOG_INPUTS  6
+#define NUM_DIGITAL_INPUTS 1
 
-const int PIN_CHANNEL_BIT0 = 2;
-const int PIN_CHANNEL_BIT1 = 3;
+#define DATA_PREFIX_BYTES 4
+#define DATA_BUFFER_SIZE (DATA_PREFIX_BYTES + 1 + NUM_DIGITAL_INPUTS + (NUM_ANALOG_INPUTS * sizeof(unsigned short)))
 
-const int PIN_SERIAL_WRITE = 5;
+byte dataBuffer[DATA_BUFFER_SIZE];
 
 const int ANALOG_INPUT_PINS[NUM_ANALOG_INPUTS] = {
   A0, A1, A2, A3, A4, A5
 };
-int analogLastValues[NUM_ANALOG_INPUTS];
 
 const int DIGITAL_INPUT_PINS[NUM_DIGITAL_INPUTS] = {
   4
@@ -26,16 +24,16 @@ const int DIGITAL_INPUT_PINS[NUM_DIGITAL_INPUTS] = {
 
 void setup()
 {
-  Serial.begin(57600);
+  // Initialize buffer with prefix (4 0xff bytes)
+  const byte dataPrefix[DATA_PREFIX_BYTES] = { 0xff, 0xff, 0xff, 0xff };
+  memcpy(dataBuffer, dataPrefix, DATA_PREFIX_BYTES);
 
-  pinMode(PIN_CHANNEL_BIT0, INPUT);
-  pinMode(PIN_CHANNEL_BIT1, INPUT);
+  Serial.begin(SERIAL_BITRATE);
+
   pinMode(PIN_SERIAL_WRITE, OUTPUT);
   digitalWrite(PIN_SERIAL_WRITE, LOW);
-
-  for (int i = 0; i < NUM_ANALOG_INPUTS; i++) {
-    analogLastValues[i] = -1;
-  }
+  pinMode(PIN_CHANNEL_BIT0, INPUT);
+  pinMode(PIN_CHANNEL_BIT1, INPUT);
 
   for (int i = 0; i < NUM_DIGITAL_INPUTS; i++) {
     pinMode(DIGITAL_INPUT_PINS[i], INPUT);
@@ -60,38 +58,24 @@ byte getActiveChannel()
 
 void loop()
 {
-  byte buffer[DATA_PAYLOAD_MAX_SIZE];
-  int bufferSize = 0;
+  dataBuffer[DATA_PREFIX_BYTES] = getActiveChannel();
+  int dataBufferSize = DATA_PREFIX_BYTES + 1;
 
-  memset(buffer, 0xff, DATA_PACKET_SIZE);
-  buffer[DATA_PACKET_SIZE] = getActiveChannel();
-  buffer[DATA_PACKET_SIZE + 1] = digitalRead(DIGITAL_INPUT_PINS[0]) == HIGH ? 0 : 1;
-  bufferSize = DATA_PACKET_SIZE + 2;
-
-  if (Serial.available() > 0) {
-    byte in = Serial.read();
-    if (in == 0xff) {
-      // ping, reset lastValues to send all
-      for (byte i = 0; i < NUM_ANALOG_INPUTS; i++) {
-        analogLastValues[i] = -1;
-      }
-    }
+  for (int i = 0; i < NUM_DIGITAL_INPUTS; i++) {
+    // TODO build a bit mask out of this, get 8 digital inputs in 1 byte
+    dataBuffer[dataBufferSize++] = digitalRead(DIGITAL_INPUT_PINS[i]) == HIGH ? 0 : 1;
   }
 
-  for (byte i = 0; i < NUM_ANALOG_INPUTS; i++) {
-    int value = ANALOG_INPUT_MAX_VALUE - analogRead(ANALOG_INPUT_PINS[i]); // Inverted, oops!
-    if (abs(value - analogLastValues[i]) >= VALUE_DIFF_THRESHOLD || analogLastValues[i] == -1) {
-      analogLastValues[i] = value;
-      float valueNormalized = constrain((float)value / (float)ANALOG_INPUT_MAX_VALUE, 0.0f, 1.0f);
-      buffer[bufferSize] = i;
-      memcpy(&buffer[bufferSize + 1], &valueNormalized, 4);
-      bufferSize += DATA_PACKET_SIZE;
-    }
+  unsigned short analogValues[NUM_ANALOG_INPUTS];
+  for (int i = 0; i < NUM_ANALOG_INPUTS; i++) {
+    analogValues[i] = (unsigned short)(ANALOG_INPUT_MAX_VALUE - analogRead(ANALOG_INPUT_PINS[i])); // Inverted. Oops!
   }
+  memcpy(&dataBuffer[dataBufferSize], analogValues, NUM_ANALOG_INPUTS * sizeof(unsigned short));
+  dataBufferSize += NUM_ANALOG_INPUTS * sizeof(unsigned short);
 
   digitalWrite(PIN_SERIAL_WRITE, HIGH);
-  Serial.write(buffer, bufferSize);
+  Serial.write(dataBuffer, dataBufferSize);
   digitalWrite(PIN_SERIAL_WRITE, LOW);
 
-  delay(1);
+  delay(3); // TODO be smarter here
 }
