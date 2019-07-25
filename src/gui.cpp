@@ -1,6 +1,7 @@
 #include "gui.h"
 
-#include "km_input.h"
+#include <km_input.h>
+
 #include "opengl_base.h"
 
 void BufferView::SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor)

@@ -1,7 +1,8 @@
 #pragma once
 
+#include <km_defines.h>
+
 #include "gui.h"
-#include "km_defines.h"
 #include "load_wav.h"
 
 #define MAX_LOOP_BUFFERS 8

@@ -2,7 +2,7 @@
 
 #include <sys/types.h>
 
-#include "km_defines.h"
+#include <km_defines.h>
 #include "main_platform.h"
 
 #define LINUX_STATE_FILE_NAME_COUNT  512

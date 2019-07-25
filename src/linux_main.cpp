@@ -25,10 +25,11 @@
 
 #include <alsa/asoundlib.h>
 
+#include <km_debug.h>
+#include <km_math.h>
+#include <km_input.h>
+
 #include "linux_audio.h"
-#include "km_debug.h"
-#include "km_math.h"
-#include "km_input.h"
 
 global_var char pathToApp_[LINUX_STATE_FILE_NAME_COUNT];
 global_var bool32 running_;

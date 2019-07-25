@@ -1,7 +1,8 @@
 #include "audio.h"
 
+#include <km_debug.h>
+
 #include "main.h"
-#include "km_debug.h"
 
 const uint8 MIDI_EVENT_NOTEON  = 0x9;
 const uint8 MIDI_EVENT_NOTEOFF = 0x8;
