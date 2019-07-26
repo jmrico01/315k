@@ -1,7 +1,7 @@
 #include "win32_arduino.h"
 
-#include <km_lib.h>
-#include <km_log.h>
+#include <km_common/km_lib.h>
+#include <km_common/km_log.h>
 
 #define ARDUINO_PREFIX_BYTES 4
 #define ARDUINO_PAYLOAD_BYTES (1 + ARDUINO_DIGITAL_INPUTS + (ARDUINO_ANALOG_INPUTS * sizeof(uint16)))

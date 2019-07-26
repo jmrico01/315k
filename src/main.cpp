@@ -1,11 +1,11 @@
 #include "main.h"
 
-#include <km_debug.h>
-#include <km_defines.h>
-#include <km_input.h>
-#include <km_log.h>
-#include <km_math.h>
-#include <km_string.h>
+#include <km_common/km_debug.h>
+#include <km_common/km_defines.h>
+#include <km_common/km_input.h>
+#include <km_common/km_log.h>
+#include <km_common/km_math.h>
+#include <km_common/km_string.h>
 #undef internal
 #include <random>
 #define internal static
@@ -1115,11 +1115,11 @@ extern "C" GAME_UPDATE_AND_RENDER_FUNC(GameUpdateAndRender)
 #endif
 }
 
-#include <km_debug.cpp>
-#include <km_input.cpp>
-#include <km_lib.cpp>
-#include <km_log.cpp>
-#include <km_string.cpp>
+#include <km_common/km_debug.cpp>
+#include <km_common/km_input.cpp>
+#include <km_common/km_lib.cpp>
+#include <km_common/km_log.cpp>
+#include <km_common/km_string.cpp>
 
 #include "audio.cpp"
 #include "gui.cpp"

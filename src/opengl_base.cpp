@@ -2,9 +2,9 @@
 
 //#include <ft2build.h>
 //#include FT_FREETYPE_H
-#include <km_debug.h>
-#include <km_defines.h>
-#include <km_math.h>
+#include <km_common/km_debug.h>
+#include <km_common/km_defines.h>
+#include <km_common/km_math.h>
 #include <stdlib.h>
 
 #include "opengl_funcs.h"

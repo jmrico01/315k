@@ -1,6 +1,6 @@
 #include "gui.h"
 
-#include <km_input.h>
+#include <km_common/km_input.h>
 
 #include "opengl_base.h"
 

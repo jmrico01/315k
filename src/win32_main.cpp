@@ -4,10 +4,10 @@
 #include <stdarg.h>
 #include <Xinput.h>
 #include <intrin.h> // __rdtsc
-#include <km_debug.h>
-#include <km_input.h>
-#include <km_log.h>
-#include <km_string.h>
+#include <km_common/km_debug.h>
+#include <km_common/km_input.h>
+#include <km_common/km_log.h>
+#include <km_common/km_string.h>
 
 #include "win32_arduino.h"
 #include "win32_audio.h"
@@ -1354,7 +1354,7 @@ int CALLBACK WinMain(
 #include "win32_audio.cpp"
 
 // TODO temporary! this is a bad idea! already compiled in main.cpp
-#include <km_input.cpp>
-#include <km_string.cpp>
-#include <km_lib.cpp>
-#include <km_log.cpp>
+#include <km_common/km_input.cpp>
+#include <km_common/km_string.cpp>
+#include <km_common/km_lib.cpp>
+#include <km_common/km_log.cpp>

@@ -13,8 +13,8 @@
 #include <fcntl.h>          // file open/close functions
 #include <dlfcn.h>          // dynamic linking functions
 
-#include <km_defines.h>
-#include <km_debug.h>
+#include <km_common/km_defines.h>
+#include <km_common/km_debug.h>
 
 #include "macos_audio.h"
 
@@ -831,4 +831,4 @@ int main(int argc, const char* argv[])
 }
 
 #include "macos_audio.cpp"
-#include "km_input.cpp"
+#include <km_common/km_input.cpp>

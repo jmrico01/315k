@@ -1,6 +1,6 @@
 #pragma once
 
-#include <km_defines.h>
+#include <km_common/km_defines.h>
 
 const uint64 BUFFERVIEW_MAX_MARKS = 1024;
 
