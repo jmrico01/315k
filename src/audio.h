@@ -5,7 +5,8 @@
 #include "gui.h"
 #include "load_wav.h"
 
-#define MAX_LOOP_BUFFERS 8
+#define REPLAY_MIDI_MESSAGES_MAX 1024
+#define REPLAY_INSTANCES_MAX 8
 
 #define WAVE_BUFFER_LENGTH_SECONDS 1
 #define WAVE_BUFFER_MAX_SAMPLES (AUDIO_MAX_SAMPLERATE * WAVE_BUFFER_LENGTH_SECONDS)
@@ -90,6 +91,26 @@ struct WaveTable
 	void WriteSamples(GameAudio* audio);
 };
 
+struct ReplayFrameInfo
+{
+	uint64 frame;
+	uint64 midiMessageStart;
+	uint64 numMidiMessages;
+};
+
+struct MidiInputReplay
+{
+	uint64 currentFrame;
+	uint64 totalFrames;
+
+	uint64 currentFrameInfo;
+	uint64 numFrameInfos;
+	ReplayFrameInfo frameInfo[REPLAY_MIDI_MESSAGES_MAX];
+
+	uint64 totalMidiMessages;
+	MidiMessage midiMessages[REPLAY_MIDI_MESSAGES_MAX];
+};
+
 struct AudioState
 {
 	Sound soundKick;
@@ -100,8 +121,8 @@ struct AudioState
 
 	WaveTable waveTable;
 
-	uint64 activeLoopBuffers;
-	Sound loopBuffers[MAX_LOOP_BUFFERS];
+	uint64 activeReplays;
+	MidiInputReplay midiInputReplays[REPLAY_INSTANCES_MAX];
 
 	float32 lastSamplesRaw[AUDIO_MAX_CHANNELS];
 	float32 lastSamplesFiltered[AUDIO_MAX_CHANNELS];

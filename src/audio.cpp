@@ -326,6 +326,7 @@ void WaveTable::WriteSamples(GameAudio* audio)
 				* Lerp(sample2Wave1, sample2Wave2, tMix);
 		}
 	}
+
 }
 
 void AudioState::Init(const ThreadContext* thread,
@@ -340,7 +341,7 @@ void AudioState::Init(const ThreadContext* thread,
 		lastSamplesFiltered[c] = 0.0;
 	}
 
-	activeLoopBuffers = 0;
+	activeReplays = 0;
 
 	const int KICK_VARIATIONS = 1;
 	const char* kickSoundFiles[KICK_VARIATIONS] = {
@@ -392,6 +393,24 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		lastWrittenSample1 = audio->buffer[(audio->sampleDelta - 1) * audio->channels + 1];
 	}
 
+	for (uint64 i = 0; i < audioState.activeReplays; i++) {
+		MidiInputReplay& replay = audioState.midiInputReplays[i];
+		const ReplayFrameInfo& frameInfo = replay.frameInfo[replay.currentFrameInfo];
+		if (frameInfo.frame == replay.currentFrame) {
+			MidiInput& midiIn = const_cast<MidiInput&>(input->midiIn);
+			for (uint64 m = 0; m < frameInfo.numMidiMessages; m++) {
+				// MemCopy?
+				midiIn.messages[midiIn.numMessages + m] = replay.midiMessages[frameInfo.midiMessageStart + m];
+			}
+			midiIn.numMessages += (int)frameInfo.numMidiMessages;
+			replay.currentFrameInfo++;
+		}
+		if (++replay.currentFrame > replay.totalFrames) {
+			replay.currentFrame = 0;
+			replay.currentFrameInfo = 0;
+		}
+	}
+
 	audioState.waveTable.Update(audio, input);
 
 	audioState.soundKick.Update(audio);
@@ -399,13 +418,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	audioState.soundDeath.Update(audio);
 	for (int i = 0; i < 12; i++) {
 		audioState.soundNotes[i].Update(audio);
-	}
-
-	for (uint64 i = 0; i < audioState.activeLoopBuffers; i++) {
-		if (!audioState.loopBuffers[i].playing) {
-			audioState.loopBuffers[i].play = true;
-		}
-		audioState.loopBuffers[i].Update(audio);
 	}
 
 	for (uint64 i = 0; i < audio->fillLength; i++) {
@@ -417,34 +429,51 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		return;
 	}
 
-	audioState.waveTable.WriteSamples(audio);
-
-	if (input->arduinoIn.connected && audioState.activeLoopBuffers < MAX_LOOP_BUFFERS) {
-		Sound& loopBuffer = audioState.loopBuffers[audioState.activeLoopBuffers];
+	if (input->arduinoIn.connected && audioState.activeReplays < REPLAY_INSTANCES_MAX) {
+		MidiInputReplay& replay = audioState.midiInputReplays[audioState.activeReplays];
 		if (input->arduinoIn.pedal.transitions == 1) {
 			if (input->arduinoIn.pedal.isDown) {
-				LOG_INFO("Loop buffer recording start\n");
-				loopBuffer.play = false;
-				loopBuffer.playing = false;
-				loopBuffer.sampleIndex = 0;
-				loopBuffer.buffer.sampleRate = audio->sampleRate;
-				loopBuffer.buffer.channels = audio->channels;
-				loopBuffer.buffer.bufferSizeSamples = 0;
+				LOG_INFO("Audio input recording start\n");
+				replay.currentFrame = 0;
+				replay.currentFrameInfo = 0;
+				replay.totalMidiMessages = 0;
 			}
 			else {
-				LOG_INFO("Loop buffer recording end\n");
-				audioState.activeLoopBuffers++;
+				LOG_INFO("Audio input recording end\n");
+				replay.totalFrames = replay.currentFrame;
+				if (replay.totalFrames >= 30) {
+					replay.currentFrame = 0;
+					replay.numFrameInfos = replay.currentFrameInfo;
+					replay.currentFrameInfo = 0;
+					audioState.activeReplays++;
+				}
+				else {
+					if (audioState.activeReplays > 0) {
+						audioState.activeReplays--;
+					}
+				}
 			}
 		}
 		if (input->arduinoIn.pedal.isDown) {
-			AudioBuffer& loopData = loopBuffer.buffer;
-			if (loopData.bufferSizeSamples + audio->fillLength < AUDIO_MAX_SAMPLES) {
-				MemCopy(&loopData.buffer[loopData.bufferSizeSamples * audio->channels],
-					audio->buffer, audio->fillLength * audio->channels * sizeof(float32));
-				loopData.bufferSizeSamples += audio->fillLength;
+			uint64 numMessages = input->midiIn.numMessages;
+			if (replay.totalMidiMessages + numMessages > REPLAY_MIDI_MESSAGES_MAX) {
+				numMessages = REPLAY_MIDI_MESSAGES_MAX - replay.totalMidiMessages;
 			}
+			if (numMessages > 0) {
+				ReplayFrameInfo& frameInfo = replay.frameInfo[replay.currentFrameInfo++];
+				frameInfo.frame = replay.currentFrame;
+				frameInfo.midiMessageStart = replay.totalMidiMessages;
+				frameInfo.numMidiMessages = numMessages;
+				replay.totalMidiMessages += numMessages;
+				for (uint64 i = 0; i < numMessages; i++) {
+					replay.midiMessages[replay.totalMidiMessages + i] = input->midiIn.messages[i];
+				}
+			}
+			replay.currentFrame++;
 		}
 	}
+
+	audioState.waveTable.WriteSamples(audio);
 
 	// TODO wow, so many last minute decisions here
 	audioState.soundKick.WriteSamples(1.0f, audio);
@@ -452,10 +481,6 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	audioState.soundDeath.WriteSamples(0.5f, audio);
 	for (int i = 0; i < 12; i++) {
 		audioState.soundNotes[i].WriteSamples(0.2f, audio);
-	}
-
-	for (uint64 i = 0; i < audioState.activeLoopBuffers; i++) {
-		audioState.loopBuffers[i].WriteSamples(1.0f, audio);
 	}
 
 	const uint64 lastSampleInd = (audio->fillLength - 1) * audio->channels;
