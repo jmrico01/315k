@@ -16,8 +16,8 @@ DEPLOY_FILES = [
 	"data",
 	"logs",
 	"shaders",
-	"kid_game.dll",
-	"kid_win32.exe"
+	"315k_game.dll",
+	"315k_win32.exe"
 ]
 
 class CompileMode(Enum):
