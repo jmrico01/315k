@@ -19,9 +19,8 @@ struct MarkerGL
 	GLuint vertexBuffer;
 	GLuint programID;
 
-	void Init(const ThreadContext* thread,
-		DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+	template <typename Allocator>
+	void Init(const ThreadContext* thread, Allocator* allocator);
 	void Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color);
 };
 
@@ -31,9 +30,8 @@ struct CircleGL
 	GLuint vertexBuffer;
 	GLuint programID;
 
-	void Init(const ThreadContext* thread,
-		DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+	template <typename Allocator>
+	void Init(const ThreadContext* thread, Allocator* allocator);
 	void Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color);
 };
 

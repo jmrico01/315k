@@ -26,10 +26,9 @@ struct Sound
 
 	AudioBuffer buffer;
 
-	void Init(const ThreadContext* thread, const GameAudio* audio,
-		const char* filePath, const MemoryBlock& transient,
-		DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+	template <typename Allocator>
+	void Init(const ThreadContext* thread, Allocator* allocator,
+		const GameAudio* audio, const char* filePath);
 	void Update(const GameAudio* audio);
 	void WriteSamples(float32 amplitude, GameAudio* audio) const;
 };
@@ -141,10 +140,8 @@ struct AudioState
 	uint8 arduinoChannel;
 #endif
 
-	void Init(const ThreadContext* thread,
-		GameAudio* audio, MemoryBlock* transient,
-		DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+	template <typename Allocator>
+	void Init(const ThreadContext* thread, Allocator* allocator, GameAudio* audio);
 };
 
 struct GameState;

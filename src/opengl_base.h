@@ -13,9 +13,8 @@ struct RectGL
 	GLuint vertexBuffer;
 	GLuint programID;
 
-	void Init(const ThreadContext* thread,
-		DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-		DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+	template <typename Allocator>
+	void Init(const ThreadContext* thread, Allocator* allocator);
 	void Draw(Mat4 transform, Vec4 color) const;
 };
 
@@ -72,26 +71,20 @@ RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size,
 RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size, Vec2 anchor,
 	ScreenInfo screenInfo);
 
-GLuint LoadShaders(const ThreadContext* thread,
-	const char* vertFilePath, const char* fragFilePath,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+template <typename Allocator>
+GLuint LoadShaders(const ThreadContext* thread, Allocator* allocator,
+    const char* vertFilePath, const char* fragFilePath);
 
-RectPixelGL InitRectPixelGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
-TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
-LineGL InitLineGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
-PlaneGL InitPlaneGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
-BoxGL InitBoxGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+template <typename Allocator>
+RectPixelGL InitRectPixelGL(const ThreadContext* thread, Allocator* allocator);
+template <typename Allocator>
+TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread, Allocator* allocator);
+template <typename Allocator>
+LineGL InitLineGL(const ThreadContext* thread, Allocator* allocator);
+template <typename Allocator>
+PlaneGL InitPlaneGL(const ThreadContext* thread, Allocator* allocator);
+template <typename Allocator>
+BoxGL InitBoxGL(const ThreadContext* thread, Allocator* allocator);
 
 void DrawRectPixel(const RectPixelGL& rectPixelGL,
 	const ScreenInfo& screenInfo,

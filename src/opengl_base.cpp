@@ -12,8 +12,7 @@
 
 #define OGL_INFO_LOG_LENGTH_MAX 512
 
-internal bool CompileAndCheckShader(GLuint shaderID,
-	DEBUGReadFileResult shaderFile)
+internal bool CompileAndCheckShader(GLuint shaderID, PlatformReadFileResult shaderFile)
 {
 	// Compile shader
 	GLint shaderFileSize = (GLint)shaderFile.size;
@@ -72,22 +71,24 @@ RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size, Vec2 anchor,
 	return result;
 }
 
-GLuint LoadShaders(const ThreadContext* thread,
-	const char* vertFilePath, const char* fragFilePath,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+GLuint LoadShaders(const ThreadContext* thread, Allocator* allocator,
+	const char* vertFilePath, const char* fragFilePath)
 {
+	const auto& allocatorState = allocator->SaveState();
+	defer (allocator->LoadState(allocatorState));
+
 	// Create GL shaders.
 	GLuint vertShaderID = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 
 	// Read shader code from files.
-	DEBUGReadFileResult vertFile = DEBUGPlatformReadFile(thread, vertFilePath);
+	PlatformReadFileResult vertFile = PlatformReadFile(thread, allocator, vertFilePath);
 	if (vertFile.size == 0) {
 		LOG_ERROR("Failed to read vertex shader file.\n");
 		return 0; // TODO what to return
 	}
-	DEBUGReadFileResult fragFile = DEBUGPlatformReadFile(thread, fragFilePath);
+	PlatformReadFileResult fragFile = PlatformReadFile(thread, allocator, fragFilePath);
 	if (fragFile.size == 0) {
 		LOG_ERROR("Failed to read fragment shader file.\n");
 		return 0; // TODO what to return
@@ -139,15 +140,11 @@ GLuint LoadShaders(const ThreadContext* thread,
 	glDeleteShader(vertShaderID);
 	glDeleteShader(fragShaderID);
 
-	DEBUGPlatformFreeFileMemory(thread, &vertFile);
-	DEBUGPlatformFreeFileMemory(thread, &fragFile);
-
 	return programID;
 }
 
-void RectGL::Init(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+void RectGL::Init(const ThreadContext* thread, Allocator* allocator)
 {
 	const GLfloat vertices[] = {
 		0.0f, 0.0f,
@@ -176,9 +173,8 @@ void RectGL::Init(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	programID = LoadShaders(thread,
-		"shaders/rect.vert", "shaders/rect.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	programID = LoadShaders(thread, allocator,
+		"shaders/rect.vert", "shaders/rect.frag");
 }
 
 void RectGL::Draw(Mat4 transform, Vec4 color) const
@@ -195,9 +191,8 @@ void RectGL::Draw(Mat4 transform, Vec4 color) const
 	glBindVertexArray(0);
 }
 
-RectPixelGL InitRectPixelGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+RectPixelGL InitRectPixelGL(const ThreadContext* thread, Allocator* allocator)
 {
 	RectPixelGL rectPixelGL;
 	const GLfloat vertices[] = {
@@ -227,16 +222,14 @@ RectPixelGL InitRectPixelGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	rectPixelGL.programID = LoadShaders(thread,
-		"shaders/rectPixel.vert", "shaders/rectPixel.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	rectPixelGL.programID = LoadShaders(thread, allocator,
+		"shaders/rectPixel.vert", "shaders/rectPixel.frag");
 	
 	return rectPixelGL;
 }
 
-TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread, Allocator* allocator)
 {
 	TexturedRectPixelGL texturedRectPixelGL;
 	// TODO probably use indexing for this
@@ -289,16 +282,14 @@ TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	texturedRectPixelGL.programID = LoadShaders(thread,
-		"shaders/texturedRect.vert", "shaders/texturedRect.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	texturedRectPixelGL.programID = LoadShaders(thread, allocator,
+		"shaders/texturedRect.vert", "shaders/texturedRect.frag");
 	
 	return texturedRectPixelGL;
 }
 
-LineGL InitLineGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+LineGL InitLineGL(const ThreadContext* thread, Allocator* allocator)
 {
 	LineGL lineGL;
 
@@ -321,16 +312,14 @@ LineGL InitLineGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	lineGL.programID = LoadShaders(thread,
-		"shaders/line.vert", "shaders/line.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	lineGL.programID = LoadShaders(thread, allocator,
+		"shaders/line.vert", "shaders/line.frag");
 	
 	return lineGL;
 }
 
-PlaneGL InitPlaneGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+PlaneGL InitPlaneGL(const ThreadContext* thread, Allocator* allocator)
 {
 	PlaneGL planeGL;
 	const GLfloat vertices[] = {
@@ -361,16 +350,14 @@ PlaneGL InitPlaneGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	planeGL.programID = LoadShaders(thread,
-		"shaders/plane.vert", "shaders/plane.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	planeGL.programID = LoadShaders(thread, allocator,
+		"shaders/plane.vert", "shaders/plane.frag");
 	
 	return planeGL;
 }
 
-BoxGL InitBoxGL(const ThreadContext* thread,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+BoxGL InitBoxGL(const ThreadContext* thread, Allocator* allocator)
 {
 	BoxGL boxGL;
 	const GLfloat vertices[] = {
@@ -436,9 +423,8 @@ BoxGL InitBoxGL(const ThreadContext* thread,
 
 	glBindVertexArray(0);
 
-	boxGL.programID = LoadShaders(thread,
-		"shaders/box.vert", "shaders/box.frag",
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	boxGL.programID = LoadShaders(thread, allocator,
+		"shaders/box.vert", "shaders/box.frag");
 	
 	return boxGL;
 }

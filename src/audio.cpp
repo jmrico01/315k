@@ -41,17 +41,15 @@ internal float32 TriangleWave(float32 t)
 	}
 }
 
-void Sound::Init(const ThreadContext* thread, const GameAudio* audio,
-	const char* filePath, const MemoryBlock& transient,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+void Sound::Init(const ThreadContext* thread, Allocator* allocator,
+	const GameAudio* audio, const char* filePath)
 {
 	play = false;
 	playing = false;
 	sampleIndex = 0;
 
-	LoadWAV(thread, filePath, audio, &buffer, transient,
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	LoadWAV(thread, allocator, filePath, audio, &buffer);
 }
 
 void Sound::Update(const GameAudio* audio)
@@ -329,10 +327,8 @@ void WaveTable::WriteSamples(GameAudio* audio)
 
 }
 
-void AudioState::Init(const ThreadContext* thread,
-	GameAudio* audio, MemoryBlock* transient,
-	DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-	DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+void AudioState::Init(const ThreadContext* thread, Allocator* allocator, GameAudio* audio)
 {
 	globalMute = false;
 
@@ -356,22 +352,14 @@ void AudioState::Init(const ThreadContext* thread,
 		"data/audio/death.wav"
 	};
 
-	soundKick.Init(thread, audio,
-		kickSoundFiles[0], *transient,
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
-	soundSnare.Init(thread, audio,
-		snareSoundFiles[0], *transient,
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
-	soundDeath.Init(thread, audio,
-		deathSoundFiles[0], *transient,
-		DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+	soundKick.Init(thread, allocator, audio, kickSoundFiles[0]);
+	soundSnare.Init(thread, allocator, audio, snareSoundFiles[0]);
+	soundDeath.Init(thread, allocator, audio, deathSoundFiles[0]);
 
 	for (int i = 0; i < 12; i++) {
 		char buf[128];
 		sprintf(buf, "data/audio/note%d.wav", i);
-		soundNotes[i].Init(thread, audio,
-			buf, *transient,
-			DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+		soundNotes[i].Init(thread, allocator, audio, buf);
 	}
 
 	waveTable.Init(audio);

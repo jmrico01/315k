@@ -102,9 +102,8 @@ struct ParticleSystemGL
     GLuint programID;
 };
 
-ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread,
-    DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-    DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory);
+template <typename Allocator>
+ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread, Allocator* allocator);
 
 void CreateParticleSystem(ParticleSystem* ps, int maxParticles,
     int particlesPerSec, float32 maxLife, Vec3 gravity,

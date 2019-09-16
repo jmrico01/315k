@@ -16,9 +16,8 @@ struct ParticleSystemDataGL
     Vec2 size[MAX_PARTICLES];
 };
 
-ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread,
-    DEBUGPlatformReadFileFunc* DEBUGPlatformReadFile,
-    DEBUGPlatformFreeFileMemoryFunc* DEBUGPlatformFreeFileMemory)
+template <typename Allocator>
+ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread, Allocator* allocator)
 {
     ParticleSystemGL psGL;
     const GLfloat vertices[] = {
@@ -113,9 +112,8 @@ ParticleSystemGL InitParticleSystemGL(const ThreadContext* thread,
 
     glBindVertexArray(0);
 
-    psGL.programID = LoadShaders(thread,
-        "shaders/particle.vert", "shaders/particle.frag",
-        DEBUGPlatformReadFile, DEBUGPlatformFreeFileMemory);
+    psGL.programID = LoadShaders(thread, allocator,
+        "shaders/particle.vert", "shaders/particle.frag");
     
     return psGL;
 }
