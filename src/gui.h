@@ -31,7 +31,7 @@ struct BufferView
 	uint64 selectStart;
 	uint64 selectEnd;
 
-	void SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor);
+	void SetPosition(Vec2Int newPos, Vec2Int newSize, Vec2 newAnchor);
 	void ResetControls();
 	void UpdateAndDraw(const GameInput& input, const ScreenInfo& screenInfo,
 		const RectGL& rectGL, const RectPixelGL& rectPixelGL, const LineGL& lineGL,

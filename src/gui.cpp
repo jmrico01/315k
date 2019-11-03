@@ -4,12 +4,12 @@
 
 #include "opengl_base.h"
 
-void BufferView::SetPosition(Vec2Int pos, Vec2Int size, Vec2 anchor)
+void BufferView::SetPosition(Vec2Int newPos, Vec2Int newSize, Vec2 newAnchor)
 {
 	DEBUG_ASSERT(numSamples <= MAX_LINE_POINTS);
 
-	this->origin = { pos.x - (int)(size.x * anchor.x), pos.y - (int)(size.y * anchor.y) };
-	this->size = size;
+	origin = { newPos.x - (int)(newSize.x * newAnchor.x), newPos.y - (int)(newSize.y * newAnchor.y) };
+	size = newSize;
 }
 
 void BufferView::ResetControls()
