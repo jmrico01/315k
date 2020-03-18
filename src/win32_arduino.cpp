@@ -8,7 +8,7 @@
 
 #define ARDUINO_ANALOG_MAX_VALUE 1023
 
-const char* Win32Arduino::ARDUINO_PORT_NAME = "\\\\.\\COM5";
+const char* Win32Arduino::ARDUINO_PORT_NAME = "\\\\.\\COM3";
 
 // Attempts to find a prefix data packet in the given buffer range
 // If found, returns the index immediately after the end of the prefix
