@@ -12,7 +12,7 @@
 
 #define OGL_INFO_LOG_LENGTH_MAX 512
 
-internal bool CompileAndCheckShader(GLuint shaderID, PlatformReadFileResult shaderFile)
+internal bool CompileAndCheckShader(GLuint shaderID, const Array<uint8>& shaderFile)
 {
 	// Compile shader
 	GLint shaderFileSize = (GLint)shaderFile.size;
@@ -72,8 +72,7 @@ RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size, Vec2 anchor,
 }
 
 template <typename Allocator>
-GLuint LoadShaders(const ThreadContext* thread, Allocator* allocator,
-	const char* vertFilePath, const char* fragFilePath)
+GLuint LoadShaders(Allocator* allocator, const char* vertFilePath, const char* fragFilePath)
 {
 	const auto& allocatorState = allocator->SaveState();
 	defer (allocator->LoadState(allocatorState));
@@ -83,13 +82,13 @@ GLuint LoadShaders(const ThreadContext* thread, Allocator* allocator,
 	GLuint fragShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 
 	// Read shader code from files.
-	PlatformReadFileResult vertFile = PlatformReadFile(thread, allocator, vertFilePath);
-	if (vertFile.size == 0) {
+	Array<uint8> vertFile = LoadEntireFile(ToString(vertFilePath), allocator);
+	if (!vertFile.data) {
 		LOG_ERROR("Failed to read vertex shader file.\n");
 		return 0; // TODO what to return
 	}
-	PlatformReadFileResult fragFile = PlatformReadFile(thread, allocator, fragFilePath);
-	if (fragFile.size == 0) {
+	Array<uint8> fragFile = LoadEntireFile(ToString(fragFilePath), allocator);
+	if (!fragFile.data) {
 		LOG_ERROR("Failed to read fragment shader file.\n");
 		return 0; // TODO what to return
 	}
@@ -144,7 +143,7 @@ GLuint LoadShaders(const ThreadContext* thread, Allocator* allocator,
 }
 
 template <typename Allocator>
-void RectGL::Init(const ThreadContext* thread, Allocator* allocator)
+void RectGL::Init(Allocator* allocator)
 {
 	const GLfloat vertices[] = {
 		0.0f, 0.0f,
@@ -173,8 +172,7 @@ void RectGL::Init(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	programID = LoadShaders(thread, allocator,
-		"shaders/rect.vert", "shaders/rect.frag");
+	programID = LoadShaders(allocator, "shaders/rect.vert", "shaders/rect.frag");
 }
 
 void RectGL::Draw(Mat4 transform, Vec4 color) const
@@ -192,7 +190,7 @@ void RectGL::Draw(Mat4 transform, Vec4 color) const
 }
 
 template <typename Allocator>
-RectPixelGL InitRectPixelGL(const ThreadContext* thread, Allocator* allocator)
+RectPixelGL InitRectPixelGL(Allocator* allocator)
 {
 	RectPixelGL rectPixelGL;
 	const GLfloat vertices[] = {
@@ -222,14 +220,14 @@ RectPixelGL InitRectPixelGL(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	rectPixelGL.programID = LoadShaders(thread, allocator,
+	rectPixelGL.programID = LoadShaders(allocator,
 		"shaders/rectPixel.vert", "shaders/rectPixel.frag");
 	
 	return rectPixelGL;
 }
 
 template <typename Allocator>
-TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread, Allocator* allocator)
+TexturedRectPixelGL InitTexturedRectPixelGL(Allocator* allocator)
 {
 	TexturedRectPixelGL texturedRectPixelGL;
 	// TODO probably use indexing for this
@@ -282,14 +280,14 @@ TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread, Allocat
 
 	glBindVertexArray(0);
 
-	texturedRectPixelGL.programID = LoadShaders(thread, allocator,
+	texturedRectPixelGL.programID = LoadShaders(allocator,
 		"shaders/texturedRect.vert", "shaders/texturedRect.frag");
 	
 	return texturedRectPixelGL;
 }
 
 template <typename Allocator>
-LineGL InitLineGL(const ThreadContext* thread, Allocator* allocator)
+LineGL InitLineGL(Allocator* allocator)
 {
 	LineGL lineGL;
 
@@ -312,14 +310,14 @@ LineGL InitLineGL(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	lineGL.programID = LoadShaders(thread, allocator,
+	lineGL.programID = LoadShaders(allocator,
 		"shaders/line.vert", "shaders/line.frag");
 	
 	return lineGL;
 }
 
 template <typename Allocator>
-PlaneGL InitPlaneGL(const ThreadContext* thread, Allocator* allocator)
+PlaneGL InitPlaneGL(Allocator* allocator)
 {
 	PlaneGL planeGL;
 	const GLfloat vertices[] = {
@@ -350,14 +348,13 @@ PlaneGL InitPlaneGL(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	planeGL.programID = LoadShaders(thread, allocator,
-		"shaders/plane.vert", "shaders/plane.frag");
+	planeGL.programID = LoadShaders(allocator, "shaders/plane.vert", "shaders/plane.frag");
 	
 	return planeGL;
 }
 
 template <typename Allocator>
-BoxGL InitBoxGL(const ThreadContext* thread, Allocator* allocator)
+BoxGL InitBoxGL(Allocator* allocator)
 {
 	BoxGL boxGL;
 	const GLfloat vertices[] = {
@@ -423,8 +420,7 @@ BoxGL InitBoxGL(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	boxGL.programID = LoadShaders(thread, allocator,
-		"shaders/box.vert", "shaders/box.frag");
+	boxGL.programID = LoadShaders(allocator, "shaders/box.vert", "shaders/box.frag");
 	
 	return boxGL;
 }

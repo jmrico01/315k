@@ -20,7 +20,7 @@ struct MarkerGL
 	GLuint programID;
 
 	template <typename Allocator>
-	void Init(const ThreadContext* thread, Allocator* allocator);
+	void Init(Allocator* allocator);
 	void Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color);
 };
 
@@ -31,7 +31,7 @@ struct CircleGL
 	GLuint programID;
 
 	template <typename Allocator>
-	void Init(const ThreadContext* thread, Allocator* allocator);
+	void Init(Allocator* allocator);
 	void Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color);
 };
 

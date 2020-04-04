@@ -31,7 +31,7 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 	const Vec3 COLOR_INFO_TEXT = Vec3 { 0.5f, 1.0f, 0.5f };
 	const float32 ALPHA_BACKGROUND = 0.2f;
 
-	if (IsKeyPressed(&input, KM_KEY_P)) {
+	if (IsKeyPressed(input, KM_KEY_P)) {
 		ResetControls();
 	}
 
@@ -53,7 +53,7 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 
 	float32 deltaZoom = input.mouseWheelDelta * 0.001f;
 	if (input.mouseWheelDelta != 0) {
-		if (IsKeyPressed(&input, KM_KEY_CTRL)) {
+		if (IsKeyPressed(input, KM_KEY_CTRL)) {
 			tSize.y *= exp(deltaZoom * 2.0f);
 		}
 		else {
@@ -110,8 +110,8 @@ void BufferView::UpdateAndDraw(const GameInput& input, const ScreenInfo& screenI
 		DrawLine(lineGL, transform, lineData, Vec4 { 0.0f, 1.0f, 0.0f, 1.0f }); // and this one
 	}
 
-	lineData->count = marks.array.size * 3;
-	for (uint64 i = 0; i < marks.array.size; i++) {
+	lineData->count = marks.size * 3;
+	for (uint64 i = 0; i < marks.size; i++) {
 		float32 tMark = (float32)marks[i] / (numSamples - 1);
 		lineData->pos[i * 3]     = Vec3 { tMark, -1.0f, 0.0f };
 		lineData->pos[i * 3 + 1] = Vec3 { tMark,  1.0f, 0.0f };

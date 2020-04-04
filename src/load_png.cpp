@@ -15,19 +15,17 @@ void UnloadTextureGL(const TextureGL& textureGL)
 }
 
 template <typename Allocator>
-bool LoadPNGOpenGL(const ThreadContext* thread, Allocator* allocator, const char* filePath,
+bool LoadPNGOpenGL(Allocator* allocator, const char* filePath,
     GLint magFilter, GLint minFilter, GLint wrapS, GLint wrapT, TextureGL& outTextureGL)
 {
     outTextureGL.size = Vec2Int { 0, 0 };
 
-    const auto& allocatorState = allocator->SaveState();
-    defer (allocator->LoadState(allocatorState));
-
-    PlatformReadFileResult pngFile = PlatformReadFile(thread, allocator, filePath);
+    Array<uint8> pngFile = LoadEntireFile(ToString(filePath), allocator);
     if (!pngFile.data) {
         LOG_ERROR("Failed to open PNG file %s\n", filePath);
         return false;
     }
+    defer (FreeFile(pngFile, allocator));
 
     int width, height, channels;
     stbi_set_flip_vertically_on_load(true);

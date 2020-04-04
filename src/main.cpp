@@ -46,7 +46,7 @@ inline float32 RandFloat32(float32 min, float32 max)
 }
 
 template <typename Allocator>
-void MarkerGL::Init(const ThreadContext* thread, Allocator* allocator)
+void MarkerGL::Init(Allocator* allocator)
 {
 	const GLfloat vertices[] = {
 		-0.5f, -0.5f,
@@ -76,8 +76,7 @@ void MarkerGL::Init(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	programID = LoadShaders(thread, allocator,
-		"shaders/marker.vert", "shaders/marker.frag");
+	programID = LoadShaders(allocator, "shaders/marker.vert", "shaders/marker.frag");
 }
 
 void MarkerGL::Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color)
@@ -99,7 +98,7 @@ void MarkerGL::Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec
 }
 
 template <typename Allocator>
-void CircleGL::Init(const ThreadContext* thread, Allocator* allocator)
+void CircleGL::Init(Allocator* allocator)
 {
 	const GLfloat vertices[] = {
 		-0.5f, -0.5f,
@@ -129,8 +128,7 @@ void CircleGL::Init(const ThreadContext* thread, Allocator* allocator)
 
 	glBindVertexArray(0);
 
-	programID = LoadShaders(thread, allocator,
-		"shaders/circle.vert", "shaders/circle.frag");
+	programID = LoadShaders(allocator, "shaders/circle.vert", "shaders/circle.frag");
 }
 
 void CircleGL::Draw(const ScreenInfo& screenInfo, Vec2Int pos, Vec2Int size, Vec4 color)
@@ -295,12 +293,11 @@ internal char* LoadLevelIntList(char* c, int outList[12], int* listSize)
 }
 
 template <typename Allocator>
-internal void LoadLevel(const ThreadContext* thread, Allocator* allocator,
-	const char* filePath, GameState* gameState)
+internal void LoadLevel(Allocator* allocator, const char* filePath, GameState* gameState)
 {
 	// Read shader code from files.
 	LOG_INFO("Reading level file: %s\n", filePath);
-	PlatformReadFileResult levelFile = PlatformReadFile(thread, allocator, filePath);
+	Array<uint8> levelFile = LoadEntireFile(ToString(filePath), allocator);
 	if (levelFile.size == 0) {
 		LOG_ERROR("Failed to read level file\n");
 		return;
@@ -378,9 +375,8 @@ internal void LoadLevel(const ThreadContext* thread, Allocator* allocator,
 	gameState->circlePos = respawn;
 }
 
-void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* platformFuncs,
-	const GameInput* input, ScreenInfo screenInfo, float32 deltaTime,
-	GameMemory* memory, GameAudio* audio)
+void GameUpdateAndRender(const PlatformFunctions& platformFuncs, const GameInput& input,
+	const ScreenInfo& screenInfo, float32 deltaTime, GameMemory* memory, GameAudio* audio)
 {
 	// NOTE: for clarity
 	// A call to this function means the following has happened:
@@ -395,8 +391,7 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 
 	if (memory->shouldInitGlobalVariables) {
 		// Initialize global function names
-		#define FUNC(returntype, name, ...) name = \
-		platformFuncs->glFunctions.name;
+		#define FUNC(returntype, name, ...) name = platformFuncs.glFunctions.name;
 			GL_FUNCTIONS_BASE
 			GL_FUNCTIONS_ALL
 		#undef FUNC
@@ -423,7 +418,7 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		gameState->audioState.Init(thread, &allocator, audio);
+		gameState->audioState.Init(&allocator, audio);
 
 		// Game data
 		gameState->bpm = 120;
@@ -441,28 +436,28 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 
 		gameState->circlePos = 0;
 
-		LoadLevel(thread, &allocator, "data/levels/level9", gameState);
+		LoadLevel(&allocator, "data/levels/level9", gameState);
 
 		gameState->dead = false;
 
 		// Rendering stuff
-		gameState->rectGL.Init(thread, &allocator);
-		gameState->rectPixelGL = InitRectPixelGL(thread, &allocator);
-		gameState->texturedRectPixelGL = InitTexturedRectPixelGL(thread, &allocator);
-		gameState->lineGL = InitLineGL(thread, &allocator);
-		gameState->textGL = InitTextGL(thread, &allocator);
-		gameState->psGL = InitParticleSystemGL(thread, &allocator);
+		gameState->rectGL.Init(&allocator);
+		gameState->rectPixelGL = InitRectPixelGL(&allocator);
+		gameState->texturedRectPixelGL = InitTexturedRectPixelGL(&allocator);
+		gameState->lineGL = InitLineGL(&allocator);
+		gameState->textGL = InitTextGL(&allocator);
+		gameState->psGL = InitParticleSystemGL(&allocator);
 
-		gameState->markerGL.Init(thread, &allocator);
-		gameState->circleGL.Init(thread, &allocator);
+		gameState->markerGL.Init(&allocator);
+		gameState->circleGL.Init(&allocator);
 
 		FT_Error error = FT_Init_FreeType(&gameState->ftLibrary);
 		if (error) {
 			LOG_ERROR("FreeType init error: %d\n", error);
 		}
-		gameState->fontFaceSmall = LoadFontFace(thread, &allocator, gameState->ftLibrary,
+		gameState->fontFaceSmall = LoadFontFace(&allocator, gameState->ftLibrary,
 			"data/fonts/ibm-plex-mono/regular.ttf", 18);
-		gameState->fontFaceMedium = LoadFontFace(thread, &allocator, gameState->ftLibrary,
+		gameState->fontFaceMedium = LoadFontFace(&allocator, gameState->ftLibrary,
 			"data/fonts/ibm-plex-mono/regular.ttf", 24);
 
 		glGenFramebuffers(NUM_FRAMEBUFFERS, gameState->framebuffers);
@@ -519,20 +514,20 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 
 		glBindVertexArray(0);
 
-		gameState->screenShader = LoadShaders(thread, &allocator,
+		gameState->screenShader = LoadShaders(&allocator,
 			"shaders/screen.vert", "shaders/screen.frag");
-		gameState->bloomExtractShader = LoadShaders(thread, &allocator,
+		gameState->bloomExtractShader = LoadShaders(&allocator,
 			"shaders/screen.vert", "shaders/bloomExtract.frag");
-		gameState->bloomBlendShader = LoadShaders(thread, &allocator,
+		gameState->bloomBlendShader = LoadShaders(&allocator,
 			"shaders/screen.vert", "shaders/bloomBlend.frag");
-		gameState->blurShader = LoadShaders(thread, &allocator,
+		gameState->blurShader = LoadShaders(&allocator,
 			"shaders/screen.vert", "shaders/blur.frag");
-		gameState->grainShader = LoadShaders(thread, &allocator,
+		gameState->grainShader = LoadShaders(&allocator,
 			"shaders/screen.vert", "shaders/grain.frag");
-		gameState->fxaaShader = LoadShaders(thread, &allocator,
+		gameState->fxaaShader = LoadShaders(&allocator,
 			"shaders/screen.vert", "shaders/fxaa.frag");
 
-		if (!LoadPNGOpenGL(thread, &allocator, "data/textures/base.png",
+		if (!LoadPNGOpenGL(&allocator, "data/textures/base.png",
 		GL_LINEAR, GL_LINEAR, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, gameState->pTexBase)) {
 			DEBUG_PANIC("Failed to load base texture\n");
 		}
@@ -608,7 +603,7 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 			LinearAllocator allocator(memory->transient.size, memory->transient.memory);
 			char buf[128];
 			sprintf(buf, "data/levels/level%d", i);
-			LoadLevel(thread, &allocator, buf, gameState);
+			LoadLevel(&allocator, buf, gameState);
 		}
 	}
 	// Toggle global mute
@@ -949,8 +944,8 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 			audioState.debugRecording = !audioState.debugRecording;
 			if (audioState.debugRecording) {
 				audioState.debugBufferSamples = 0;
-				audioState.debugBufferView.marks.Init();
-				audioState.debugBufferView.marks.array.size = 0;
+				audioState.debugBufferView.marks;
+				audioState.debugBufferView.marks.size = 0;
 				audioState.debugBufferView.ResetControls();
 			}
 		}
@@ -970,7 +965,7 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 		if (audioState.debugRecording) {
 			if (audio->sampleDelta > 0 && (audioState.debugBufferSamples + audio->sampleDelta)
 			* audio->channels <= DEBUG_BUFFER_SAMPLES) {
-				if (audioState.debugBufferView.marks.array.size < BUFFERVIEW_MAX_MARKS) {
+				if (audioState.debugBufferView.marks.size < BUFFERVIEW_MAX_MARKS) {
 					audioState.debugBufferView.marks.Append(audioState.debugBufferSamples);
 				}
 				MemCopy(audioState.debugBuffer + audioState.debugBufferSamples * audio->channels,
@@ -980,7 +975,7 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 		}
 		if (audioState.debugViewRecording) {
 			audioState.debugBufferView.numSamples = audioState.debugBufferSamples;
-			audioState.debugBufferView.UpdateAndDraw(*input, screenInfo,
+			audioState.debugBufferView.UpdateAndDraw(input, screenInfo,
 				gameState->rectGL, gameState->rectPixelGL, gameState->lineGL,
 				gameState->textGL, gameState->fontFaceSmall,
 				audio->sampleRate, memory->transient);
@@ -1044,9 +1039,9 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 			memory->transient
 		);
 
-		if (input->arduinoIn.connected) {
+		if (input.arduinoIn.connected) {
 			snprintf(strBuf, STRING_BUFFER_MAX_LENGTH,
-				"Arduino Channel: %u", input->arduinoIn.activeChannel);
+				"Arduino Channel: %u", input.arduinoIn.activeChannel);
 			audioInfoPos += audioInfoStride;
 			DrawText(gameState->textGL, gameState->fontFaceSmall, screenInfo,
 				strBuf, audioInfoPos, Vec2 { 0.0f, 1.0f },
@@ -1078,14 +1073,16 @@ void GameUpdateAndRender(const ThreadContext* thread, const PlatformFunctions* p
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO
 #include <stb_image.h>
+#undef STB_IMAGE_IMPLEMENTATION
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb_sprintf.h>
+#undef STB_SPRINTF_IMPLEMENTATION
 
-#include <km_common/km_debug.cpp>
 #include <km_common/km_input.cpp>
 #include <km_common/km_lib.cpp>
 #include <km_common/km_log.cpp>
 #include <km_common/km_memory.cpp>
+#include <km_common/km_os.cpp>
 #include <km_common/km_string.cpp>
 
 #if GAME_WIN32

@@ -14,7 +14,7 @@ struct RectGL
 	GLuint programID;
 
 	template <typename Allocator>
-	void Init(const ThreadContext* thread, Allocator* allocator);
+	void Init(Allocator* allocator);
 	void Draw(Mat4 transform, Vec4 color) const;
 };
 
@@ -72,19 +72,19 @@ RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size, Vec2 anchor,
 	ScreenInfo screenInfo);
 
 template <typename Allocator>
-GLuint LoadShaders(const ThreadContext* thread, Allocator* allocator,
+GLuint LoadShaders(Allocator* allocator,
     const char* vertFilePath, const char* fragFilePath);
 
 template <typename Allocator>
-RectPixelGL InitRectPixelGL(const ThreadContext* thread, Allocator* allocator);
+RectPixelGL InitRectPixelGL(Allocator* allocator);
 template <typename Allocator>
-TexturedRectPixelGL InitTexturedRectPixelGL(const ThreadContext* thread, Allocator* allocator);
+TexturedRectPixelGL InitTexturedRectPixelGL(Allocator* allocator);
 template <typename Allocator>
-LineGL InitLineGL(const ThreadContext* thread, Allocator* allocator);
+LineGL InitLineGL(Allocator* allocator);
 template <typename Allocator>
-PlaneGL InitPlaneGL(const ThreadContext* thread, Allocator* allocator);
+PlaneGL InitPlaneGL(Allocator* allocator);
 template <typename Allocator>
-BoxGL InitBoxGL(const ThreadContext* thread, Allocator* allocator);
+BoxGL InitBoxGL(Allocator* allocator);
 
 void DrawRectPixel(const RectPixelGL& rectPixelGL,
 	const ScreenInfo& screenInfo,

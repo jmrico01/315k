@@ -27,8 +27,7 @@ struct Sound
 	AudioBuffer buffer;
 
 	template <typename Allocator>
-	void Init(const ThreadContext* thread, Allocator* allocator,
-		const GameAudio* audio, const char* filePath);
+	void Init(Allocator* allocator, const GameAudio* audio, const char* filePath);
 	void Update(const GameAudio* audio);
 	void WriteSamples(float32 amplitude, GameAudio* audio) const;
 };
@@ -86,7 +85,7 @@ struct WaveTable
 	EnvelopeADSR envelopes[WAVETABLE_ENVELOPES];
 
 	void Init(const GameAudio* audio);
-	void Update(const GameAudio* audio, const GameInput* input);
+	void Update(const GameAudio* audio, const GameInput& input);
 	void WriteSamples(GameAudio* audio);
 };
 
@@ -141,9 +140,9 @@ struct AudioState
 #endif
 
 	template <typename Allocator>
-	void Init(const ThreadContext* thread, Allocator* allocator, GameAudio* audio);
+	void Init(Allocator* allocator, GameAudio* audio);
 };
 
 struct GameState;
-void OutputAudio(GameAudio* audio, GameState* gameState,
-	const GameInput* input, MemoryBlock transient);
+void OutputAudio(GameAudio* audio, GameState* gameState, const GameInput& input,
+	MemoryBlock transient);

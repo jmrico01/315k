@@ -9,6 +9,13 @@ class LibExternal:
 
 PROJECT_NAME = "315k"
 
+COPY_DIRS = {
+	"/data": "/data",
+	"/src/shaders": "/shaders"
+}
+
+DEFINES = []
+
 DEPLOY_FILES = [
 	"data",
 	"logs",
@@ -28,3 +35,8 @@ LIBS_EXTERNAL = [
 PATHS = {
 	"win32-vcvarsall": WIN32_VCVARSALL
 }
+
+USE_KM_PLATFORM = True
+
+def post_compile_custom(paths):
+	pass

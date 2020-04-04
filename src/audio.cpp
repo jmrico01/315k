@@ -42,14 +42,13 @@ internal float32 TriangleWave(float32 t)
 }
 
 template <typename Allocator>
-void Sound::Init(const ThreadContext* thread, Allocator* allocator,
-	const GameAudio* audio, const char* filePath)
+void Sound::Init(Allocator* allocator, const GameAudio* audio, const char* filePath)
 {
 	play = false;
 	playing = false;
 	sampleIndex = 0;
 
-	LoadWAV(thread, allocator, filePath, audio, &buffer);
+	LoadWAV(allocator, filePath, audio, &buffer);
 }
 
 void Sound::Update(const GameAudio* audio)
@@ -131,7 +130,7 @@ void WaveTable::Init(const GameAudio* audio)
 	envelopes[0].release = 0.1f;
 }
 
-void WaveTable::Update(const GameAudio* audio, const GameInput* input)
+void WaveTable::Update(const GameAudio* audio, const GameInput& input)
 {
 	for (int i = 0; i < activeVoices; i++) {
 		voices[i].time += (float32)audio->sampleDelta / audio->sampleRate;
@@ -143,8 +142,8 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 		oscillators[i].tWave = fmod(oscillators[i].tWave, 1.0f);
 	}
 
-	if (input->arduinoIn.connected) {
-		const ArduinoInput& arduinoInput = input->arduinoIn;
+	if (input.arduinoIn.connected) {
+		const ArduinoInput& arduinoInput = input.arduinoIn;
 		tWaveTable = arduinoInput.analogValues[0][0];
 		oscillators[WAVETABLE_OSCILLATORS - 1].amp = arduinoInput.analogValues[0][2];
 		oscillators[WAVETABLE_OSCILLATORS - 1].freq = arduinoInput.analogValues[0][3] * 20.0f;
@@ -155,16 +154,16 @@ void WaveTable::Update(const GameAudio* audio, const GameInput* input)
 	else {
 		float32 tWaveTablePixRange = 600.0f;
 		float32 tWaveTablePixOffset = 200.0f;
-		float32 tWaveTableT = (input->mousePos.y - tWaveTablePixOffset) / tWaveTablePixRange;
+		float32 tWaveTableT = (input.mousePos.y - tWaveTablePixOffset) / tWaveTablePixRange;
 		tWaveTable = Lerp(0.0f, 1.0f, tWaveTableT);
 		tWaveTable = ClampFloat32(tWaveTable, 0.0f, 1.0f);
 	}
 
 	// Drive WaveTable voices with MIDI input
-	for (int i = 0; i < input->midiIn.numMessages; i++) {
-		uint8 status = input->midiIn.messages[i].status;
-		uint8 dataByte1 = input->midiIn.messages[i].dataByte1;
-		//uint8 dataByte2 = input->midiIn.messages[i].dataByte2;
+	for (int i = 0; i < input.midiIn.numMessages; i++) {
+		uint8 status = input.midiIn.messages[i].status;
+		uint8 dataByte1 = input.midiIn.messages[i].dataByte1;
+		//uint8 dataByte2 = input.midiIn.messages[i].dataByte2;
 		uint8 event = status >> 4;
 		//uint8 channel = status & 0xf;
 		switch (event) {
@@ -328,7 +327,7 @@ void WaveTable::WriteSamples(GameAudio* audio)
 }
 
 template <typename Allocator>
-void AudioState::Init(const ThreadContext* thread, Allocator* allocator, GameAudio* audio)
+void AudioState::Init(Allocator* allocator, GameAudio* audio)
 {
 	globalMute = false;
 
@@ -352,14 +351,14 @@ void AudioState::Init(const ThreadContext* thread, Allocator* allocator, GameAud
 		"data/audio/death.wav"
 	};
 
-	soundKick.Init(thread, allocator, audio, kickSoundFiles[0]);
-	soundSnare.Init(thread, allocator, audio, snareSoundFiles[0]);
-	soundDeath.Init(thread, allocator, audio, deathSoundFiles[0]);
+	soundKick.Init(allocator, audio, kickSoundFiles[0]);
+	soundSnare.Init(allocator, audio, snareSoundFiles[0]);
+	soundDeath.Init(allocator, audio, deathSoundFiles[0]);
 
 	for (int i = 0; i < 12; i++) {
 		char buf[128];
 		sprintf(buf, "data/audio/note%d.wav", i);
-		soundNotes[i].Init(thread, allocator, audio, buf);
+		soundNotes[i].Init(allocator, audio, buf);
 	}
 
 	waveTable.Init(audio);
@@ -369,8 +368,8 @@ void AudioState::Init(const ThreadContext* thread, Allocator* allocator, GameAud
 #endif
 }
 
-void OutputAudio(GameAudio* audio, GameState* gameState,
-	const GameInput* input, MemoryBlock transient)
+void OutputAudio(GameAudio* audio, GameState* gameState, const GameInput& input,
+	MemoryBlock transient)
 {
 	DEBUG_ASSERT(audio->channels == 2); // Stereo support only
 	AudioState& audioState = gameState->audioState;
@@ -385,7 +384,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		MidiInputReplay& replay = audioState.midiInputReplays[i];
 		const ReplayFrameInfo& frameInfo = replay.frameInfo[replay.currentFrameInfo];
 		if (frameInfo.frame == replay.currentFrame) {
-			MidiInput& midiIn = const_cast<MidiInput&>(input->midiIn);
+			MidiInput& midiIn = const_cast<MidiInput&>(input.midiIn);
 			for (uint64 m = 0; m < frameInfo.numMidiMessages; m++) {
 				// MemCopy?
 				midiIn.messages[midiIn.numMessages + m] = replay.midiMessages[frameInfo.midiMessageStart + m];
@@ -417,10 +416,10 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		return;
 	}
 
-	if (input->arduinoIn.connected && audioState.activeReplays < REPLAY_INSTANCES_MAX) {
+	if (input.arduinoIn.connected && audioState.activeReplays < REPLAY_INSTANCES_MAX) {
 		MidiInputReplay& replay = audioState.midiInputReplays[audioState.activeReplays];
-		if (input->arduinoIn.pedal.transitions == 1) {
-			if (input->arduinoIn.pedal.isDown) {
+		if (input.arduinoIn.pedal.transitions == 1) {
+			if (input.arduinoIn.pedal.isDown) {
 				LOG_INFO("Audio input recording start\n");
 				replay.currentFrame = 0;
 				replay.currentFrameInfo = 0;
@@ -442,8 +441,8 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 				}
 			}
 		}
-		if (input->arduinoIn.pedal.isDown) {
-			uint64 numMessages = input->midiIn.numMessages;
+		if (input.arduinoIn.pedal.isDown) {
+			uint64 numMessages = input.midiIn.numMessages;
 			if (replay.totalMidiMessages + numMessages > REPLAY_MIDI_MESSAGES_MAX) {
 				numMessages = REPLAY_MIDI_MESSAGES_MAX - replay.totalMidiMessages;
 			}
@@ -454,7 +453,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 				frameInfo.numMidiMessages = numMessages;
 				replay.totalMidiMessages += numMessages;
 				for (uint64 i = 0; i < numMessages; i++) {
-					replay.midiMessages[replay.totalMidiMessages + i] = input->midiIn.messages[i];
+					replay.midiMessages[replay.totalMidiMessages + i] = input.midiIn.messages[i];
 				}
 			}
 			replay.currentFrame++;
@@ -478,7 +477,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		lastSamplesRaw[c] = audio->buffer[lastSampleInd + c];
 	}
 
-	// float32 lowPassFrequency = MaxFloat32((float32)input->mousePos.x, 0.0f);
+	// float32 lowPassFrequency = MaxFloat32((float32)input.mousePos.x, 0.0f);
 	// float32 a = 2.0f * PI_F * lowPassFrequency / (float32)audio->sampleRate;
 	// float32 alpha = a / (a + 1.0f);
 	// float32 prevSampleFiltered0 = audioState.lastSamplesFiltered[0];
@@ -493,7 +492,7 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 	// 	prevSampleFiltered1 = audio->buffer[sampleInd + 1];
 	// }
 
-	// float32 highPassFrequency = MaxFloat32((float32)input->mousePos.x * 2.0f + 100.0f, 0.0f);
+	// float32 highPassFrequency = MaxFloat32((float32)input.mousePos.x * 2.0f + 100.0f, 0.0f);
 	// float32 a = 2.0f * PI_F * highPassFrequency / (float32)audio->sampleRate;
 	// float32 alpha = ClampFloat32(1.0f / (a + 1.0f), 0.0f, 1.0f);
 	// float32 prevSampleRaw0 = audioState.lastSamplesRaw[0];
@@ -517,8 +516,8 @@ void OutputAudio(GameAudio* audio, GameState* gameState,
 		audioState.lastSamplesFiltered[c] = audio->buffer[lastSampleInd + c];
 	}
 
-	if (input->arduinoIn.connected) {
-		float32 volume = input->arduinoIn.analogValues[0][1];
+	if (input.arduinoIn.connected) {
+		float32 volume = input.arduinoIn.analogValues[0][1];
 		for (uint64 i = 0; i < audio->fillLength; i++) {
 			audio->buffer[i * audio->channels] *= volume;
 			audio->buffer[i * audio->channels + 1] *= volume;
