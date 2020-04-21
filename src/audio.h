@@ -20,14 +20,14 @@ const uint64 DEBUG_BUFFER_SAMPLES = MEGABYTES(32);
 
 struct Sound
 {
-	bool32 play;
-	bool32 playing;
+    bool play;
+	bool playing;
 	uint64 sampleIndex;
-
+    
 	AudioBuffer buffer;
-
+    
 	template <typename Allocator>
-	void Init(Allocator* allocator, const GameAudio* audio, const char* filePath);
+        void Init(Allocator* allocator, const GameAudio* audio, const char* filePath);
 	void Update(const GameAudio* audio);
 	void WriteSamples(float32 amplitude, GameAudio* audio) const;
 };
@@ -37,16 +37,16 @@ struct Voice
 	float32 baseFreq;
 	float32 maxAmp;
 	int midiNote;
-
+    
 	float32 time;
 	float32 tWave;
 	float32 freq;
 	float32 amp;
-
-	bool32 sustained;
+    
+    bool sustained;
 	float32 releaseTime;
 	float32 releaseAmp;
-
+    
 	int envelope;
 };
 
@@ -76,14 +76,14 @@ struct WaveTable
 	int bufferLengthSamples;
 	int numWaves;
 	Wave waves[WAVETABLE_MAX_WAVES];
-
+    
 	int activeVoices;
 	Voice voices[WAVETABLE_MAX_VOICES];
-
+    
 	Oscillator oscillators[WAVETABLE_OSCILLATORS];
-
+    
 	EnvelopeADSR envelopes[WAVETABLE_ENVELOPES];
-
+    
 	void Init(const GameAudio* audio);
 	void Update(const GameAudio* audio, const GameInput& input);
 	void WriteSamples(GameAudio* audio);
@@ -100,11 +100,11 @@ struct MidiInputReplay
 {
 	uint64 currentFrame;
 	uint64 totalFrames;
-
+    
 	uint64 currentFrameInfo;
 	uint64 numFrameInfos;
 	ReplayFrameInfo frameInfo[REPLAY_MIDI_MESSAGES_MAX];
-
+    
 	uint64 totalMidiMessages;
 	MidiMessage midiMessages[REPLAY_MIDI_MESSAGES_MAX];
 };
@@ -114,35 +114,35 @@ struct AudioState
 	Sound soundKick;
 	Sound soundSnare;
 	Sound soundDeath;
-
+    
 	Sound soundNotes[12];
-
+    
 	WaveTable waveTable;
-
+    
 	uint64 activeReplays;
 	MidiInputReplay midiInputReplays[REPLAY_INSTANCES_MAX];
-
+    
 	float32 lastSamplesRaw[AUDIO_MAX_CHANNELS];
 	float32 lastSamplesFiltered[AUDIO_MAX_CHANNELS];
-
-	bool32 globalMute;
-
+    
+	bool globalMute;
+    
 #if GAME_INTERNAL
-	bool32 debugView;
-
-	bool32 debugRecording;
-	bool32 debugViewRecording;
+	bool debugView;
+    
+	bool debugRecording;
+	bool debugViewRecording;
 	uint64 debugBufferSamples;
 	float32 debugBuffer[DEBUG_BUFFER_SAMPLES];
 	BufferView debugBufferView;
-
+    
 	uint8 arduinoChannel;
 #endif
-
+    
 	template <typename Allocator>
-	void Init(Allocator* allocator, GameAudio* audio);
+        void Init(Allocator* allocator, GameAudio* audio);
 };
 
 struct GameState;
 void OutputAudio(GameAudio* audio, GameState* gameState, const GameInput& input,
-	MemoryBlock transient);
+                 MemoryBlock transient);

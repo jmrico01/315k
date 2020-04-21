@@ -12,9 +12,9 @@ struct RectGL
 	GLuint vertexArray;
 	GLuint vertexBuffer;
 	GLuint programID;
-
+    
 	template <typename Allocator>
-	void Init(Allocator* allocator);
+        void Init(Allocator* allocator);
 	void Draw(Mat4 transform, Vec4 color) const;
 };
 
@@ -67,13 +67,13 @@ struct LineGLData
 };
 
 RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size,
-	ScreenInfo screenInfo);
+                              ScreenInfo screenInfo);
 RectCoordsNDC ToRectCoordsNDC(Vec2Int pos, Vec2Int size, Vec2 anchor,
-	ScreenInfo screenInfo);
+                              ScreenInfo screenInfo);
 
 template <typename Allocator>
 GLuint LoadShaders(Allocator* allocator,
-    const char* vertFilePath, const char* fragFilePath);
+                   const char* vertFilePath, const char* fragFilePath);
 
 template <typename Allocator>
 RectPixelGL InitRectPixelGL(Allocator* allocator);
@@ -87,15 +87,15 @@ template <typename Allocator>
 BoxGL InitBoxGL(Allocator* allocator);
 
 void DrawRectPixel(const RectPixelGL& rectPixelGL,
-	const ScreenInfo& screenInfo,
-	Vec2Int pos, Vec2 anchor, Vec2Int size, Vec4 color);
+                   const ScreenInfo& screenInfo,
+                   Vec2Int pos, Vec2 anchor, Vec2Int size, Vec4 color);
 void DrawTexturedRectPixel(const TexturedRectPixelGL& texturedRectPixelGL,
-	const ScreenInfo& screenInfo,
-	Vec2Int pos, Vec2 anchor, Vec2Int size, bool32 flipHorizontal, GLuint texture);
+                           const ScreenInfo& screenInfo,
+                           Vec2Int pos, Vec2 anchor, Vec2Int size, bool flipHorizontal, GLuint texture);
 void DrawPlane(PlaneGL,
-	Mat4 vp, Vec3 point, Vec3 normal, Vec4 color);
+               Mat4 vp, Vec3 point, Vec3 normal, Vec4 color);
 void DrawBox(BoxGL boxGL,
-	Mat4 vp, Vec3 min, Vec3 max, Vec4 color);
+             Mat4 vp, Vec3 min, Vec3 max, Vec4 color);
 
 // Batch functions
 void DrawLine(LineGL lineGL, Mat4 transform, const LineGLData* lineData, Vec4 color);
