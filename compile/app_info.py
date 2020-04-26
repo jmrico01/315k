@@ -1,42 +1,50 @@
+from compile import Platform, TargetType, Define, PlatformTargetOptions, BuildTarget, CopyDir, LibExternal
 from env_settings import WIN32_VCVARSALL
 
-class LibExternal:
-	def __init__(self, name, path, compiledNames = None, dllNames = None):
-		self.name = name
-		self.path = path
-		self.compiledNames = compiledNames
-		self.dllNames = dllNames
+TARGETS = [
+    BuildTarget("315k",
+        source_file="src/main.cpp",
+        type=TargetType.EXECUTABLE,
+        defines=[],
+        platform_options={
+            Platform.WINDOWS: PlatformTargetOptions(
+                defines=[],
+                compiler_flags=[
+                    "/wd4201", # nonstandard extension used: nameless struct/union
+                ],
+                linker_flags=[]
+            )
+        }
+    )
+]
 
-PROJECT_NAME = "315k"
-
-COPY_DIRS = {
-	"/data": "/data",
-	"/src/shaders": "/shaders"
-}
-
-DEFINES = []
+COPY_DIRS = [
+    CopyDir("data", "data"),
+    CopyDir("src/shaders", "shaders")
+]
 
 DEPLOY_FILES = [
 	"data",
 	"logs",
 	"shaders",
-	"315k_win32.exe"
+    TARGETS[0].get_output_name()
 ]
 
 LIBS_EXTERNAL = [
-	LibExternal("freetype", "freetype-2.8.1", {
-		"debug":   "freetype281MTd.lib",
-		"release": "freetype281MT.lib"
-	}),
-	LibExternal("stbimage", "stb_image-2.23"),
-	LibExternal("stbsprintf", "stb_sprintf-1.06")
+    LibExternal("freetype",
+        path="freetype-2.8.1",
+        compiledNames={
+            "debug":   "freetype281MTd.lib",
+            "release": "freetype281MT.lib"
+        }
+    ),
+    LibExternal("stbimage",   path="stb_image-2.23"),
+    LibExternal("stbsprintf", path="stb_sprintf-1.06")
 ]
 
 PATHS = {
 	"win32-vcvarsall": WIN32_VCVARSALL
 }
-
-USE_KM_PLATFORM = True
 
 def post_compile_custom(paths):
 	pass
