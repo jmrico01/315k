@@ -1,19 +1,33 @@
 from compile import Platform, TargetType, Define, PlatformTargetOptions, BuildTarget, CopyDir, LibExternal
 from env_settings import WIN32_VCVARSALL
 
+windows_options = PlatformTargetOptions(
+	defines=[],
+	compiler_flags=[
+        "/MTd",
+
+		"/wd4100", # unreferenced formal parameter
+        "/wd4127", # conditional expression is constant
+		"/wd4201", # nonstandard extension used: nameless struct/union
+		"/wd4458", # declaration of X hides class member
+		"/wd4505", # unreferenced local function has been removed
+	],
+	linker_flags=[
+        "user32.lib",
+        "gdi32.lib",
+        "opengl32.lib",
+        "ole32.lib",
+		"winmm.lib"
+    ]
+)
+
 TARGETS = [
     BuildTarget("315k",
         source_file="src/main.cpp",
         type=TargetType.EXECUTABLE,
         defines=[],
         platform_options={
-            Platform.WINDOWS: PlatformTargetOptions(
-                defines=[],
-                compiler_flags=[
-                    "/wd4201", # nonstandard extension used: nameless struct/union
-                ],
-                linker_flags=[]
-            )
+            Platform.WINDOWS: windows_options
         }
     )
 ]
