@@ -8,13 +8,13 @@
 
 #define ARDUINO_ANALOG_MAX_VALUE 1023
 
-const char* Win32Arduino::ARDUINO_PORT_NAME = "\\\\.\\COM3";
+const char* Win32Arduino::ARDUINO_PORT_NAME = "\\\\.\\COM4";
 
 // Attempts to find a prefix data packet in the given buffer range
 // If found, returns the index immediately after the end of the prefix
 // If not found, returns indexStart
 internal uint64 FindFirstPrefix(uint64 indexStart, uint64 indexEnd,
-	const uint8* buffer, uint64 bufferSize)
+                                const uint8* buffer, uint64 bufferSize)
 {
 	int matches = 0;
 	uint64 index = indexStart;
@@ -42,12 +42,12 @@ internal uint64 FindFirstPrefix(uint64 indexStart, uint64 indexEnd,
 bool Win32Arduino::Init(const char* portName)
 {
 	handle = CreateFileA(static_cast<LPCSTR>(portName),
-		GENERIC_READ | GENERIC_WRITE,
-		0,
-		NULL,
-		OPEN_EXISTING,
-		FILE_FLAG_NO_BUFFERING, // FILE_ATTRIBUTE_NORMAL,
-		NULL);
+                         GENERIC_READ | GENERIC_WRITE,
+                         0,
+                         NULL,
+                         OPEN_EXISTING,
+                         FILE_FLAG_NO_BUFFERING, // FILE_ATTRIBUTE_NORMAL,
+                         NULL);
 	if (handle == INVALID_HANDLE_VALUE) {
 		LOG_ERROR("Failed to open Arduino file handle for port %s\n", portName);
 		return false;
